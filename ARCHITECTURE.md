@@ -1,0 +1,66 @@
+# Architecture
+
+AFK Journey Recorder is a local web app. A Hono API and a SQLite file run on your machine (`127.0.0.1` only), a React app talks to the API, and a read-only command line reads the same database. Nothing leaves the machine except the downloads of the reference-data importers and, when you start it, the agent tool you chose.
+
+```
+ pictures, forms ──▶ web (React) ──▶ src/server (Hono API) ──▶ SQLite (data/afk.db)
+                                         │   ▲                       ▲
+                                         │   └── src/domain (pure rules, no I/O)
+                                         ▼                           │
+                              agent tool (read-only child)    src/query ◀── scripts/query.ts (CLI)
+```
+
+## Layers
+
+| Folder | What it holds | May import |
+|---|---|---|
+| `src/domain` | Pure rules and types: maps and tiles, layouts and deployments, units (a hero's parts and summons), formation checks, statistics maths, name matching. No database, no HTTP. | itself, `zod` |
+| `src/db` | `schema.sql` (the baseline), `views.sql`, one numbered file per migration in `migrations/`, and small queries on the stored data. | `src/domain` |
+| `src/import` | Importers of reference data (heroes, bosses, boards, artifacts) and the storing of pictures. | `src/domain`, `src/vision` |
+| `src/vision` | Local readers of a picture's tiles: which hero, which rank, how many stars. | `src/domain` |
+| `src/query` | Read-only questions of the history, grouped by topic (filters, hero statistics, formations, players, stages, scenarios). | `src/db`, `src/domain`, `src/shared` |
+| `src/server` | The HTTP API, grouped by feature: `records` (battles and fights), `reference` (heroes, maps, seasons, profiles), `reader` (picture import and what the readers learnt), `review`, `stats`, `agent`. | all of the above |
+| `src/shared` | The types the API and the web app both use. | `src/domain` |
+| `web` | The React app, grouped by feature: `arena`, `dream-hunt`, `stages`, `reader`, `stats`, `admin`, `scenarios`. | `src/domain`, `src/shared` |
+| `scripts` | Commands run with `npm run`: database setup, importers, the query CLI. | everything |
+
+The rule that keeps this simple: `src/domain` imports nothing from the other folders, so its rules can be tested without a server or a database, and `src/import` never reaches into `src/server`.
+
+## The database
+
+SQLite through `better-sqlite3`, one file (`data/afk.db`, or `AFK_DB`). `schema.sql` is the version 1 baseline and is never edited to change a table. A change is a new numbered migration in `src/db/open.ts`, which takes the file from version n to n + 1 inside a transaction. A file of an older version is copied to `<file>.before-v<n>` before it is migrated. The query CLI opens the file read-only and never migrates.
+
+A battle record keeps a snapshot of each hero's rank and equipment on the day, so a record never changes when the roster does. The roster is the current state; recorded ranks are history.
+
+## Reading pictures
+
+A screenshot of the game can fill in a form. Two readers take part:
+
+1. The local readers in `src/vision` name the heroes and ranks they are sure of. They learn from pictures the player confirmed.
+2. For everything else the agent (a command line tool such as `claude -p` or `opencode run --standalone`, chosen in Admin) is started as a read-only child process, reads the picture and prints a proposal.
+
+An import only fills the form. The player reviews it, and a record is saved only when the player saves it. The agent never writes to the database.
+
+## The Advisor
+
+Everything that estimates a chance or proposes a team (the Win Score, the generated formation, the Counter Advisor and the Dream Hunt plans) is the Advisor. It lives in three directories:
+
+- `src/advisor`: the queries, rules, routes and CLI commands;
+- `web/advisor`: the screens;
+- `tests/advisor`: its tests.
+
+The rest of the app reaches it only through two entry modules, `src/advisor/index.ts` (routes, CLI commands, outside counters, tier check) and `web/advisor/index.tsx` (the screens). All its routes are under `/api/advisor`. A build may replace those two files with stand-ins that have the same names and do nothing: the statistics, recording and import tools do not depend on the Advisor, and the app runs without it, showing a note where an Advisor screen would be. Never import a file behind an entry module from outside these directories.
+
+## Running it
+
+- `npm run dev`: the API on port 3000 and the Vite dev server on 5173.
+- `npm run build`, then `npm start`: one process on port 3000 that also serves `web/dist` and `images/`.
+- `npm run query -- help`: the read-only command line.
+
+## Tests
+
+`npm test` runs Vitest. Server tests build an in-memory database with `openDb(':memory:')` and call the API with `app.request()`. Web tests render the components with Testing Library and a mocked `fetch`. Tests sit in the folder of what they test. `npm run typecheck` and `npm run lint` must pass as well.
+
+## Decisions
+
+Design decisions were recorded as numbered notes (ADRs) in the project this edition comes from; comments in the code cite them as "ADR 0036" and so on. They are not part of this edition, so read such a comment as a pointer, not as something you can look up here.

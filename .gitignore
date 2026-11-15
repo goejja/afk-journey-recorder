@@ -1,0 +1,18 @@
+node_modules/
+cache/
+images/
+web/dist/
+data/*.db
+data/*.db-*
+data/backups/
+tmp/
+.DS_Store
+
+# a copy kept before the Tournament backfill
+data/*.before-*
+
+# working notes and drafts of the agents; they name real players, so they are never committed
+.cache/
+
+# the real names and IDs that check:public looks for; never committed
+.private/

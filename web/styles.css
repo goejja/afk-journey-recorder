@@ -1,0 +1,532 @@
+:root {
+  /* Surfaces: the page, a card on the page, a card or control raised on a card */
+  --bg: #14161c;
+  --panel: #1e212b;
+  --panel-hi: #272b38;
+  --border: #343949;
+  --text: #e6e8ee;
+  --muted: #8d93a6;
+  --accent: #6c9cff;
+  --danger: #e5484d;
+  /* Meaning: results, the two sides of a battle, text on a coloured fill */
+  --win: #4cc38a;
+  --warn: #e0b341;
+  --danger-bg: #3b1d20;
+  /* The win and loss colours toned down for borders that mark a result on a whole card or label */
+  --win-soft: color-mix(in srgb, var(--win) 50%, var(--border));
+  --danger-soft: color-mix(in srgb, var(--danger) 50%, var(--border));
+  --side-a: var(--accent);
+  --side-b: #e5604d;
+  --on-color: #0b1020;
+  /* Tints of the two side colours: a tile, an outline and a thumbnail stay one palette */
+  --side-a-tile: color-mix(in srgb, var(--side-a) 42%, transparent);
+  --side-b-tile: color-mix(in srgb, var(--side-b) 42%, transparent);
+  --side-a-text: color-mix(in srgb, var(--side-a) 25%, var(--text));
+  --side-b-text: color-mix(in srgb, var(--side-b) 25%, var(--text));
+  --side-a-line: color-mix(in srgb, var(--side-a) 65%, var(--text));
+  --side-b-line: color-mix(in srgb, var(--side-b) 65%, var(--text));
+  --side-a-thumb: color-mix(in srgb, var(--side-a) 55%, var(--bg));
+  --side-b-thumb: color-mix(in srgb, var(--side-b) 55%, var(--bg));
+  /* A portrait sits on a light plate; a selected tile casts a strong shadow */
+  --portrait-bg: #f1ece2;
+  --shadow-strong: rgba(0, 0, 0, 0.55);
+  --glow: color-mix(in srgb, var(--text) 60%, transparent);
+  /* One tint per PvP mode, for the chip that opens each row of the Arena page */
+  --mode-arena: #5fb4c9;
+  --mode-supreme: var(--star-purple);
+  --mode-league: var(--star-yellow);
+  --mode-guild: #e08a4c;
+  --mode-treasure: #6dbb7a;
+  --scrim: rgba(5, 7, 12, 0.6);
+  /* Map tiles and weapon stars */
+  --tile-open: #3a4054;
+  --tile-wood: #a8743a;
+  --tile-stone: #aab0bd;
+  --star-grey: #aab3c5;
+  --star-purple: #b36cff;
+  --star-yellow: #f2c230;
+  --star-red: #ff4d4d;
+  /* Spacing, a 4px scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  /* Corners: controls, cards and panels, pills */
+  --r-control: 6px;
+  --r-card: 10px;
+  --r-pill: 999px;
+  /* Type: one scale for every text on the page */
+  --font-xs: 11px;
+  --font-sm: 12px;
+  --font-md: 13px;
+  --font-base: 14px;
+  --font-lg: 18px;
+  --font-xl: 22px;
+  /* Layers: a sticky control, popovers, the overlay, toasts */
+  --z-control: 3;
+  --z-popover: 20;
+  --z-overlay: 50;
+  --z-toast: 60;
+  /* Controls: every input, select and button is one height, compact ones in repeated rows another */
+  --control-h: 32px;
+  --control-h-compact: 28px;
+  --check-size: 18px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+/* A Page's name lives in the navigation; this heading keeps the document structure for assistive technology. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* Every control shows where the keyboard is, without drawing a ring for a mouse click. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: var(--font-base)/1.4 system-ui, sans-serif; }
+.app-header { display: flex; align-items: center; gap: var(--sp-5); padding: var(--sp-3) var(--sp-5); border-bottom: 1px solid var(--border); background: var(--panel); }
+.app-header .brand { font-size: var(--font-lg); font-weight: 700; }
+nav a { color: var(--muted); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-control); }
+nav a.active { color: var(--text); background: var(--panel-hi); }
+main { padding: var(--sp-4) var(--sp-5); }
+.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
+.toolbar h2 { margin-bottom: 0; }
+p { margin: 0 0 var(--sp-3); }
+h2 { font-size: var(--font-lg); margin: 0 0 var(--sp-3); }
+.muted { color: var(--muted); font-weight: normal; font-size: var(--font-md); }
+.filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-4); align-items: flex-end; }
+/* Every control is one height, so a select, a button and a text box in the same row line up. The compact size is for controls inside cards and tables. */
+input, select, button, textarea { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-control); padding: var(--sp-1) var(--sp-3); min-height: var(--control-h); font: inherit; }
+textarea { padding: var(--sp-2) var(--sp-3); }
+input[type='checkbox'], input[type='radio'] { flex: none; width: var(--check-size); height: var(--check-size); min-height: 0; margin: 0; padding: 0; accent-color: var(--accent); }
+.small { white-space: nowrap; }
+.filters .upload { min-height: var(--control-h); padding: 0 var(--sp-3); }
+.small, .state select, .profile, .enemy-chip, .upload { min-height: var(--control-h-compact); padding: 0 var(--sp-2); }
+/* Buttons that are only an icon or a link inside something else are not controls of their own. */
+.hex, .hex-slot, .tag-remove, button.link, .chip button, .placed li button { min-height: 0; }
+button { cursor: pointer; }
+button:disabled { opacity: 0.4; cursor: default; }
+button.danger { border-color: var(--danger); color: var(--danger); }
+.check, fieldset.field > label { display: flex; gap: var(--sp-2); align-items: center; min-height: var(--control-h); color: var(--muted); }
+/* In dense lists the rows and boxes are the compact size. */
+.multi-select-list, .sync-list { --check-size: 16px; }
+.multi-select-list .check, .sync-list .check { min-height: var(--control-h-compact); }
+.error { background: var(--danger-bg); border: 1px solid var(--danger); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-control); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3); }
+.card { background: var(--panel); border: 2px solid var(--border); border-radius: var(--r-card); overflow: hidden; opacity: 0.6; }
+.card.owned { opacity: 1; border-color: var(--accent); }
+.card-main { display: flex; flex-direction: column; align-items: center; width: 100%; border: 0; border-radius: 0; background: transparent; padding: var(--sp-3) var(--sp-2) var(--sp-2); gap: var(--sp-1); }
+.card-main img, .no-image { width: 72px; height: 72px; object-fit: contain; }
+.name { font-weight: 600; text-align: center; }
+.meta { color: var(--muted); font-size: var(--font-sm); text-align: center; }
+/* The labels share one column and the selects the other, so the boxes line up whatever their options say. */
+.state { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-2); padding: var(--sp-2) var(--sp-2) var(--sp-2); border-top: 1px solid var(--border); }
+.state label { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; gap: var(--sp-2); }
+.state select { min-width: 0; }
+
+a { text-decoration: none; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-color); font-weight: 600; }
+.master-detail { height: calc(100vh - 100px); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--sp-3); overflow: hidden; }
+.master-detail-header { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.master-detail-header > .toolbar, .master-detail-header > .panel { margin-bottom: 0; }
+.master-detail-columns { display: grid; grid-template-columns: minmax(12rem, 220px) minmax(0, 1fr); gap: var(--sp-4); min-width: 0; min-height: 0; }
+.master-detail-sidebar, .master-detail-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.master-detail-sidebar { overflow: visible; }
+.master-detail-sidebar-head, .master-detail-main-head { flex: none; padding-bottom: var(--sp-2); }
+.master-detail-sidebar-head .filters { margin-bottom: 0; }
+.master-detail-main-head { border-bottom: 1px solid var(--border); }
+.master-detail-main-head h2, .master-detail-main-head h3 { margin: 0; }
+.master-detail-sidebar-scroll, .master-detail-main-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.master-detail-main-scroll { padding-bottom: var(--sp-4); }
+.master-detail-list { list-style: none; display: flex; flex-direction: column; gap: var(--sp-1); margin: 0; padding: 0; }
+.map-item { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 0; text-align: left; }
+.map-item.active { border-color: var(--accent); background: var(--panel-hi); }
+.map-editor { min-width: 0; }
+.map-editor .hexmap { max-width: 100%; overflow-x: auto; }
+.hexmap { padding: var(--sp-2) 0; position: relative; }
+.hexrow { display: flex; }
+.hex { position: relative; padding: 0; border: 0; border-radius: 0; font-weight: 700; color: var(--on-color); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.hex:disabled { opacity: 1; cursor: default; }
+.hex:not(:disabled):hover { filter: brightness(1.25); }
+.tile-open { background: var(--tile-open); }
+/* The deployment zones are muted and see-through so units and walls stand out; the outline of each zone is drawn by HexMap. */
+.tile-player { background: var(--side-a-tile); color: var(--side-a-text); }
+.tile-enemy { background: var(--side-b-tile); color: var(--side-b-text); }
+.swatch.tile-player { color: var(--side-a-text); }
+.swatch.tile-enemy { color: var(--side-b-text); }
+.zone-outlines { position: absolute; top: var(--sp-2); left: 0; overflow: visible; pointer-events: none; }
+.zone-outlines line { stroke-linecap: round; }
+.zone-inner { stroke-width: 1; stroke-opacity: 0.22; }
+.zone-outer { stroke-width: 3; }
+.zone-player { stroke: var(--side-a-line); }
+.zone-enemy { stroke: var(--side-b-line); }
+.tile-wood { background: var(--tile-wood); }
+.tile-stone { background: var(--tile-stone); }
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: var(--sp-4); padding: 0; margin: var(--sp-2) 0 var(--sp-4); color: var(--muted); }
+.swatch { position: relative; display: inline-block; width: 22px; height: 24px; line-height: 24px; text-align: center; font-size: var(--font-xs); font-weight: 700; color: var(--on-color); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); vertical-align: middle; }
+.actions > .muted { align-self: center; }
+.actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: flex-end; margin-bottom: var(--sp-4); }
+
+h3 { font-size: var(--font-base); margin: var(--sp-4) 0 var(--sp-2); }
+.panel > h3:first-child { margin-top: 0; }
+.portrait { object-fit: contain; flex: none; }
+.portrait-missing { display: inline-flex; align-items: center; justify-content: center; background: var(--panel-hi); border-radius: 50%; color: var(--muted); font-weight: 700; }
+.with-portrait { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: var(--control-h-compact); background: var(--panel-hi); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 0 var(--sp-1) 0 var(--sp-3); }
+.chip button { border: 0; background: transparent; padding: 0 var(--sp-2); color: var(--muted); }
+
+h4 { font-size: var(--font-md); margin: var(--sp-3) 0 var(--sp-2); color: var(--muted); }
+.two-col { display: grid; grid-template-columns: minmax(0, 420px) minmax(260px, 796px); gap: var(--sp-4); align-items: start; }
+/* The map column is as wide as the map, so long text below it cannot push the picker away. */
+/* The picker follows the page while the map is being filled, so it stays within reach. */
+.two-col > .picker { position: sticky; top: var(--sp-2); max-height: calc(100vh - var(--sp-4)); overflow-y: auto; padding-right: var(--sp-4); scrollbar-gutter: stable; }
+/* The search box and filters of a unit selector stay at the top while its icons scroll under them. */
+.picker-controls { position: sticky; top: 0; z-index: var(--z-control); padding-bottom: var(--sp-2); background: var(--bg); }
+.panel .picker-controls { background: var(--panel); }
+/* One label style: small and muted, above its control (.field) or beside it in a card (the others). */
+.field, .state label, .choice-label, .placed-label { color: var(--muted); font-size: var(--font-sm); }
+/* A group of radio buttons has no frame: its legend is the label and the choices sit in a row. */
+fieldset.field { flex-direction: row; flex-wrap: wrap; column-gap: var(--sp-4); margin: 0; padding: 0; border: 0; min-width: 0; }
+fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--muted); font-size: var(--font-sm); }
+.field { display: flex; flex-direction: column; gap: var(--sp-1); width: fit-content; max-width: 100%; }
+/* The small label text must not shrink the control, or it would not line up with a bare select or button beside it. */
+.field select, .field button, .field input:not([type='radio']):not([type='checkbox']) { font-size: var(--font-base); }
+.attempts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.attempt-head { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+.attempt-head .small { margin-left: auto; }
+.badge { padding: 1px var(--sp-2); border-radius: var(--r-pill); font-size: var(--font-sm); font-weight: 700; color: var(--on-color); }
+.badge.win { background: var(--win); }
+.badge.loss { background: var(--danger); color: var(--text); }
+/* A badge with no result colour is a plain label: light text on the panel, not the dark text of the coloured ones. */
+.badge:not(.win, .loss, .few) { background: var(--panel-hi); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+.team { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; margin-top: var(--sp-2); }
+.unit { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
+.unit-meta { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-xs); color: var(--muted); }
+.unit-blank { flex: none; }
+/* The top line of a record: what it is (tags last, they vary the most) on the left, the buttons in one place on the right. */
+.attempt-top { display: flex; gap: var(--sp-3); align-items: center; }
+.attempt-info { flex: 1; min-width: 0; display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+.attempt-info.one-line { flex-wrap: nowrap; overflow: hidden; white-space: nowrap; } /* the line is cut at its end (the tags) rather than wrapped */
+.attempt-info.one-line > * { flex: none; }
+.attempt-info.one-line > .tags-cell { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; }
+.attempt-actions { flex: none; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); }
+/* Inline row editing keeps inputs compact and lets them share the available information column. */
+.attempt-info input.small, .attempt-info select.small { flex: 1 1 12rem; min-width: 8rem; }
+/* The buttons of a record in every list (stage, Dream Hunt, Arena and the other PvP modes) are the same compact size. */
+.attempt-actions button { min-height: var(--control-h-compact); min-width: 72px; padding: 0 var(--sp-2); white-space: nowrap; }
+/* An Arena battle has many cells and many buttons: what it is goes on the first line with its buttons at the right, its teams and tags below. */
+.attempt-top:has(> .battle-info) { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'info actions' 'teams teams'; row-gap: var(--sp-2); }
+.attempt-top:has(> .battle-info) > .attempt-info { grid-area: info; }
+.attempt-top:has(> .battle-info) > .attempt-actions { grid-area: actions; }
+/* A stage attempt on one line: the result, the stage, the formation, the tags, the buttons. */
+.stage-row { display: grid; grid-template-columns: 3.5rem 12rem 4.5rem 9.5rem 26rem minmax(0, 1fr) auto; column-gap: var(--sp-3); align-items: center; }
+.stage-row .team { margin-top: 0; }
+.stage-row > .badge { justify-self: start; }
+.stage-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-row .tags-cell { flex-wrap: nowrap; min-width: 0; }
+.battle-teams { grid-area: teams; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); min-width: 0; }
+.battle-fights { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: grid; gap: var(--sp-2); }
+.battle-map { display: flex; justify-content: center; padding: var(--sp-1) 0; }
+.attempt-form h3 { margin-top: var(--sp-5); }
+
+.card-main.static { cursor: default; display: flex; flex-direction: column; align-items: center; padding: var(--sp-3) var(--sp-2) var(--sp-2); gap: var(--sp-1); }
+.upload { display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--r-control); cursor: pointer; background: var(--panel-hi); }
+.upload input { display: none; }
+
+/* Dream Hunt */
+.tabs { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-4); }
+.tabs button.active { background: var(--accent); border-color: var(--accent); color: var(--on-color); font-weight: 600; }
+/* One card: the panels of a page, a record in a list, a weekly slot, the selected hero, a dialog. Compact ones are for cards inside a grid or a row; nested ones sit inside a card, one step darker. */
+.panel, .attempt, .weekly-slot, .selected-hero, .overlay-box, .crop-editor { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-3); }
+.panel { margin-bottom: var(--sp-4); }
+.weekly-slot, .selected-hero { padding: var(--sp-2); }
+.battle-fight, .estimate, .team-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-control); padding: var(--sp-2); }
+.team-box { border-width: 2px; }
+.team-won { border-color: var(--win-soft); }
+.team-lost { border-color: var(--danger-soft); }
+/* This week: the bosses as columns and a few whole days under them, small enough to need no scrolling. Header and cells share the column widths. */
+.week-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0 var(--sp-2); }
+.week-table th:first-child, .week-table td:first-child { width: 72px; }
+/* The Advisor's first column holds a plan's name, its total and its minimum clears, so it is wider than a day's total. */
+.week-table.advisor th:first-child, .week-table.advisor td:first-child { width: 12rem; }
+.week-table th, .week-table td { text-align: left; vertical-align: middle; padding: var(--sp-2) var(--sp-3); }
+.week-table td { background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.week-table td:first-child { border-left: 1px solid var(--border); border-radius: var(--r-card) 0 0 var(--r-card); }
+.week-table td:last-child { border-right: 1px solid var(--border); border-radius: 0 var(--r-card) var(--r-card) 0; }
+.week-day { cursor: pointer; }
+.week-toggle { display: flex; flex-direction: column; align-items: flex-start; border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+.week-placements td { padding-top: var(--sp-1); }
+.week-boss { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.week-boss > span { display: flex; flex-direction: column; min-width: 0; }
+/* Every time has the same width and digits line up, whether it is 47.70s or 1:32.00. */
+.week-time { display: inline-block; min-width: 7ch; font-variant-numeric: tabular-nums; }
+.week-times { white-space: nowrap; font-size: var(--font-sm); }
+/* A time coloured from green (the fastest of those compared against the same boss) to red (the slowest): --worst runs from 0 to 1. */
+.ranked { font-weight: 600; color: color-mix(in hsl, var(--danger) calc(var(--worst) * 100%), var(--win)); }
+.week-team { display: flex; flex-direction: column; gap: var(--sp-1); }
+.week-team-units { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+.board { width: 100%; border-collapse: collapse; }
+.board th, .board td { text-align: left; padding: var(--sp-2) var(--sp-2); border-bottom: 1px solid var(--border); vertical-align: middle; }
+.board tr.low { opacity: 0.75; }
+.team-cell { display: flex; align-items: center; gap: var(--sp-3); cursor: pointer; }
+.layouts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.layout-card { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--r-card); }
+.layout-facts { display: flex; flex-direction: column; gap: var(--sp-1); }
+.badge.few { background: var(--warn); margin-left: var(--sp-2); }
+.spread { position: relative; display: inline-block; width: 140px; height: 10px; background: var(--border); border-radius: var(--r-control); }
+.spread-range { position: absolute; top: 0; height: 10px; background: var(--win); border-radius: var(--r-control); }
+.spread-median { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--text); }
+
+/* Tags */
+.tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
+.badge.tag { background: var(--panel-hi); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+.tag-remove { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 0 0 var(--sp-1); }
+
+.estimate { white-space: pre-wrap; margin: 0; padding: var(--sp-3); font: inherit; }
+
+/* Statistics */
+.winbar { display: inline-block; width: 90px; height: 8px; background: var(--border); border-radius: var(--r-control); vertical-align: middle; overflow: hidden; }
+.winbar-fill { display: block; height: 100%; background: var(--win); }
+button.link { background: none; border: 0; color: inherit; font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
+.unit-inline { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.advisor-team, .advisor-formations { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.stats-detail { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); }
+
+/* Rows of a portrait, a name and selects have no labels above the controls, so center them. */
+.attempts .filters { align-items: center; margin-bottom: var(--sp-1); }
+.hero-grid { list-style: none; margin: var(--sp-2) 0 0; padding: 0; max-height: 360px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: var(--sp-1); }
+.hero-group { grid-column: 1 / -1; margin-top: var(--sp-2); font-size: var(--font-sm); font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); }
+.hero-group:first-child { margin-top: 0; }
+.hero-icon { width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-1) var(--sp-1); font-size: var(--font-xs); line-height: 1.1; }
+.hero-icon span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-icon.active { border-color: var(--accent); background: var(--panel-hi); }
+.hero-icon:disabled { opacity: 0.35; }
+.hero-icon.held { opacity: 0.5; }
+.hero-icon.held:hover { opacity: 1; }
+.phantimal-none { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 1px dashed var(--border); color: var(--muted); font-size: var(--font-md); }
+.hex.tile-dim { opacity: 0.45; }
+.icon-choice { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 260px; }
+.choice-head { display: flex; align-items: center; gap: var(--sp-2); }
+.choice-body { max-width: 420px; }
+.sides-extras { display: flex; flex-wrap: wrap; gap: var(--sp-5); margin-top: var(--sp-3); }
+.sides-extras h4 { margin: 0 0 var(--sp-2); }
+.hex .portrait { background: var(--portrait-bg); border-radius: 50%; box-shadow: 0 0 0 1px var(--shadow-strong); }
+.enemy-chips { list-style: none; margin: 0 0 var(--sp-2); padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.enemy-chip { font-size: var(--font-sm); border-radius: var(--r-pill); }
+.enemy-chip.active { border-color: var(--accent); background: var(--panel-hi); }
+.enemy-picker h4 { margin: var(--sp-2) 0 var(--sp-1); font-size: var(--font-sm); color: var(--muted); }
+.chip-groups { max-height: 320px; overflow-y: auto; }
+.crop-editor { display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; margin: var(--sp-3) 0; }
+.crop-canvas { width: 270px; height: auto; aspect-ratio: 360 / 398; cursor: grab; touch-action: none; border-radius: var(--r-control); background: repeating-conic-gradient(#8883 0% 25%, transparent 0% 50%) 50% / 16px 16px; }
+.crop-canvas:active { cursor: grabbing; }
+/* A tile's tooltip is drawn by hand: the browser's own takes a second to appear and is clipped by the hexagon. */
+.hex-cell { position: relative; flex: none; }
+.hex-cell:hover { z-index: var(--z-popover); }
+.hex-cell .hex { display: block; }
+.tile-tip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); z-index: var(--z-popover); padding: var(--sp-1) var(--sp-2); border-radius: var(--r-control); background: var(--bg); color: var(--text); border: 1px solid var(--border); font-size: var(--font-sm); font-weight: 600; white-space: nowrap; pointer-events: none; }
+.hex-cell:hover .tile-tip, .hex-cell:focus-within .tile-tip { display: block; }
+.placed { display: flex; align-items: flex-start; gap: var(--sp-2); margin: var(--sp-1) 0; }
+.placed-label { flex: none; min-width: 3.5rem; padding-top: var(--sp-1); }
+.placed ul { flex: 1 1 0; min-width: 0; list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.placed li { display: inline-flex; align-items: center; gap: var(--sp-1); min-height: var(--control-h-compact); padding: 0 var(--sp-1); border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--panel-hi); font-size: var(--font-sm); }
+.placed li button { border: 0; background: transparent; padding: 0 var(--sp-2); color: var(--muted); }
+
+.side-banner { width: 416px; box-sizing: border-box; padding: var(--sp-1) var(--sp-3); border-radius: var(--r-control); font-size: var(--font-sm); font-weight: 700; color: var(--on-color); opacity: 0.55; }
+.side-banner.active { opacity: 1; }
+.side-banner-a { background: var(--side-a); }
+.side-banner-b { background: var(--side-b); }
+.map-unit { display: inline-flex; border-radius: 50%; }
+.map-unit-a { box-shadow: 0 0 0 3px var(--side-a); }
+.map-unit-b { box-shadow: 0 0 0 3px var(--side-b); }
+.hex.tile-droppable { filter: brightness(1.35); }
+.picker .hero-grid { max-height: none; overflow: visible; }
+.hero-icon[draggable='true'] { cursor: grab; }
+.picker-extras { margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+a.button { display: inline-flex; align-items: center; min-height: var(--control-h); padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-control); background: var(--panel); color: var(--text); text-decoration: none; }
+a.button:hover { background: var(--panel-hi); }
+
+/* The recording screen fills the window; the picker (and the left column, if the window is short) scroll on their own. */
+.workspace { display: flex; flex-direction: column; height: calc(100vh - 100px); min-height: 520px; }
+.workspace-bar { flex: none; }
+.workspace-bar h2 { display: flex; align-items: center; min-height: var(--control-h); margin: 0; font-size: var(--font-base); }
+.workspace-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.workspace-row .tabs { margin: 0; }
+.swap-control { display: flex; gap: var(--sp-2); align-items: flex-end; }
+.workspace-row .side-profiles { display: contents; }
+/* The line under the title is the same in every mode, so its captions give way to placeholders and the fields share the width. */
+.workspace-row .field > .field-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.workspace-row .record-note { flex: 1 1 8rem; min-width: 6rem; }
+.workspace-row .record-note input { width: 100%; }
+.hint-icon { align-self: center; color: var(--muted); cursor: help; }
+.deployment-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); margin-bottom: var(--sp-2); padding: var(--sp-1) var(--sp-3); }
+.deployment-bar .deployment-title { margin: 0; font-size: var(--font-sm); }
+.deployment-bar .deployment-profile { display: contents; }
+.deployment-bar .deployment-line { padding: 0; border-top: 0; }
+.deployment-bar .deployment-ident { flex: 0 1 auto; }
+.deployment-check { display: inline-flex; align-items: center; gap: var(--sp-2); flex: none; }
+.deployment-bar > .error { flex-basis: 100%; margin: 0; }
+.workspace-actions { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); }
+.workspace-bar .error, .workspace-bar [role='status'] { margin: 0 0 var(--sp-2); }
+.workspace-body { flex: 1; min-height: 0; }
+.workspace-body > div { height: 100%; }
+.workspace-body .two-col { height: 100%; }
+.workspace-body .two-col > div { min-height: 0; height: 100%; overflow-y: auto; }
+.workspace-body .two-col > .picker { position: static; max-height: none; overflow: hidden; display: flex; flex-direction: column; padding-right: 0; }
+/* The profiles, side tabs and search stay in place; the units below them scroll. */
+.picker-fixed { flex: none; }
+/* The room for the scrollbar is inside the scrolling box, so the bar sits at the edge and not over the portraits. */
+.workspace-body .picker-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--sp-4); }
+.details-panel { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-2); }
+.details-panel summary { cursor: pointer; color: var(--muted); font-size: var(--font-md); }
+
+.map-slot { position: absolute; z-index: var(--z-control); }
+.hex-slot { position: relative; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; background: var(--side-a); cursor: pointer; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.hex-slot-b { background: var(--side-b); }
+.hex-slot-inner { position: absolute; inset: 2px; display: grid; place-items: center; background: var(--panel); color: var(--text); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.hex-slot-empty .hex-slot-inner { background: var(--bg); color: var(--muted); font-size: var(--font-xl); font-weight: 700; }
+.hex-slot:hover .hex-slot-inner { filter: brightness(1.25); }
+.overlay { position: fixed; inset: 0; z-index: var(--z-overlay); display: grid; place-items: center; background: var(--scrim); }
+.overlay-box { width: min(560px, 92vw); max-height: 86vh; overflow: auto; display: grid; gap: var(--sp-3); padding: var(--sp-3); border-color: var(--accent); }
+.overlay-box > h3:first-child { margin-top: 0; }
+.artifact-badge { position: relative; display: inline-flex; border-radius: var(--r-card); background: var(--panel-hi); padding: var(--sp-1); }
+.artifact-badge-a { box-shadow: 0 0 0 2px var(--side-a); }
+.artifact-badge-b { box-shadow: 0 0 0 2px var(--side-b); }
+.map-unit-selected { box-shadow: 0 0 0 3px var(--text), 0 0 8px 3px var(--glow); }
+.selected-hero { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); border-color: var(--accent); }
+
+.weapon-stars { font-size: var(--font-md); letter-spacing: 1px; white-space: nowrap; }
+.weapon-stars-grey { color: var(--star-grey); }
+.weapon-stars-purple { color: var(--star-purple); }
+.weapon-stars-yellow { color: var(--star-yellow); }
+.weapon-stars-red { color: var(--star-red); }
+.weapon-stars-rainbow { background: linear-gradient(90deg, var(--star-red), #ffb347, #f7e34a, #5bd96b, #4da6ff, var(--star-purple)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.weapon-row { grid-column: 1 / -1; text-align: right; margin-top: -2px; }
+
+/* Long lists: weeks and collapsed battles */
+.week { margin-bottom: var(--sp-3); }
+.week-head { display: flex; gap: var(--sp-2); align-items: center; width: 100%; text-align: left; margin-bottom: var(--sp-2); background: var(--panel-hi); }
+.day-strip { display: flex; gap: var(--sp-2); align-items: center; }
+.day-fight { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-1); border: 2px solid var(--border); border-radius: var(--r-control); min-width: 44px; }
+.day-fight.win { border-color: var(--win-soft); }
+.day-fight.loss { border-color: var(--danger-soft); }
+.day-fight.blank { opacity: 0.35; border-style: dashed; justify-content: center; }
+.day-fight-time { font-size: var(--font-xs); color: var(--muted); }
+.day-fight-time.ranked { color: color-mix(in hsl, var(--danger) calc(var(--worst) * 100%), var(--win)); } /* after .day-fight-time, which would otherwise stay muted */
+.team-pips { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.team-pip { padding: 1px var(--sp-2); border: 2px solid var(--border); border-radius: var(--r-pill); font-size: var(--font-sm); }
+.team-pip.win { border-color: var(--win-soft); }
+.team-pip.loss { border-color: var(--danger-soft); }
+
+/* The same columns on every collapsed row, so the texts line up from one row to the next. */
+.day-info, .battle-info { display: grid; align-items: center; column-gap: var(--sp-3); }
+.day-info { grid-template-columns: auto 7rem 6.5rem 10rem 9.5rem 8rem minmax(0, 1fr); }
+.battle-info { grid-template-columns: 2.5rem 16rem 3.5rem 11rem minmax(0, 1fr); }
+.mode-chip { flex: none; justify-self: start; width: 2.5rem; padding: 1px 0; text-align: center; border-radius: var(--r-pill); font-size: var(--font-sm); font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--mode) 22%, var(--panel)); border: 1px solid color-mix(in srgb, var(--mode) 60%, var(--border)); }
+.mode-arena { --mode: var(--mode-arena); }
+.mode-supreme-arena { --mode: var(--mode-supreme); }
+.mode-super-league { --mode: var(--mode-league); }
+.mode-guild-duel { --mode: var(--mode-guild); }
+.mode-treasure-rush { --mode: var(--mode-treasure); }
+.players { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-info > .badge, .battle-info > .badge { justify-self: start; white-space: nowrap; }
+.tags-cell { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
+
+/* The selected profile's identity and controls stay in the workspace header while its hero grid scrolls below. */
+.roster-top-panel { display: grid; gap: var(--sp-2); }
+.roster-profile-toolbar { margin-bottom: 0; gap: var(--sp-2); flex-wrap: wrap; }
+.roster-profile-toolbar h2 { margin: 0; }
+.roster-filters { margin-bottom: 0; }
+/* The two side profiles share one row: each field may shrink below the select's longest option. */
+.side-profiles { flex-wrap: nowrap; }
+.side-profiles .field { flex: 1 1 0; width: auto; min-width: 0; }
+.side-profiles select { width: 100%; min-width: 0; }
+.side-profiles .row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.profile-sidebar-actions { display: grid; gap: var(--sp-2); }
+.profile-new { width: 100%; margin-bottom: 0; }
+
+/* Roster import: a tile as cut from the picture, and the heroes the agent could not name */
+.import-tile { display: block; height: 56px; width: auto; border-radius: var(--r-control); }
+.import-unknown { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.import-unknown li { display: flex; align-items: center; gap: var(--sp-2); }
+.hero-line { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.profile-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+/* One line per profile: the name, then the small details, cut short when the column is narrow (the full text is in the tooltip). */
+.profile { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-width: 0; text-align: left; }
+.profile-name { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-meta { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-xs); text-align: right; }
+.profile.active { border-color: var(--accent); background: var(--panel-hi); }
+.profile-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.profile-merge { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-bottom: var(--sp-3); }
+.profile-form { display: flex; gap: var(--sp-3); align-items: flex-end; flex-wrap: wrap; }
+
+/* Roster sync dialog */
+.sync-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.sync-list .check { color: var(--text); }
+.overlay-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; }
+.dialog-field { width: 100%; }
+.dialog-field input { width: 100%; }
+.copy-fallback { width: 100%; min-height: 8rem; resize: vertical; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--font-sm); }
+
+/* A filter with several choices: a button opening a list of checkboxes */
+.multi-select { position: relative; display: inline-block; }
+.multi-select-list { position: absolute; z-index: var(--z-popover); top: 100%; left: 0; min-width: 100%; max-height: 18rem; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-2); margin-top: var(--sp-1); background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-control); white-space: nowrap; }
+
+/* The weekly default: one card per team or fight, with the map drawn small */
+.weekly-slots { list-style: none; margin: var(--sp-3) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: stretch; }
+.weekly-slot .field { width: 100%; } /* from the top, so the boss and the map line up from card to card, and a rule only adds a field under them */
+.weekly-slot { display: flex; flex-direction: column; gap: var(--sp-2); width: 150px; }
+.map-picker { position: relative; }
+.map-picker-button { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); width: 100%; padding: var(--sp-2) var(--sp-1); }
+.map-picker-name { max-width: 100%; text-align: center; line-height: 1.2; overflow-wrap: anywhere; } /* the whole name, on as many lines as it needs */
+.map-thumb { display: block; }
+.map-thumb-none { display: grid; place-items: center; width: 72px; height: 66px; border: 1px dashed var(--border); border-radius: var(--r-control); color: var(--muted); font-size: var(--font-xl); }
+.map-picker-list { position: absolute; z-index: var(--z-popover); top: 100%; left: 0; width: 330px; max-height: 24rem; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); padding: var(--sp-2); margin-top: var(--sp-1); background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-control); }
+.map-choice { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); min-width: 0; padding: var(--sp-1); font-size: var(--font-sm); line-height: 1.2; }
+.map-choice span:last-child { max-width: 100%; text-align: center; overflow-wrap: anywhere; }
+ .map-choice.active { border-color: var(--accent); background: var(--panel-hi); }
+.weekly-slot:nth-child(n+4) .map-picker-list { left: auto; right: 0; } /* the right-hand cards open leftwards, to stay on screen */
+
+@media (max-width: 800px) {
+  .master-detail { height: auto; overflow: visible; }
+  .master-detail-header { position: sticky; top: 0; z-index: var(--z-control); padding: var(--sp-2) 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .master-detail-columns { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+  .master-detail-sidebar, .master-detail-main { overflow: visible; }
+  .master-detail-sidebar-scroll, .master-detail-main-scroll { flex: 0 0 auto; overflow: visible; scrollbar-gutter: auto; }
+}
+
+/* The Formation ID of a formation: the code field, what is known about it and the stored codes of the same units */
+/* The Formation ID is a field like the tags: a caption over a row holding the input, what is known about the code and the stored codes of the same units */
+.formation-id .tags > .muted, .formation-id .tags > .error { margin: 0; }
+.formation-id .tags > .error { padding: var(--sp-1) var(--sp-2); font-size: var(--font-sm); }
+.formation-id-input { width: 14ch; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.05em; }
+.formation-id-input[aria-invalid='true'] { border-color: var(--danger); }
+.formation-id-badge { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.advisor-minimum { width: 5rem; }
+
+/* Reader: the tiles the hero reader learnt, filed under each hero */
+.reader-hero { margin-bottom: var(--sp-4); }
+.reader-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--sp-2); }
+.reader-tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-control); padding: var(--sp-2); }
+.reader-tile.flagged { border-color: var(--warn); }
+.reader-tile img { width: 100%; height: auto; border-radius: var(--r-control); }
+.reader-tile .warn-text { color: var(--warn); }
+
+/* Round Deployments: one condensed line per Profile, five boxes (one per team), detail on demand */
+.deployment-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
+.deployment-head h4 { margin: 0; }
+.deployment-toggle, .deployment-name { padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.deployment-toggle:hover, .deployment-name:hover { text-decoration: underline; }
+.deployment-line { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; padding: var(--sp-2) 0; border-top: 1px solid var(--border); }
+.deployment-profile:first-child .deployment-line { border-top: 0; }
+.deployment-name { flex: 1 1 12ch; min-width: 8ch; }
+.deployment-ident { display: inline-flex; align-items: center; gap: var(--sp-2); flex: 1 1 12ch; flex-wrap: wrap; }
+.deployment-ident .deployment-name { flex: 0 1 auto; }
+.deployment-boxes { display: inline-flex; gap: 2px; }
+.deployment-box { display: inline-grid; place-items: center; width: 1.7rem; height: 1.7rem; padding: 0; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--bg); color: var(--muted); font-size: var(--font-sm); font-weight: 700; cursor: default; }
+.deployment-box:disabled { cursor: default; opacity: 0.5; }
+.deployment-box.ok, .deployment-box.confirmed { border-color: var(--win); color: var(--win); }
+.deployment-box.saved { border-color: var(--accent); color: var(--accent); }
+.deployment-box.differs { border-color: var(--warn); color: var(--warn); cursor: pointer; }
+.deployment-box[aria-expanded='true'] { background: var(--panel-hi); }
+.deployment-teams { list-style: none; margin: 0; padding: 0 0 var(--sp-2); display: grid; gap: var(--sp-1); }
+.deployment-team { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--font-sm); }
+.deployment-note { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--font-sm); }
+.deployment-repair { display: flex; align-items: end; gap: var(--sp-2); flex-wrap: wrap; padding: 0 0 var(--sp-2); }
+.sync-edit { display: flex; align-items: center; gap: var(--sp-2); padding-left: var(--sp-5); }

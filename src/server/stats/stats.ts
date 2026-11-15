@@ -1,0 +1,47 @@
+import type Database from 'better-sqlite3';
+import { Hono, type Context } from 'hono';
+import type { ArtifactStat, HeroStat, PairStat, StageStat, Summary, TrioStat } from '../../shared/api.js';
+import { statsContract } from '../../shared/contracts/stats.js';
+import { formationProfile, formationReport } from '../../query/formation-profile.js';
+import { artifactStats, heroDistribution, heroRowStats, heroStats, mapStats, ruleStats, pairStats, playerStats, trioStats, stageStats, summary } from '../../query/index.js';
+import { factionMismatches } from '../../query/faction-mismatches.js';
+import { fail, serve } from '../contract.js';
+import { listParam } from '../params.js';
+
+/** Read-only win-rate views over the recorded history, the same numbers the agent's query CLI gives. */
+export function statsRoutes(db: Database.Database): Hono {
+  const app = new Hono();
+  const number = (text: string | undefined) => (text !== undefined && text !== '' && Number.isFinite(Number(text)) ? Number(text) : undefined);
+  /** The filters every view of sides shares: modes, tags and Players (by Player ID), each matching any of those given. */
+  const common = (c: Context) => ({ mode: listParam(c, 'mode'), tag: listParam(c, 'tag'), player: listParam(c, 'player'), excludeDefault: c.req.query('excludeDefault') === 'true' });
+  const withMin = (c: Context) => ({ ...common(c), minGames: number(c.req.query('min')) });
+
+  serve(app, statsContract.summary, () => summary(db) as Summary);
+
+  serve(app, statsContract.heroes, (_, c) => heroStats(db, withMin(c)) as HeroStat[]);
+  serve(app, statsContract.heroDistribution, ({ params }, c) => heroDistribution(db, params.hero, common(c)));
+  serve(app, statsContract.heroRows, ({ params }, c) => heroRowStats(db, params.hero, common(c)));
+
+  serve(app, statsContract.artifacts, (_, c) => artifactStats(db, withMin(c)) as ArtifactStat[]);
+  serve(app, statsContract.maps, (_, c) => mapStats(db, withMin(c)));
+  serve(app, statsContract.rules, (_, c) => ruleStats(db, withMin(c)));
+  serve(app, statsContract.formationReport, (_, c) => formationReport(db, { ...withMin(c), hero: listParam(c, 'hero') }));
+  serve(app, statsContract.formationProfile, (_, c) => formationProfile(db, listParam(c, 'core') ?? [], common(c)) ?? fail(404, 'No formation group has these core heroes'));
+  serve(app, statsContract.factionMismatches, () => factionMismatches(db));
+
+  serve(app, statsContract.pairs, (_, c) => pairStats(db, withMin(c)) as PairStat[]);
+  serve(app, statsContract.trios, (_, c) => trioStats(db, withMin(c)) as TrioStat[]);
+
+  serve(app, statsContract.players, (_, c) => playerStats(db, { mode: listParam(c, 'mode'), excludeDefault: c.req.query('excludeDefault') === 'true', minGames: number(c.req.query('min')) }));
+
+  serve(app, statsContract.stages, (_, c) =>
+    stageStats(db, {
+      kind: listParam(c, 'kind'),
+      season: number(c.req.query('season')),
+      tag: listParam(c, 'tag'),
+      minGames: number(c.req.query('min')),
+    }) as StageStat[],
+  );
+
+  return app;
+}
