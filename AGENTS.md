@@ -38,6 +38,7 @@ npm run query -- sql "SELECT ..."              # one read-only SELECT
 
 - TypeScript throughout: Hono API in `src/server`, SQLite via `better-sqlite3` in `src/db`, React + Vite in `web`, pure rules in `src/domain`, read-only questions in `src/query`.
 - `src/server` and `web` are grouped by feature. Tests sit in the folder of what they test.
+- A new API route is described first in `src/shared/contracts/` with `endpoint()` and registered with `serve()` (see ARCHITECTURE.md, "The API contract"); the web app calls it with `call()` in `web/backend.ts`. Do not add a bare `app.get('/api/...')`.
 - `npm run typecheck`, `npm run lint` and `npm test` must pass. Tests build an in-memory database with `openDb(':memory:')` and exercise the API with `app.request()`.
 - Paths are relative to the folder the server is started from (`npm run` in the project folder): `data/afk.db` (`AFK_DB` to change), `images`, and the import work folder `tmp/roster-import` (`AFK_IMPORT_DIR` to change).
 - The server binds to `127.0.0.1` only; keep it that way.

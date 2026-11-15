@@ -28,7 +28,7 @@ The rule that keeps this simple: `src/domain` imports nothing from the other fol
 
 ## The database
 
-SQLite through `better-sqlite3`, one file (`data/afk.db`, or `AFK_DB`). `schema.sql` is the version 1 baseline and is never edited to change a table. A change is a new numbered migration in `src/db/open.ts`, which takes the file from version n to n + 1 inside a transaction. A file of an older version is copied to `<file>.before-v<n>` before it is migrated. The query CLI opens the file read-only and never migrates.
+SQLite through `better-sqlite3`, one file (`data/afk.db`, or `AFK_DB`). `schema.sql` is the version 1 baseline and is never edited to change a table. A change is a new numbered file in `src/db/migrations/`, which takes the file from version n to n + 1 inside a transaction. A file of an older version is copied to `<file>.before-v<n>` before it is migrated. The query CLI opens the file read-only and never migrates.
 
 A battle record keeps a snapshot of each hero's rank and equipment on the day, so a record never changes when the roster does. The roster is the current state; recorded ranks are history.
 
@@ -41,6 +41,15 @@ A screenshot of the game can fill in a form. Two readers take part:
 
 An import only fills the form. The player reviews it, and a record is saved only when the player saves it. The agent never writes to the database.
 
+## The API contract
+
+Every route is described once, in `src/shared/contracts/<topic>.ts`, with `endpoint({ method, path, body, response, ... })` (`src/shared/contract.ts`). The description holds the HTTP method, the path with its `:params`, a zod schema for the body and one for the response, and the status.
+
+- The server registers a route with `serve(app, route, handler)` (`src/server/contract.ts`). The handler gets the decoded path parameters and the validated body, and returns the response value, `fail(status, message)` for an error, or `created(value)` to answer 201. A body the schema refuses answers 400 with the schema's message before the handler runs. Outside production the value a handler returns is checked against the response schema too, and a mismatch answers 500, so a test that calls the route fails.
+- The web app calls a route with `call(route, { params, query, body })` in `web/backend.ts`, which is typed from the same description, so a change to a body or a response is a compile error on both sides. The types the screens use are exported from `src/shared/api.ts`.
+- Some bodies and large responses are described with `z.custom<Type>()`: they are typed but not checked at runtime, and the handler keeps validating a body field by field to keep its messages. Query parameters are typed for the client but the handler reads them itself. Files use `Upload` (a raw body the handler reads) and `Binary` (a response sent with `file(bytes, type)`).
+- The Advisor's routes are described in `src/advisor/shared/contracts.ts` and called from `web/advisor/api.ts`, so a build without the Advisor has neither.
+
 ## The Advisor
 
 Everything that estimates a chance or proposes a team (the Win Score, the generated formation, the Counter Advisor and the Dream Hunt plans) is the Advisor. It lives in three directories:
@@ -49,7 +58,7 @@ Everything that estimates a chance or proposes a team (the Win Score, the genera
 - `web/advisor`: the screens;
 - `tests/advisor`: its tests.
 
-The rest of the app reaches it only through two entry modules, `src/advisor/index.ts` (routes, CLI commands, outside counters, tier check) and `web/advisor/index.tsx` (the screens). All its routes are under `/api/advisor`. A build may replace those two files with stand-ins that have the same names and do nothing: the statistics, recording and import tools do not depend on the Advisor, and the app runs without it, showing a note where an Advisor screen would be. Never import a file behind an entry module from outside these directories.
+The rest of the app reaches it only through two entry modules, `src/advisor/index.ts` (routes, CLI commands, tier check) and `web/advisor/index.tsx` (the screens). All its routes are under `/api/advisor`. A build may replace those two files with stand-ins that have the same names and do nothing: the statistics, recording and import tools do not depend on the Advisor, and the app runs without it, showing a note where an Advisor screen would be. Never import a file behind an entry module from outside these directories.
 
 ## Running it
 
