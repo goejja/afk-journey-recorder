@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import type { BattleDraft, BattleImportPicture } from '../../../web/backend.js';
 import { ArenaPage } from '../../../web/arena/ArenaPage.js';
-import { feedbackOf, fightCoverage, firstReusable, groupPictures, keptOwn, knownPlacementOpponent, knownPlacementOwn, misfitsMap, placeOpponent, placeOwn, savedSides, unplacedUnit } from '../../../web/reader/battle-import.js';
+import { feedbackOf, fightCoverage, groupPictures, keptOwn, knownPlacementOpponent, knownPlacementOwn, misfitsMap, placeOpponent, placeOwn, reusedSide, savedPlacements, unplacedUnit } from '../../../web/reader/battle-import.js';
 import { draftSide } from '../../support/draft-side.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
@@ -268,7 +268,7 @@ describe('placing a known player as in a saved fight', () => {
     ...over,
   });
   const picked = heroes('Evie', 'Zed').map((h) => ({ ...h, rank: h.hero === 'Zed' ? 'Mythic+' : null }));
-  const saved = (fights: any[]) => firstReusable(savedSides(fights, 'Super League', 2, 'B', '2222'), picked, { artifact: null, phantimal: 'Orson' }, cells, TILE.ENEMY);
+  const saved = (fights: any[], playerId: string | null = '2222') => reusedSide(savedPlacements(fights, 'Super League', 2, 'B'), picked, { artifact: null, phantimal: 'Orson' }, cells, TILE.ENEMY, null, playerId);
 
   it('keeps the tiles, the artifact and the phantimal of the saved fight, with the ranks the picture was sure of', () => {
     const other = placeOpponent(cells, picked, { artifact: null, phantimal: 'Orson' }, saved([fight(1)]));
@@ -276,13 +276,14 @@ describe('placing a known player as in a saved fight', () => {
     expect([other.artifact, other.phantimal, other.formationId]).toEqual(['Awakening', { name: 'Orson', tile: 4 }, '']);
   });
 
-  it('uses the latest fight, and nothing when the player, the team number, the heroes or the phantimal differ', () => {
+  it('uses the latest fight, and nothing when the team number, the heroes or the phantimal differ', () => {
     expect(saved([fight(1, { opponent: { ...fight(1).opponent, artifact: 'Old' } }), fight(2)])!.artifact).toBe('Awakening');
-    expect(saved([fight(1, { playerIdB: '9999' })])).toBeNull();
+    expect(saved([fight(1, { playerIdB: '9999' })])).not.toBeNull(); // another Player's placement is the fallback (tier any)
+    expect(saved([fight(1)], null)).toBeNull(); // with no Player ID nothing is reused
     expect(saved([fight(1, { battlePosition: 3 })])).toBeNull();
     expect(saved([fight(1, { opponent: { ...fight(1).opponent, heroes: [{ tile: 3, name: 'Zed', rank: null, equipmentLevel: null }] } })])).toBeNull();
-    expect(firstReusable(savedSides([fight(1)], 'Super League', 2, 'B', '2222'), picked, { artifact: null, phantimal: 'Wedge' }, cells, TILE.ENEMY)).toBeNull();
-    expect(firstReusable(savedSides([fight(1)], 'Super League', 2, 'B', null), picked, { artifact: null, phantimal: null }, cells, TILE.ENEMY)).toBeNull();
+    expect(reusedSide(savedPlacements([fight(1)], 'Super League', 2, 'B'), picked, { artifact: null, phantimal: 'Wedge' }, cells, TILE.ENEMY, null, '2222')).toBeNull();
+    expect(reusedSide(savedPlacements([fight(1)], 'Super League', 2, 'B'), picked, { artifact: null, phantimal: null }, cells, TILE.ENEMY, null, null)).toBeNull();
   });
 
   it('places a player as in a saved fight where they stood on the other side, the board turned upside down', () => {
@@ -295,8 +296,8 @@ describe('placing a known player as in a saved fight', () => {
     expect([other.artifact, other.phantimal]).toEqual(['Awakening', { name: 'Orson', tile: 4 }]);
 
     const asSideB = fight(2, { playerIdA: '3333', playerIdB: '2222' });
-    const own = savedSides([asSideB], 'Super League', 2, 'A', '2222');
-    const mine = placeOwn(cells, picked, { artifact: null, phantimal: 'Orson' }, firstReusable(own, picked, { artifact: null, phantimal: 'Orson' }, cells, TILE.PLAYER));
+    const own = savedPlacements([asSideB], 'Super League', 2, 'A');
+    const mine = placeOwn(cells, picked, { artifact: null, phantimal: 'Orson' }, reusedSide(own, picked, { artifact: null, phantimal: 'Orson' }, cells, TILE.PLAYER, null, '2222'));
     expect(mine.placed.map((p) => [p.hero, p.tile])).toEqual([['Zed', 41], ['Evie', 44]]);
   });
 
@@ -307,23 +308,23 @@ describe('placing a known player as in a saved fight', () => {
   });
 
   it('knows a phantimal pair as the same whichever part the picture shows', () => {
-    const wedge = savedSides([fight(1, { opponent: { ...fight(1).opponent, phantimal: { name: 'Wedge of Matter', tile: 4, partnerTile: 2 } } })], 'Super League', 2, 'B', '2222');
-    expect(firstReusable(wedge, picked, { artifact: null, phantimal: 'Wedge of Power' }, cells, TILE.ENEMY)).not.toBeNull();
-    expect(firstReusable(wedge, picked, { artifact: null, phantimal: 'Orson' }, cells, TILE.ENEMY)).toBeNull();
+    const wedge = savedPlacements([fight(1, { opponent: { ...fight(1).opponent, phantimal: { name: 'Wedge of Matter', tile: 4, partnerTile: 2 } } })], 'Super League', 2, 'B');
+    expect(reusedSide(wedge, picked, { artifact: null, phantimal: 'Wedge of Power' }, cells, TILE.ENEMY, null, '2222')).not.toBeNull();
+    expect(reusedSide(wedge, picked, { artifact: null, phantimal: 'Orson' }, cells, TILE.ENEMY, null, '2222')).toBeNull();
   });
 
   it('does not reuse tiles that are not in the zone of the map, nor two units on one tile, nor half a phantimal pair', () => {
-    const candidates = (opponent: Record<string, unknown>) => savedSides([fight(1, { opponent: { ...fight(1).opponent, ...opponent } })], 'Super League', 2, 'B', '2222');
+    const candidates = (opponent: Record<string, unknown>) => savedPlacements([fight(1, { opponent: { ...fight(1).opponent, ...opponent } })], 'Super League', 2, 'B');
     const extras = { artifact: null, phantimal: 'Orson' };
-    expect(misfitsMap(candidates({}), picked, extras, cells, TILE.ENEMY)).toBe(false); // fits
-    expect(misfitsMap(candidates({ heroes: [{ tile: 3, name: 'Zed' }, { tile: 3, name: 'Evie' }] }), picked, extras, cells, TILE.ENEMY)).toBe(true);
-    expect(misfitsMap(candidates({ heroes: [{ tile: 20, name: 'Zed' }, { tile: 0, name: 'Evie' }] }), picked, extras, cells, TILE.ENEMY)).toBe(true);
-    expect(misfitsMap(candidates({ phantimal: { name: 'Wedge of Matter', tile: 4 } }), picked, { artifact: null, phantimal: 'Wedge of Matter' }, cells, TILE.ENEMY)).toBe(true);
-    expect(misfitsMap(candidates({ heroes: [{ tile: 3, name: 'Zed' }] }), picked, extras, cells, TILE.ENEMY)).toBe(false); // other heroes: not the same formation, nothing to warn about
+    expect(misfitsMap(candidates({}), picked, extras, cells, TILE.ENEMY, null, '2222')).toBe(false); // fits
+    expect(misfitsMap(candidates({ heroes: [{ tile: 3, name: 'Zed' }, { tile: 3, name: 'Evie' }] }), picked, extras, cells, TILE.ENEMY, null, '2222')).toBe(true);
+    expect(misfitsMap(candidates({ heroes: [{ tile: 20, name: 'Zed' }, { tile: 0, name: 'Evie' }] }), picked, extras, cells, TILE.ENEMY, null, '2222')).toBe(true);
+    expect(misfitsMap(candidates({ phantimal: { name: 'Wedge of Matter', tile: 4 } }), picked, { artifact: null, phantimal: 'Wedge of Matter' }, cells, TILE.ENEMY, null, '2222')).toBe(true);
+    expect(misfitsMap(candidates({ heroes: [{ tile: 3, name: 'Zed' }] }), picked, extras, cells, TILE.ENEMY, null, '2222')).toBe(false); // other heroes: not the same formation, nothing to warn about
   });
 
   it('does not reuse tiles that are not in the zone of the map', () => {
-    expect(firstReusable(savedSides([fight(1, { opponent: { ...fight(1).opponent, heroes: [{ tile: 20, name: 'Zed' }, { tile: 0, name: 'Evie' }] } })], 'Super League', 2, 'B', '2222'), picked, { artifact: null, phantimal: 'Orson' }, cells, TILE.ENEMY)).toBeNull();
+    expect(saved([fight(1, { opponent: { ...fight(1).opponent, heroes: [{ tile: 20, name: 'Zed' }, { tile: 0, name: 'Evie' }] } })])).toBeNull();
   });
 });
 

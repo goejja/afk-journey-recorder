@@ -3,6 +3,8 @@ import { rosterImportContract } from '../../src/shared/contracts/roster-import.j
 import { TEAMS_PER_MODE } from '../../src/domain/arena.js';
 import { TILE, TILE_COUNT } from '../../src/domain/map.js';
 import { PAIR_HEROES, PAIR_PHANTIMALS, SUMMONS } from '../../src/domain/units.js';
+import { layoutFrom } from '../../src/domain/layout.js';
+import { knewHomelessPlacement, resolveSavedPlacement, type PlacementTarget, type SavedPlacement } from '../../src/domain/placement-reuse.js';
 import type { ArenaBattle, ArenaMode, BattleDraft, BattleDraftSide, BattleImportPicture, Hero, ImportFeedbackSide, ImportReading } from '../backend.js';
 import { emptyFormation, formationFromRecord, placeHero, withHeroState, type FormationState } from '../FormationEditor.js';
 import { emptyOpponent, opponentFromRecord, type OpponentState } from '../arena/OpponentEditor.js';
@@ -106,8 +108,8 @@ function turnedOver(saved: SavedSide): SavedSide {
 
 /**
  * The saved sides that a side of a picture can stand like, latest first: the fights of the same mode and team number in which the same
- * Player (by Player ID) stood on this side, as saved, or on the other side, turned upside down. Round-robin opponents keep their
- * formation, so a placement recorded once is known again. Whether it really is the same formation is `reusable`'s question.
+ * Player (by Player ID) stood on this side, as saved, or on the other side, turned upside down. It tells which teams the Player is known
+ * to field, for `correctHeroes`; where a team stood is the resolver's question (`reusedSide`).
  */
 export function savedSides(fights: ArenaBattle[], mode: ArenaMode, position: number, side: 'A' | 'B', playerId: string | null | undefined, mapName?: string | null): SavedSide[] {
   if (!playerId) return [];
@@ -123,19 +125,6 @@ export function savedSides(fights: ArenaBattle[], mode: ArenaMode, position: num
 
 /** A record is about the same Map as the one being placed on; without a Map to compare, any record counts. */
 const sameMap = (fight: ArenaBattle, mapName: string | null | undefined): boolean => mapName === undefined || mapName === null || fight.mapName === mapName;
-
-/**
- * The saved sides of the same mode and team number that belong to nobody the picture names. Their placement is offered by the button beside
- * a Profile, only when the heroes are exactly the same, and never applied unasked or used to correct a reading: replayed on the saved
- * history, the placement of another Player was the one saved in 0 of 4 sides, the same Player's in 240 of 242.
- */
-export function otherSavedSides(fights: ArenaBattle[], mode: ArenaMode, position: number, side: 'A' | 'B', own: SavedSide[], mapName?: string | null): SavedSide[] {
-  const sides = fights
-    .filter((f) => f.mode === mode && (TEAMS_PER_MODE[mode] === 1 || f.battlePosition === position) && sameMap(f, mapName))
-    .sort((a, b) => b.id - a.id)
-    .flatMap((f) => (side === 'A' ? [f.formation, turnedOver(f.opponent)] : [f.opponent, turnedOver(f.formation)]));
-  return sides.filter((candidate) => !own.includes(candidate));
-}
 
 /** The most heroes of a team a Battle import replaces (ADR 0013). */
 const MAX_CORRECTED_HEROES = 2;
@@ -187,30 +176,47 @@ export function correctHeroes(side: BattleDraftSide, known: KnownTeam[]): { hero
   };
 }
 
-/** The first of the saved sides that is the formation of the picture, if any. */
-export const firstReusable = (candidates: SavedSide[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>, cells: number[], zone: number): SavedSide | null =>
-  candidates.find((c) => reusable(c, heroes, extras, cells, zone)) ?? null;
-
-/** Whether the saved side is the formation of the picture: the same heroes, and a phantimal the picture shows must be the same too. */
-function sameFormation(saved: SavedSide, heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>): boolean {
-  const wanted = [...new Set(heroes.map((h) => h.hero))].sort();
-  const kept = [...new Set(saved.heroes.filter((h) => !isSummon({ hero: h.name, part: h.part })).map((h) => h.name))].sort();
-  if (wanted.length !== kept.length || wanted.some((name, i) => name !== kept[i])) return false;
-  return !extras.phantimal || (saved.phantimal != null && phantimalKey(extras.phantimal) === phantimalKey(saved.phantimal.name));
+/**
+ * The saved sides of the same mode and team number as placements for the resolver (ADR 0030), each as it would stand on `side`'s zone:
+ * a side of the fight that stood there as saved, the other turned upside down. Every Player's sides are listed, with the Player behind
+ * each; the resolver prefers the Player's own and then the newest.
+ */
+export function savedPlacements(fights: ArenaBattle[], mode: ArenaMode, position: number, side: 'A' | 'B'): SavedPlacement<SavedSide>[] {
+  const other = side === 'A' ? 'B' : 'A';
+  const sideOf = (f: ArenaBattle, s: 'A' | 'B'): SavedSide => (s === 'A' ? f.formation : f.opponent);
+  const placement = (f: ArenaBattle, s: 'A' | 'B', saved: SavedSide): SavedPlacement<SavedSide> => ({
+    attemptId: f.id,
+    mapName: f.mapName ?? null,
+    playerId: s === 'A' ? f.playerIdA : f.playerIdB,
+    units: layoutFrom({ heroes: saved.heroes.map((h) => ({ tile: h.tile, hero: h.name, part: h.part })), phantimal: saved.phantimal }).units,
+    artifact: saved.artifact ?? null,
+    source: saved,
+  });
+  return fights
+    .filter((f) => f.mode === mode && (TEAMS_PER_MODE[mode] === 1 || f.battlePosition === position))
+    .flatMap((f) => [placement(f, side, sideOf(f, side)), placement(f, other, turnedOver(sideOf(f, other)))]);
 }
 
-/** Whether the saved placement is possible on this map: every unit on its own tile of the zone, and a phantimal pair on both of its tiles. */
-function fitsMap(saved: SavedSide, cells: number[], zone: number): boolean {
-  const tiles = [...saved.heroes.map((h) => h.tile), ...phantimalParts(saved.phantimal).map((p) => p.tile)];
-  return new Set(tiles).size === tiles.length && tiles.every((tile) => cells[tile] === zone) && missingPhantimalPart(saved.phantimal) === null;
+/** What the resolver is asked for a picture's side: its heroes, the map and zone, and the Player behind it. A phantimal the picture shows must be the saved one too. */
+function targetOf(heroes: BattleDraftSide['heroes'], cells: number[], zone: number, mapName: string | null | undefined, playerId: string | null | undefined): PlacementTarget {
+  return { mapName: mapName ?? null, cells, zone, heroes: [...new Set(heroes.map((h) => h.hero))], playerId: playerId ?? null };
 }
 
-const reusable = (saved: SavedSide, heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>, cells: number[], zone: number): boolean =>
-  sameFormation(saved, heroes, extras) && fitsMap(saved, cells, zone);
+/** The placements that show the phantimal the picture shows (a pair is the same whichever part it names); a picture with none accepts any. */
+const withPhantimal = (placements: SavedPlacement<SavedSide>[], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>) =>
+  extras.phantimal ? placements.filter((p) => p.source?.phantimal != null && phantimalKey(extras.phantimal!) === phantimalKey(p.source.phantimal.name)) : placements;
 
-/** True when the formation of the picture was saved before but no saved placement of it fits this map. */
-export const misfitsMap = (candidates: SavedSide[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>, cells: number[], zone: number): boolean =>
-  !firstReusable(candidates, heroes, extras, cells, zone) && candidates.some((c) => sameFormation(c, heroes, extras));
+/**
+ * The saved side that says where the picture's team stood (the resolver's tiers `profile`, then `any`, ADR 0030), or null when the team
+ * was never placed on this map by a record that fits, or when no Player ID says whose team it is.
+ */
+export function reusedSide(placements: SavedPlacement<SavedSide>[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>, cells: number[], zone: number, mapName: string | null | undefined, playerId: string | null | undefined): SavedSide | null {
+  return resolveSavedPlacement(targetOf(heroes, cells, zone, mapName, playerId), withPhantimal(placements, extras)).source;
+}
+
+/** True when the picture's team was placed on this map before, by a Player whose team it could be, but no saved placement of it fits the map. */
+export const misfitsMap = (placements: SavedPlacement<SavedSide>[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>, cells: number[], zone: number, mapName: string | null | undefined, playerId: string | null | undefined): boolean =>
+  !!playerId && reusedSide(placements, heroes, extras, cells, zone, mapName, playerId) === null && knewHomelessPlacement(targetOf(heroes, cells, zone, mapName, playerId), withPhantimal(placements, extras));
 
 const unitsKey = (placed: { tile: number; hero: string; part?: string }[], phantimal: PlacedPhantimal | null, artifact: string) =>
   JSON.stringify([placed.map((p) => [p.hero, p.part ?? '', p.tile]).sort(), phantimal ? [phantimal.name, phantimal.tile, phantimal.partnerTile ?? null] : null, artifact]);
@@ -240,8 +246,7 @@ function knownPlacement<S extends { placed: { tile: number; hero: string; part?:
   const heroes = [...new Set(current.placed.filter((p) => !isSummon({ hero: p.hero, part: p.part })).map((p) => p.hero))].map((hero) => ({ tile: '', ...kind.heroesOf(current, hero) }));
   if (heroes.length === 0) return null;
   const extras = { artifact: null, phantimal: current.phantimal?.name ?? null };
-  const own = savedSides(fights, mode, position, kind.letter, playerId, mapName);
-  const found = firstReusable([...own, ...otherSavedSides(fights, mode, position, kind.letter, own, mapName)], heroes, extras, cells, kind.zone);
+  const found = reusedSide(savedPlacements(fights, mode, position, kind.letter), heroes, extras, cells, kind.zone, mapName, playerId);
   if (!found) return null;
   const next = kind.place(cells, heroes, extras, found);
   return unitsKey(next.placed, next.phantimal, next.artifact) === unitsKey(current.placed, current.phantimal, current.artifact) ? null : next;
@@ -335,7 +340,7 @@ function layOut(
 
 /** Your side's heroes on the first free tiles of the player's zone, in the order of the picture, with the states the picture was sure of; then its phantimal and artifact when the report showed them. */
 export function placeOwn(cells: number[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'> = { artifact: null, phantimal: null }, saved: SavedSide | null = null): FormationState {
-  if (saved && reusable(saved, heroes, extras, cells, TILE.PLAYER)) return reusedOwn(saved, heroes, extras);
+  if (saved) return reusedOwn(saved, heroes, extras);
   let formation = emptyFormation();
   const phantimal = layOut(
     cells,
@@ -355,7 +360,7 @@ export function placeOwn(cells: number[], heroes: BattleDraftSide['heroes'], ext
 
 /** The other side's heroes on the first free tiles of the enemy zone, likewise. */
 export function placeOpponent(cells: number[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'> = { artifact: null, phantimal: null }, saved: SavedSide | null = null): OpponentState {
-  if (saved && reusable(saved, heroes, extras, cells, TILE.ENEMY)) return reusedOpponent(saved, heroes, extras);
+  if (saved) return reusedOpponent(saved, heroes, extras);
   let placed = emptyOpponent().placed;
   const phantimal = layOut(
     cells,

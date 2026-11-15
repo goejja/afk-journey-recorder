@@ -6,12 +6,13 @@ import { keepOnMap } from '../relocate.js';
 import { emptyOpponent, opponentFromRecord, toOpponentPayload, type OpponentState } from './OpponentEditor.js';
 import { type ImportRound } from '../reader/BattleImport.js';
 import { reusableIn } from '../../src/domain/tournament.js';
+import type { SavedPlacement } from '../../src/domain/placement-reuse.js';
 import { isSummon } from '../../src/domain/units.js';
 import { matchTeam, turnTeam, withPlacement, withSeenAs, type ReadSide, type RoundTeam } from '../../src/domain/round-deployment.js';
 import { describe as describeChange } from './RoundDeploymentBar.js';
 import { applyToOpponent, applyToOwn, deploymentsFromRecords, guessOf, mergeDeployments, pruneGuess, readSideOf, standsOn, teamOfOpponent, teamOfOwn, type GuessTiles } from './round-deployment.js';
 import { TILE } from '../../src/domain/map.js';
-import { correctHeroes, firstReusable, knownTeams, misfitsMap, otherSavedSides, placeOpponent, placeOwn, readingOf, savedSides, unplacedUnit, type ImportedTeam, type ImportGroup, type KnownTeam } from '../reader/battle-import.js';
+import { correctHeroes, knownTeams, misfitsMap, placeOpponent, placeOwn, readingOf, reusedSide, savedPlacements, savedSides, unplacedUnit, type ImportedTeam, type ImportGroup, type KnownTeam, type SavedSide } from '../reader/battle-import.js';
 import { derivePhantimal } from '../phantimal.js';
 
 export interface Reference {
@@ -276,7 +277,7 @@ export function cloneFromImport(reference: Reference, group: ImportGroup, everyS
       };
     }
     const corrected: Record<Side, string[]> = { A: [], B: [] };
-    const known = { A: [] as ReturnType<typeof savedSides>, B: [] as ReturnType<typeof savedSides> };
+    const known = { A: [] as SavedPlacement<SavedSide>[], B: [] as SavedPlacement<SavedSide>[] };
     const mapName = drafts[slot]!.mapName;
     if (reuse)
       for (const side of ['A', 'B'] as const) {
@@ -292,14 +293,19 @@ export function cloneFromImport(reference: Reference, group: ImportGroup, everyS
           // in a Round a correction from the Player's own records is the reuse the player asked for: it is listed, not a reason to look
           (round ? reused : notes).push(`Team ${slot + 1}, Side ${side} (${sides[side].name ?? '?'}): corrected from ${fix.because}: ${fix.corrected.map((c) => (c.from ? `${c.from} to ${c.to}` : `${c.to} added`)).join(', ')}. Check it against the picture.`);
         }
-        // the same Player's saved sides first, then any other Player's on the same Map (ADR 0030); the player reviews it before saving
-        known[side] = [...own, ...otherSavedSides(saved, mode, slot + 1, side, own, mapName)];
+        // where the team stood: the same Player's saved sides first, then any other Player's on the same Map (ADR 0030); the player reviews it before saving.
+        // The sides of the Player outside the Round, when the Round holds none, count as the Player's own too.
+        const who = playerId?.toLowerCase();
+        const inRoundOwn = savedPlacements(saved, mode, slot + 1, side);
+        known[side] = who && !inRoundOwn.some((p) => p.playerId?.toLowerCase() === who) && mode === 'Super League'
+          ? [...inRoundOwn, ...savedPlacements(everySaved, mode, slot + 1, side).filter((p) => p.playerId?.toLowerCase() === who)]
+          : inRoundOwn;
       }
     for (const [side, zone] of [['A', TILE.PLAYER], ['B', TILE.ENEMY]] as const)
-      if (misfitsMap(known[side], sides[side].heroes, sides[side], cells, zone)) notes.push(`Team ${slot + 1}, Side ${side} (${sides[side].name ?? '?'}): the saved placement does not fit the map ${drafts[slot]!.mapName}, so the heroes are on free tiles.`);
+      if (misfitsMap(known[side], sides[side].heroes, sides[side], cells, zone, mapName, sides[side].profile?.playerId)) notes.push(`Team ${slot + 1}, Side ${side} (${sides[side].name ?? '?'}): the saved placement does not fit the map ${drafts[slot]!.mapName}, so the heroes are on free tiles.`);
     // A player seen before with the same heroes stands as in the saved fight: the formations of a round-robin do not change.
-    const reuseA = firstReusable(known.A, sides.A.heroes, sides.A, cells, TILE.PLAYER);
-    const reuseB = firstReusable(known.B, sides.B.heroes, sides.B, cells, TILE.ENEMY);
+    const reuseA = reusedSide(known.A, sides.A.heroes, sides.A, cells, TILE.PLAYER, mapName, sides.A.profile?.playerId);
+    const reuseB = reusedSide(known.B, sides.B.heroes, sides.B, cells, TILE.ENEMY, mapName, sides.B.profile?.playerId);
     let formation = placeOwn(cells, sides.A.heroes, sides.A, reuseA);
     let opponent = placeOpponent(cells, sides.B.heroes, sides.B, reuseB);
     // The Phantimal of an imported side follows the same rule as one placed by hand: it stands only while the heroes of its faction are there
