@@ -1,0 +1,23 @@
+name: Feature request
+description: Something the tool should do that it does not do today.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The problem you have today, in one or two sentences. Say what hurts, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: wanted
+    attributes:
+      label: What you would like
+      description: What you would do with the tool once it works that way, and which mode or page it concerns.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Examples or links that show the need. Do not paste your database, and do not post pictures or text that show real player names or IDs.
