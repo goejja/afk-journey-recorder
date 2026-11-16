@@ -38,13 +38,26 @@ const BACK_DEPTH = Math.min(...Array.from({ length: TILE_COUNT }, (_, tile) => d
 /** The game row of a tile counted from its side's back edge: 1 is the back row, up to 15 for the front one. */
 export const gameRowOf = (tile: number, side: Side): number => depthOf(tile, side) - BACK_DEPTH + 1;
 
-/** The tile a fixed relation points to from a tile, or null when it points off the board. `rearmost` is not a tile: see `rearmostOf`. */
-export function relatedTile(relation: 'behind' | 'mirror', tile: number, side: Side): number | null {
+/** The tiles a tile can point to, in a side's own frame (Side A facing up the board): the neighbours of a hexagon, and the mirror tile. */
+export type TileRelation = 'behind' | 'front' | 'left' | 'behindRight' | 'mirror';
+
+/**
+ * The tile a fixed relation points to from a tile, or null when it points off the board. `rearmost` is not a tile: see `rearmostOf`.
+ * `behind` is the neighbour toward the side's back edge on its left, `behindRight` the one on its right, `front` the one toward the
+ * enemy (the opposite of `behind`), `left` the neighbour on the same line (the owner's reading of Daimon's tiles, 2026-11-17).
+ */
+export function relatedTile(relation: TileRelation, tile: number, side: Side): number | null {
   const own = side === 'A' ? tile : turn(tile);
   let found: number | null;
   if (relation === 'behind') {
     // Side A faces up the board, so its back edge is the bottom and "behind" is the bottom left neighbour.
     found = tileAt(rowOfTile(own) + 1, xOf(own) - 0.5);
+  } else if (relation === 'behindRight') {
+    found = tileAt(rowOfTile(own) + 1, xOf(own) + 0.5);
+  } else if (relation === 'front') {
+    found = tileAt(rowOfTile(own) - 1, xOf(own) + 0.5);
+  } else if (relation === 'left') {
+    found = tileAt(rowOfTile(own), xOf(own) - 1);
   } else {
     const row = rowOfTile(own);
     const index = own - STARTS[row]!;
@@ -52,6 +65,14 @@ export function relatedTile(relation: 'behind' | 'mirror', tile: number, side: S
     found = mirrored === index ? null : STARTS[row]! + mirrored;
   }
   return found === null ? null : side === 'A' ? found : turn(found);
+}
+
+/** The tiles next to a tile (the six hexagons around it that are on the board), in a side's own frame. */
+export function neighbourTiles(tile: number, side: Side): number[] {
+  const own = side === 'A' ? tile : turn(tile);
+  const around = [tileAt(rowOfTile(own), xOf(own) - 1), tileAt(rowOfTile(own), xOf(own) + 1)];
+  for (const line of [-1, 1]) for (const across of [-0.5, 0.5]) around.push(tileAt(rowOfTile(own) + line, xOf(own) + across));
+  return around.flatMap((t) => (t === null ? [] : [side === 'A' ? t : turn(t)]));
 }
 
 /**

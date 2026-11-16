@@ -10,8 +10,8 @@ interface Props {
   artifact?: string | null;
   /** The assist hero of a stage or Dream Hunt record; it is not one of the five units, so it comes last. */
   assist?: { name: string } | null;
-  /** What is written under each hero: its name, or its rank and equipment. */
-  meta?: 'name' | 'state';
+  /** What is written under each hero: its name, or its rank and equipment; `none` writes nothing, so the row is only as tall as the portraits and the details stay in the tooltips. */
+  meta?: 'name' | 'state' | 'none';
   size?: number;
   side?: 'a' | 'b';
   label?: string;
@@ -27,7 +27,7 @@ interface Props {
  */
 export function TeamOverview({ heroes, phantimal, artifact, assist, meta = 'name', size = 32, side = 'a', label, outcome }: Props) {
   const slot = { width: size + 12 }; // every slot has the same width, so the same unit sits in the same place on every row
-  const blank = (key: string) => <span key={key} className="unit-blank" aria-hidden="true" style={{ width: size + 12, height: size + 14 }} />;
+  const blank = (key: string) => <span key={key} className="unit-blank" aria-hidden="true" style={{ width: size + 12, height: size + (meta === 'none' ? 0 : 14) }} />;
   // A summon's row can come before its hero's (the tiles decide the order), so drop the summons first and then keep one row per hero.
   const own = heroes.filter((h) => !isSummon({ hero: h.name, part: h.part }));
   const once = own.filter((h, i) => own.findIndex((x) => x.name === h.name) === i);
@@ -36,7 +36,7 @@ export function TeamOverview({ heroes, phantimal, artifact, assist, meta = 'name
       {phantimal ? (
         <span className="unit" style={slot} title={`Phantimal ${PAIR_PHANTIMALS[phantimal.name] ? `${phantimal.name} and ${PAIR_PHANTIMALS[phantimal.name]}` : phantimal.name}`}>
           <Portrait kind="phantimal" name={phantimal.name} size={size} />
-          <span className="unit-meta">phantimal</span>
+          {meta !== 'none' && <span className="unit-meta">phantimal</span>}
         </span>
       ) : (
         blank('phantimal')
@@ -44,7 +44,7 @@ export function TeamOverview({ heroes, phantimal, artifact, assist, meta = 'name
       {artifact ? (
         <span className="unit" style={slot} title={artifact}>
           <ArtifactBadge name={artifact} side={side} size={size} />
-          <span className="unit-meta">{artifact}</span>
+          {meta !== 'none' && <span className="unit-meta">{artifact}</span>}
         </span>
       ) : (
         blank('artifact')
@@ -52,16 +52,18 @@ export function TeamOverview({ heroes, phantimal, artifact, assist, meta = 'name
       {once.map((h) => (
         <span key={h.name} className="unit" style={slot} title={`${h.name} · ${h.rank ?? 'rank unknown'}${h.equipmentLevel != null ? ` · ${weaponLabel(h.equipmentLevel)}` : ''}`}>
           <Portrait kind="hero" name={h.name} size={size} />
-          <span className="unit-meta">
-            {meta === 'name' ? h.name : `${h.rank ?? '–'}${h.equipmentLevel != null ? ` ${weaponLabel(h.equipmentLevel)}` : ''}`}
-          </span>
+          {meta !== 'none' && (
+            <span className="unit-meta">
+              {meta === 'name' ? h.name : `${h.rank ?? '–'}${h.equipmentLevel != null ? ` ${weaponLabel(h.equipmentLevel)}` : ''}`}
+            </span>
+          )}
         </span>
       ))}
       {Array.from({ length: Math.max(0, MAX_STANDARD_HEROES - once.length) }, (_, i) => blank(`hero${i}`))}
       {assist === undefined ? null : assist ? (
         <span className="unit" style={slot} title={`Assist ${assist.name}`}>
           <Portrait kind="hero" name={assist.name} size={size} />
-          <span className="unit-meta">assist</span>
+          {meta !== 'none' && <span className="unit-meta">assist</span>}
         </span>
       ) : (
         blank('assist')

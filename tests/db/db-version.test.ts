@@ -200,6 +200,24 @@ describe('database versions (ADR 0023)', () => {
     db.close();
   });
 
+  it('lets a Placement Rule name the six places added in versions 22 and 23 and keeps the rules it had', () => {
+    const path = tempFile();
+    const old = new Database(path);
+    old.exec(schema());
+    old.pragma('user_version = 1');
+    old.close();
+    const first = openDb(path);
+    first.exec("INSERT INTO placement_rule (hero, relation, effect, note, source) VALUES ('Alna', 'sameRow', 'protects', 'kept', 'manual')");
+    first.close();
+    const db = openDb(path);
+    for (const relation of ['front', 'frontmost', 'daimon', 'adjacentRearmost', 'behindOrNearest', 'adjacentFrontmost']) {
+      expect(() => db.prepare("INSERT INTO placement_rule (hero, relation, effect, source) VALUES (?, ?, 'boosts', 'manual')").run(relation, relation)).not.toThrow();
+    }
+    expect(() => db.exec("INSERT INTO placement_rule (hero, relation, effect, source) VALUES ('X', 'sideways', 'boosts', 'manual')")).toThrow();
+    expect(db.prepare("SELECT note FROM placement_rule WHERE hero = 'Alna'").pluck().get()).toBe('kept');
+    db.close();
+  });
+
   it('gives a new database the pairs, summons and second part the code used to know, with no heroes imported yet', () => {
     const db = openDb(':memory:');
     expect(db.prepare('SELECT count(*) FROM hero_pair').pluck().get()).toBe(1);

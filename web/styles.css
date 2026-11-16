@@ -223,6 +223,7 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .stage-row .tags-cell { flex-wrap: nowrap; min-width: 0; }
 .battle-teams { grid-area: teams; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); min-width: 0; }
 .battle-fights { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: grid; gap: var(--sp-2); }
+.battle-note { margin-bottom: 0; } /* the card's own padding is the space below the last line */
 .battle-map { display: flex; justify-content: center; padding: var(--sp-1) 0; }
 .attempt-form h3 { margin-top: var(--sp-5); }
 

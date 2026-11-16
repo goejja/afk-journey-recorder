@@ -91,7 +91,7 @@ function FightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDelete, o
         <TeamOverview label="Side B" side="b" outcome={b.outcome === 'Win' ? 'lost' : 'won'} heroes={b.opponent.heroes} phantimal={b.opponent.phantimal} artifact={b.opponent.artifact} size={36} />
       </div>
       {shown.has(b.id) && <BattleMapPreview battle={b} map={reference.maps.find((m) => m.name === b.mapName)} />}
-      {b.note && <p className="muted">{b.note}</p>}
+      {b.note && <p className="muted battle-note">{b.note}</p>}
     </>
   );
 }

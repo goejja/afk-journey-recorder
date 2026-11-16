@@ -1,4 +1,7 @@
-import { backToFront, gameRowOf, relatedTile, rowOfTile, stepsBetween, tileAt, xOf } from './board.js';
+import { backToFront, gameRowOf, neighbourTiles, relatedTile, stepsBetween, type TileRelation } from './board.js';
+
+/** The tiles Daimon's protection tries, in order: behind, beside it on the left, behind on the right. */
+export const DAIMON_TILES: TileRelation[] = ['behind', 'left', 'behindRight'];
 
 /**
  * Where an ally can stand in relation to a hero, read from the start tiles of a side (a Side B tile turned over, so both sides read the
@@ -26,18 +29,13 @@ interface Standing {
   tile: number;
 }
 
-/** The tile at a step from a tile in the board's own frame (a line down is `+1`, a half tile across is `0.5`), or null off the board. */
-const step = (tile: number, lines: number, across: number) => tileAt(rowOfTile(tile) + lines, xOf(tile) + across);
-
 /** The tiles a relation names around a tile, in order, for the relations that name tiles. */
 function tilesOf(relation: 'behind' | 'front' | 'adjacent' | 'mirror' | 'daimon', tile: number): (number | null)[] {
   switch (relation) {
-    case 'behind': return [relatedTile('behind', tile, 'A')];
-    case 'front': return [step(tile, -1, 0.5)];
-    case 'mirror': return [relatedTile('mirror', tile, 'A')];
-    case 'adjacent': return [step(tile, 0, -1), step(tile, 0, 1), step(tile, -1, -0.5), step(tile, -1, 0.5), step(tile, 1, -0.5), step(tile, 1, 0.5)];
+    case 'behind': case 'front': case 'mirror': return [relatedTile(relation, tile, 'A')];
+    case 'adjacent': return neighbourTiles(tile, 'A');
     // Daimon's protection: the tile behind, else the one beside it on the left, else the one behind on the right (the owner's reading, 2026-11-17)
-    case 'daimon': return [relatedTile('behind', tile, 'A'), step(tile, 0, -1), step(tile, 1, 0.5)];
+    case 'daimon': return DAIMON_TILES.map((r) => relatedTile(r, tile, 'A'));
   }
 }
 
