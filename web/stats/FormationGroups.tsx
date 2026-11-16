@@ -1,17 +1,19 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { isSmallSample } from '../../src/domain/stats.js';
 import { useLoad } from '../useLoad.js';
-import { api, type ArchetypeStat, type GameMap, type PlacementMap, type FormationGroupRow, type FormationProfileStat, type FormationReport, type GroupHero, type RateRecord } from '../backend.js';
+import { api, type ArchetypeStat, type GameMap, type PlacementMap, type FormationGroupRow, type FormationReport, type GroupCounterReport, type GroupCounterRow, type GroupHero, type Matchup, type RateRecord } from '../backend.js';
 import { useMaps } from '../useMaps.js';
 import { HexMap } from '../HexMap.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { Portrait } from '../Portrait.js';
+import { Dialog } from '../ui/Dialog.js';
 import { percent, points, record, toggled } from '../format.js';
 
 interface Filters {
   mode: string[];
   tag: string[];
   player: string[];
+  playedIn: string[];
   excludeDefault: boolean;
   min: string;
 }
@@ -19,12 +21,19 @@ interface Filters {
 const plain = (heroes: string[]) => heroes.join(' + ');
 const coreNames = (core: GroupHero[]) => core.map((h) => h.hero);
 
-const heroChip = (h: GroupHero | { hero: string }, withShare: boolean) => (
-  <span key={h.hero} className="unit-inline">
-    <Portrait kind="hero" name={h.hero} size={24} /> {h.hero}
-    {withShare && 'share' in h ? ` ${percent(h.share)}` : ''}
-  </span>
-);
+/** Portraits of a group's heroes, each with its share of the group's appearances under it. */
+function GroupHeroes({ heroes, size }: { heroes: GroupHero[]; size: number }) {
+  return (
+    <span className="group-heroes">
+      {heroes.map((h) => (
+        <span key={h.hero} className="group-hero" title={`${h.hero} ${percent(h.share)}`}>
+          <Portrait kind="hero" name={h.hero} size={size} />
+          <small>{percent(h.share)}</small>
+        </span>
+      ))}
+    </span>
+  );
+}
 
 function Rate({ r }: { r: RateRecord }) {
   return (
@@ -76,31 +85,116 @@ function Placement({ placement, maps }: { placement: PlacementMap[]; maps: GameM
   );
 }
 
-function Profile({ core, filters, maps }: { core: string[]; filters: Filters; maps: GameMap[] }) {
-  // `core` is a new array on every render; its names are the dependency.
-  const { data: profile, error } = useLoad(
-    () => api.statsFormationProfile({ core, mode: filters.mode, tag: filters.tag, player: filters.player, excludeDefault: filters.excludeDefault ? 'true' : '' }),
-    [core.join('/'), filters],
-  );
+const MATRIX_SIZE = 12;
+const PAIRS_SHOWN = 8;
 
-  if (error) return <p className="error" role="alert">{error}</p>;
-  if (!profile) return <p className="muted">Loading…</p>;
-  const matchups = (title: string, rows: FormationProfileStat['strongAgainst']) => (
+/** A group's name in the counters report: its core heroes. */
+const nameOf = (g: GroupCounterRow) => plain(g.core);
+
+/** Which groups a group beats and loses to, from the head-to-head records under the same filters. */
+function Counters({ core, report }: { core: string[]; report: GroupCounterReport | null }) {
+  if (!report) return <p className="muted">Loading…</p>;
+  const key = core.join('/');
+  const group = report.groups.find((g) => g.core.join('/') === key);
+  const { winRate, minGames } = report.rule;
+  const list = (title: string, matchups: Matchup[], mine: boolean) => (
     <>
       <h4>{title}</h4>
-      {rows.length === 0 ? (
-        <p className="muted">No enemy group with at least 5 games.</p>
+      {matchups.length === 0 ? (
+        <p className="muted">No group met in at least {minGames} games with a win rate of {percent(winRate)} or more.</p>
       ) : (
         <ul className="stats-detail">
-          {rows.map((m) => (
-            <li key={m.enemy.join('/')}>
-              {`${plain(m.enemy)} — ${record(m)} (${percent(m.winRate)})`}
+          {matchups.map((m) => (
+            <li key={m.vs}>
+              {`${nameOf(report.groups[m.vs]!)} — ${mine ? `${m.wins}–${m.losses}` : `${m.losses}–${m.wins}`} of ${m.games} (${percent(mine ? m.winRate : m.losses / m.games)})`}
             </li>
           ))}
         </ul>
       )}
     </>
   );
+  if (!group) return <p className="muted">This group has no head-to-head record under these filters.</p>;
+  const anecdotes = group.matchups.filter((m) => m.anecdote);
+  return (
+    <>
+      {list('Beats', group.beats, true)}
+      {list('Loses to', group.losesTo, false)}
+      {anecdotes.length > 0 && (
+        <>
+          <h4>Met in too few games</h4>
+          <ul className="stats-detail">
+            {anecdotes.map((m) => (
+              <li key={m.vs}>
+                {`${nameOf(report.groups[m.vs]!)} — ${m.wins}–${m.losses} of ${m.games}`}
+                <span className="badge few">anecdote</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
+  );
+}
+
+/** The most played groups against each other: each cell is the row group's win rate against the column group. */
+function CounterMatrix({ report }: { report: GroupCounterReport }) {
+  const shown = report.groups.slice(0, MATRIX_SIZE);
+  if (shown.length < 2) return null;
+  const cell = (row: number, column: number) => {
+    if (row === column) return <td key={column} className="mirror" />;
+    const m = shown[row]!.matchups.find((x) => x.vs === column);
+    if (!m) return <td key={column} className="none" />;
+    const heat = Math.round(Math.abs(m.winRate - 0.5) * 120);
+    return (
+      <td
+        key={column}
+        className={`${m.winRate >= 0.5 ? 'win' : 'loss'}${m.anecdote ? ' faded' : ''}`}
+        style={{ '--heat': heat } as CSSProperties}
+        title={`${nameOf(shown[row]!)} against ${nameOf(shown[column]!)}: ${m.wins}–${m.losses} of ${m.games}${m.anecdote ? ` (under ${report.rule.minGames} games: anecdote)` : ''}`}
+      >
+        {percent(m.winRate)}
+        <span className="games">{m.games}</span>
+      </td>
+    );
+  };
+  return (
+    <>
+      <h3>Groups against each other</h3>
+      <p className="muted">
+        The {shown.length} most played groups. Each cell is the win rate of the row group against the column group, with the games under it; green is above 50%, red below, and a faded cell has fewer than {report.rule.minGames} games.
+      </p>
+      <table className="board counter-matrix" aria-label="Win rate of each group against each other">
+        <thead>
+          <tr>
+            <th scope="col">Group</th>
+            {shown.map((g, i) => <th key={nameOf(g)} scope="col" title={nameOf(g)}>{i + 1}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((g, row) => (
+            <tr key={nameOf(g)}>
+              <th scope="row" aria-label={`${row + 1}. ${nameOf(g)}`} title={nameOf(g)}>
+                <span className="group-rank">{row + 1}</span>
+                <span className="group-heroes">{g.core.map((h) => <Portrait key={h} kind="hero" name={h} size={20} />)}</span>
+              </th>
+              {shown.map((_, column) => cell(row, column))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function Profile({ core, filters, maps, counters }: { core: string[]; filters: Filters; maps: GameMap[]; counters: GroupCounterReport | null }) {
+  // `core` is a new array on every render; its names are the dependency.
+  const { data: profile, error } = useLoad(
+    () => api.statsFormationProfile({ core, mode: filters.mode, tag: filters.tag, player: filters.player, playedIn: filters.playedIn, excludeDefault: filters.excludeDefault ? 'true' : '' }),
+    [core.join('/'), filters],
+  );
+
+  if (error) return <p className="error" role="alert">{error}</p>;
+  if (!profile) return <p className="muted">Loading…</p>;
   const gaps = [['ahead', 'Ahead'], ['near', 'Near level'], ['behind', 'Behind'], ['unknown', 'Unknown gap']] as const;
   return (
     <>
@@ -158,8 +252,7 @@ function Profile({ core, filters, maps }: { core: string[]; filters: Filters; ma
           </ul>
         </>
       )}
-      {matchups('Strong against', profile.strongAgainst)}
-      {matchups('Weak against', profile.weakAgainst)}
+      <Counters core={core} report={counters} />
       <Placement placement={profile.placement} maps={maps} />
       <h4>Results by upgrade gap</h4>
       <p className="muted">Ranks and equipment of the group's side against the other side, from the snapshots of each battle; unknown when a rank is missing.</p>
@@ -177,50 +270,116 @@ function Profile({ core, filters, maps }: { core: string[]; filters: Filters; ma
   );
 }
 
-function GroupRow({ group, baseline, filters, maps, opened, toggle }: { group: FormationGroupRow; baseline: number; filters: Filters; maps: GameMap[]; opened: boolean; toggle: () => void }) {
-  const core = coreNames(group.core);
+/** A win-rate bar whose length is the games of the group, against the most played group, and whose fill is its win rate. */
+function GamesBar({ group, most }: { group: { games: number; winRate: number }; most: number }) {
   return (
-    <Fragment>
-      <tr className={isSmallSample(group.games) ? 'low' : undefined}>
-        <td>
-          <button className="link" aria-expanded={opened} onClick={toggle}>
-            {opened ? '▾' : '▸'} <span className="unit-inline">{core.map((h) => <Portrait key={h} kind="hero" name={h} size={24} />)}</span> {plain(core)}
-          </button>
-        </td>
-        <td>{group.flex.map((h) => heroChip(h, true))}</td>
-        <td>{group.artifact ? `${group.artifact.artifact} ${percent(group.artifact.share)}` : ''}</td>
-        <td>{record(group)} of {group.games}</td>
-        <td>
-          {percent(group.winRate)} <span className="muted" title={`The win rate of all sides is ${percent(baseline)}`}>{points(group.vsAverage)}</span>
-        </td>
-        <td>{group.players}</td>
-        <td>
-          {group.labels.map((l) => (
-            <span key={l.name} className="badge few">{l.detail ? `${l.name}: ${l.detail}` : l.name}</span>
-          ))}
-          {isSmallSample(group.games) && <span className="badge few">few games</span>}
-        </td>
-      </tr>
-      {opened && (
-        <tr>
-          <td colSpan={7}>
-            <div role="region" aria-label={`Profile of ${plain(core)}`}>
-              <Profile core={core} filters={filters} maps={maps} />
-            </div>
-          </td>
-        </tr>
-      )}
-    </Fragment>
+    <span className="group-bar" style={{ width: `${Math.max(6, (group.games / most) * 100)}%` }} role="img" aria-label={`${percent(group.winRate)} of ${group.games} games`}>
+      <span className="group-bar-win" style={{ width: percent(group.winRate) }} />
+    </span>
   );
 }
 
-function ArchetypeHeader({ row }: { row: ArchetypeStat }) {
+/** The pairs of the group's own heroes, from the pairs statistics under the same mode and season filters. */
+function GroupPairs({ heroes, filters }: { heroes: Set<string>; filters: Filters }) {
+  const pairs = useLoad(() => api.statsPairs({ mode: filters.mode, playedIn: filters.playedIn }), [filters.mode, filters.playedIn]);
+  if (pairs.error) return <p className="error" role="alert">{pairs.error}</p>;
+  if (!pairs.data) return <p className="muted">Loading…</p>;
+  const own = pairs.data.filter((p) => heroes.has(p.heroA) && heroes.has(p.heroB)).sort((a, b) => b.games - a.games).slice(0, PAIRS_SHOWN);
   return (
-    <tr>
-      <th colSpan={7} scope="colgroup">
-        {`Archetype: ${plain(coreNames(row.core))} · ${row.groups.length} groups · ${row.games} games (${record(row)}) · ${row.players} players`}
-      </th>
-    </tr>
+    <>
+      <h4>Pairs in this group</h4>
+      {own.length === 0 ? (
+        <p className="muted">No pair of these heroes in the pairs statistics.</p>
+      ) : (
+        <ul className="stats-detail">
+          {own.map((p) => (
+            <li key={`${p.heroA}/${p.heroB}`}>{`${p.heroA} + ${p.heroB} — ${record(p)} of ${p.games} (${percent(p.winRate)})`}</li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** The card of a group: who it is, then its pairs, counters, placement and the rest of its profile. */
+function GroupCard({ group, baseline, filters, maps, counters }: { group: FormationGroupRow; baseline: number; filters: Filters; maps: GameMap[]; counters: GroupCounterReport | null }) {
+  const core = coreNames(group.core);
+  const heroes = new Set([...core, ...group.flex.map((h) => h.hero)]);
+  return (
+    <div role="region" aria-label={`Profile of ${plain(core)}`}>
+      <div className="group-card-head">
+        <GroupHeroes heroes={group.core} size={40} />
+        <span className="group-sep" />
+        <GroupHeroes heroes={group.flex} size={28} />
+      </div>
+      <p>
+        {record(group)} of {group.games} games, {percent(group.winRate)}{' '}
+        <span className="muted" title={`The win rate of all sides is ${percent(baseline)}`}>{points(group.vsAverage)}</span>
+        {' · '}{group.players} players{group.artifact ? ` · ${group.artifact.artifact} ${percent(group.artifact.share)}` : ''}
+        {group.labels.map((l) => (
+          <span key={l.name} className="badge few">{l.detail ? `${l.name}: ${l.detail}` : l.name}</span>
+        ))}
+        {isSmallSample(group.games) && <span className="badge few">few games</span>}
+      </p>
+      <GroupPairs heroes={heroes} filters={filters} />
+      <Profile core={core} filters={filters} maps={maps} counters={counters} />
+    </div>
+  );
+}
+
+/** The figures of a row, in the columns every row of the list shares: bar, win rate, record, games, players, evidence. */
+function Figures({ stat, most, evidence }: { stat: { games: number; wins: number; winRate: number; players: number }; most: number; evidence: boolean }) {
+  return (
+    <>
+      <GamesBar group={stat} most={most} />
+      <strong className="num">{percent(stat.winRate)}</strong>
+      <span className="num">{record(stat)}</span>
+      <span className="num">{stat.games}</span>
+      <span className="num">{stat.players}</span>
+      <span>{evidence && isSmallSample(stat.games) && <span className="badge few">few games</span>}</span>
+    </>
+  );
+}
+
+function GroupRowButton({ group, most, onOpen }: { group: FormationGroupRow; most: number; onOpen: () => void }) {
+  return (
+    <button className={`group-row${isSmallSample(group.games) ? ' low' : ''}`} onClick={onOpen} aria-label={plain(coreNames(group.core))} aria-haspopup="dialog">
+      <span />
+      <GroupHeroes heroes={group.core} size={32} />
+      <GroupHeroes heroes={group.flex} size={22} />
+      <Figures stat={group} most={most} evidence />
+    </button>
+  );
+}
+
+function ArchetypeSection({ row, most, opened, toggle, children }: { row: ArchetypeStat; most: number; opened: boolean; toggle: () => void; children: ReactNode }) {
+  return (
+    <section className="group-archetype">
+      <button className="group-row group-archetype-head" aria-expanded={opened} aria-label={`Archetype: ${plain(coreNames(row.core))}`} title={`${row.groups.length} groups`} onClick={toggle}>
+        <span aria-hidden="true">{opened ? '▾' : '▸'}</span>
+        <GroupHeroes heroes={row.core} size={32} />
+        <GroupHeroes heroes={row.flex} size={22} />
+        <Figures stat={row} most={most} evidence={false} />
+      </button>
+      {opened && children}
+    </section>
+  );
+}
+
+/** The column titles of the list; the rows below read the same columns. */
+function GroupListHead() {
+  return (
+    <div className="group-row group-list-head" aria-hidden="true">
+      <span />
+      <span>Core</span>
+      <span>Flex</span>
+      <span>Games (bar) and win rate</span>
+      <span className="num">Win</span>
+      <span className="num">W–L</span>
+      <span className="num">Games</span>
+      <span className="num">Players</span>
+      <span />
+    </div>
   );
 }
 
@@ -228,18 +387,30 @@ function ArchetypeHeader({ row }: { row: ArchetypeStat }) {
 export function FormationGroups({ filters }: { filters: Filters }) {
   const maps = useMaps();
   const [picked, setPicked] = useState<string[]>([]);
-  const [open, setOpen] = useState<Set<string>>(new Set());
+  // the archetypes the owner folded or unfolded against the default; the group whose card is open
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());
+  const [chosen, setChosen] = useState<FormationGroupRow | null>(null);
   // an answer that arrives after the filters changed again is dropped (useLoad)
-  const heroList = useLoad(() => api.statsHeroes({ mode: filters.mode }), [filters.mode]);
+  const heroList = useLoad(() => api.statsHeroes({ mode: filters.mode, playedIn: filters.playedIn }), [filters.mode, filters.playedIn]);
   const heroes = useMemo(() => (heroList.data ?? []).map((x) => x.hero).sort(), [heroList.data]);
   const loaded = useLoad(
-    () => api.statsFormationReport({ mode: filters.mode, tag: filters.tag, player: filters.player, excludeDefault: filters.excludeDefault ? 'true' : '', min: filters.min, hero: picked }),
+    () => api.statsFormationReport({ mode: filters.mode, tag: filters.tag, player: filters.player, playedIn: filters.playedIn, excludeDefault: filters.excludeDefault ? 'true' : '', min: filters.min, hero: picked }),
     [filters, picked],
+  );
+  // The counters read both sides of every battle, so the Hero and minimum-games filters of the table do not apply to them.
+  const counters = useLoad(
+    () => api.statsGroupCounters({ mode: filters.mode, tag: filters.tag, player: filters.player, playedIn: filters.playedIn, excludeDefault: filters.excludeDefault ? 'true' : '' }),
+    [filters.mode, filters.tag, filters.player, filters.playedIn, filters.excludeDefault],
   );
   const report: FormationReport | null = loaded.data ?? null;
   const error = loaded.error;
 
-  const toggle = (key: string) => setOpen((old) => toggled(old, key));
+  const most = report ? Math.max(1, ...report.rows.map((r) => r.games)) : 1;
+  // every row has room for the longest Core and Flex lists, so the columns line up from row to row
+  const slots = {
+    '--core-n': Math.max(1, ...(report?.rows ?? []).flatMap((r) => [r.core.length, ...r.groups.map((g) => g.core.length)])),
+    '--flex-n': Math.max(1, ...(report?.rows ?? []).flatMap((r) => [r.flex.length, ...r.groups.map((g) => g.flex.length)])),
+  } as CSSProperties;
 
   return (
     <>
@@ -252,31 +423,34 @@ export function FormationGroups({ filters }: { filters: Filters }) {
       {error && <p className="error" role="alert">{error}</p>}
       {report && report.rows.length === 0 && <p className="muted">Nothing to show with these filters.</p>}
       {report && report.rows.length > 0 && (
-        <table className="board" aria-label="Formation groups">
-          <thead>
-            <tr>
-              <th>Core</th>
-              <th>Flex</th>
-              <th>Artifact</th>
-              <th>Record</th>
-              <th>Win rate</th>
-              <th>Players</th>
-              <th>Evidence</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.rows.map((row) => (
-              <Fragment key={coreNames(row.groups[0]!.core).join('/')}>
-                {row.groups.length > 1 && <ArchetypeHeader row={row} />}
-                {row.groups.map((group) => {
-                  const key = coreNames(group.core).join('/');
-                  return <GroupRow key={key} group={group} baseline={report.baseline} filters={filters} maps={maps} opened={open.has(key)} toggle={() => toggle(key)} />;
-                })}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+        <div className="group-table" style={slots}>
+          <GroupListHead />
+          <div className="group-list" role="list" aria-label="Formation groups">
+          {report.rows.map((row) => {
+            const key = coreNames(row.groups[0]!.core).join('/');
+            const buttons = row.groups.map((group) => (
+              <GroupRowButton key={coreNames(group.core).join('/')} group={group} most={most} onOpen={() => setChosen(group)} />
+            ));
+            if (row.groups.length === 1) return <div key={key} role="listitem">{buttons}</div>;
+            const opened = flipped.has(key);
+            return (
+              <div key={key} role="listitem">
+                <ArchetypeSection row={row} most={most} opened={opened} toggle={() => setFlipped((old) => toggled(old, key))}>
+                  {buttons}
+                </ArchetypeSection>
+              </div>
+            );
+          })}
+          </div>
+        </div>
       )}
+      {chosen && report && (
+        <Dialog title={plain(coreNames(chosen.core))} side closeOnBackdrop onCancel={() => setChosen(null)} actions={<button onClick={() => setChosen(null)}>Close</button>}>
+          <GroupCard group={chosen} baseline={report.baseline} filters={filters} maps={maps} counters={counters.data ?? null} />
+        </Dialog>
+      )}
+      {counters.error && <p className="error" role="alert">{counters.error}</p>}
+      {counters.data && report && report.rows.length > 0 && <CounterMatrix report={counters.data} />}
     </>
   );
 }

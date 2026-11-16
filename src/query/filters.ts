@@ -16,11 +16,15 @@ export type StatFilters = Omit<Filters, 'mode' | 'tag'> & {
   tag?: string | string[];
   /** Player IDs (ADR 0006): only the sides of these Players. */
   player?: string | string[];
+  /** Seasons the records were played in (`attempt.season`, ADR 0038), as numbers or numbers written out: only records of these seasons. */
+  playedIn?: string | string[] | number | number[];
   /** Leave out the sides of the default profile's Player ID, to see what other Players use. Nothing is left out when it has no Player ID. */
   excludeDefault?: boolean;
 };
 
 export const listOf = (value: string | string[] | undefined): string[] => (value === undefined ? [] : [value].flat().filter((v) => v !== ''));
+/** The whole seasons in a `playedIn` filter; anything that is not one is left out. */
+export const seasonsOf = (value: StatFilters['playedIn']): number[] => [value ?? []].flat().map(Number).filter((n) => Number.isInteger(n) && n >= 1);
 export const placeholders = (values: string[]) => values.map(() => '?').join(', ');
 
 export const MAX_ROWS = 500;
@@ -38,6 +42,8 @@ export function whereFor(filters: StatFilters, params: unknown[]): string {
   if (tags.length) (clauses.push(`EXISTS (SELECT 1 FROM attempt_tag t WHERE t.attempt_id = x.attempt_id AND t.tag IN (${placeholders(tags)}))`), params.push(...tags));
   const players = listOf(filters.player);
   if (players.length) (clauses.push(`EXISTS (SELECT 1 FROM attempt_player p WHERE p.attempt_id = x.attempt_id AND p.side = x.side AND p.player_id IN (${placeholders(players)}))`), params.push(...players));
+  const seasons = seasonsOf(filters.playedIn);
+  if (seasons.length) (clauses.push(`EXISTS (SELECT 1 FROM attempt sn WHERE sn.id = x.attempt_id AND sn.season IN (${placeholders(seasons.map(String))}))`), params.push(...seasons));
   if (filters.excludeDefault) clauses.push(`NOT EXISTS (SELECT 1 FROM attempt_player p JOIN profile pr ON pr.player_id = p.player_id AND pr.is_default = 1 WHERE p.attempt_id = x.attempt_id AND p.side = x.side)`);
   if (filters.before !== undefined) (clauses.push('x.attempt_id < ?'), params.push(filters.before));
   if (filters.except !== undefined) (clauses.push('x.attempt_id <> ?'), params.push(filters.except));

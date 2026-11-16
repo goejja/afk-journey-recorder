@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { openDb } from '../src/db/open.js';
-import { checkProposal, type ReaderTally } from '../src/import/rank-learning.js';
+import { checkProposal, type ReadAs, type ReaderTally } from '../src/import/rank-learning.js';
 import { harvestRankLooks } from '../src/server/reader/rank-harvest.js';
 import { lookExamples } from '../src/server/reader/look-examples.js';
 import { removeFiles, saveImage } from '../src/server/reader/saved-image.js';
@@ -35,6 +35,20 @@ const line = (name: string, looks: number, added: number, before: ReaderTally | 
   console.log(`${name.padEnd(11)} ${String(looks).padStart(5)} ${String(added).padStart(5)}   ${cell(before)}   ${cell(after)}`);
 for (const rank of ranks) line(rank, known.filter((e) => e.rank === rank).length, proposed.filter((e) => e.rank === rank).length, check.before.byRank.get(rank), check.after.byRank.get(rank));
 line('overall', known.length, proposed.length, check.before.overall, check.after.overall);
+
+// what each rank's looks were read as, with the proposed looks among the others (the reading the guard judges)
+const answers = (counts: Map<string | null, number>) =>
+  [...counts].sort((a, b) => (a[0] === null ? 1 : b[0] === null ? -1 : b[1] - a[1])).map(([rank, n]) => `${rank ?? 'unsure'} ${n}`).join(', ');
+const readAs = (title: string, matrix: ReadAs) => {
+  console.log(`\n${title}`);
+  for (const rank of ranks) if (matrix.has(rank)) console.log(`  ${rank.padEnd(11)} read as: ${answers(matrix.get(rank)!)}`);
+};
+readAs('Known looks, read as (with the proposed looks added):', check.after.readAs.known);
+readAs('Proposed looks, read as:', check.after.readAs.proposed);
+if (check.confused.length > 0) {
+  console.log('\nLooks read right now and read wrong with the proposed looks (the number is the look\'s place among the known or the proposed looks):');
+  for (const c of check.confused) console.log(`  ${c.group} look ${c.group === 'known' ? c.index : c.index - known.length} filed as ${c.rank}, now read as ${c.readAs}`);
+}
 if (check.refused) console.log(`\nRefused: ${check.refused}.`);
 
 if (!values.apply) console.log('\nNothing was changed. Add --apply to save the proposed looks.');

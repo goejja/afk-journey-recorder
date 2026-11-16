@@ -4,7 +4,8 @@ import { heroNamesOf } from '../../src/domain/round-deployment.js';
 import { isSummon } from '../../src/domain/units.js';
 import { TEAMS_IN_ROUND, turnTeam, withSeenAs, type RoundDeployment } from '../../src/domain/round-deployment.js';
 import type { ArenaBattle, BattleDraftSide, Profile, RoundDeploymentEntry } from '../backend.js';
-import { placeOpponent, placeOwn } from '../reader/battle-import.js';
+import { OPPONENT_SIDE, OWN_SIDE, placeOpponent, placeOwn, type PlacedSide } from '../reader/battle-import.js';
+import type { PlacedPhantimal } from '../units.js';
 import { emptyFormation, withHeroState, type FormationState } from '../FormationEditor.js';
 import type { OpponentState } from './OpponentEditor.js';
 
@@ -18,25 +19,24 @@ const heroOf = (row: { tile: number; hero: string; part?: string }, rank: string
   equipmentLevel: isSummon(row) ? null : equipmentLevel,
 });
 
-/** The team of a form's Side A, or null when no hero is placed. */
-export function teamOfOwn(formation: FormationState): RoundTeam | null {
-  if (formation.placed.length === 0) return null;
+/** The team of a form's side, or null when no hero is placed. The tiles are as they stand (a Side B caller turns the team for the Deployment). */
+function teamOf<S extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: PlacedPhantimal | null; artifact: string }>(side: PlacedSide<S>, state: S): RoundTeam | null {
+  if (state.placed.length === 0) return null;
   return {
-    heroes: formation.placed.map((p) => heroOf(p, formation.snapshots[p.hero]?.rank ?? null, formation.snapshots[p.hero]?.equipmentLevel ?? null)),
-    phantimal: formation.phantimal ? { name: formation.phantimal.name, tile: formation.phantimal.tile, ...(formation.phantimal.partnerTile != null ? { partnerTile: formation.phantimal.partnerTile } : {}) } : null,
-    artifact: formation.artifact || null,
+    heroes: state.placed.map((p) => {
+      const { rank, equipmentLevel } = side.heroesOf(state, p.hero);
+      return heroOf(p, rank, equipmentLevel);
+    }),
+    phantimal: state.phantimal ? { name: state.phantimal.name, tile: state.phantimal.tile, ...(state.phantimal.partnerTile != null ? { partnerTile: state.phantimal.partnerTile } : {}) } : null,
+    artifact: state.artifact || null,
   };
 }
 
+/** The team of a form's Side A, or null when no hero is placed. */
+export const teamOfOwn = (formation: FormationState): RoundTeam | null => teamOf(OWN_SIDE, formation);
+
 /** The team of a form's Side B, with its tiles as they stand (the caller turns it for the Deployment). */
-export function teamOfOpponent(opponent: OpponentState): RoundTeam | null {
-  if (opponent.placed.length === 0) return null;
-  return {
-    heroes: opponent.placed.map((p) => heroOf(p, p.rank || null, p.equipment === '' ? null : Number(p.equipment))),
-    phantimal: opponent.phantimal ? { name: opponent.phantimal.name, tile: opponent.phantimal.tile, ...(opponent.phantimal.partnerTile != null ? { partnerTile: opponent.phantimal.partnerTile } : {}) } : null,
-    artifact: opponent.artifact || null,
-  };
-}
+export const teamOfOpponent = (opponent: OpponentState): RoundTeam | null => teamOf(OPPONENT_SIDE, opponent);
 
 /** What a side of a picture says, for `matchTeam`: its heroes (a hero once), the artifact and phantimal named, and the tiles nobody could name. */
 export function readSideOf(side: BattleDraftSide): ReadSide {
@@ -152,7 +152,7 @@ const sameUnits = (placed: { hero: string; part?: string }[], team: RoundTeam): 
 export function ownFromTeam(team: RoundTeam, cells: number[], current?: FormationState): FormationState {
   if (!standsOn(team, cells, TILE.PLAYER)) {
     const base = current && sameUnits(current.placed, team) ? current : placeOwn(cells, readHeroes(team), extrasOf(team));
-    return ownWithKnownTiles(base, team, cells);
+    return withKnownTiles(ownWithStates(base, team), team, cells, TILE.PLAYER);
   }
   let formation: FormationState = {
     ...emptyFormation(),
@@ -168,7 +168,7 @@ export function ownFromTeam(team: RoundTeam, cells: number[], current?: Formatio
 export function opponentFromTeam(team: RoundTeam, cells: number[], current?: OpponentState): OpponentState {
   if (!standsOn(team, cells, TILE.ENEMY)) {
     const base = current && sameUnits(current.placed, team) ? current : placeOpponent(cells, readHeroes(team), extrasOf(team));
-    return opponentWithKnownTiles(base, team, cells);
+    return withKnownTiles(opponentWithStates(base, team), team, cells, TILE.ENEMY);
   }
   const opponent = placeOpponent(cells, [], { artifact: null, phantimal: null });
   return {
@@ -205,40 +205,24 @@ function opponentWithStates(current: OpponentState, team: RoundTeam): OpponentSt
  */
 export const applyToOwn = (current: FormationState, team: RoundTeam, cells: number[]): FormationState => ownFromTeam(team, cells, current);
 
-/** The Deployment's known tiles put over the form's placement, where the map allows them and the tile is free. */
-function ownWithKnownTiles(current: FormationState, team: RoundTeam, cells: number[]): FormationState {
-  let formation = ownWithStates(current, team);
-  for (const h of team.heroes) {
-    if (h.tile === null || cells[h.tile] !== TILE.PLAYER) continue;
-    const tile = h.tile;
-    if (formation.placed.some((p) => p.tile === tile && !(p.hero === h.hero && (p.part ?? '') === (h.part ?? '')))) continue;
-    formation = { ...formation, placed: formation.placed.map((p) => (p.hero === h.hero && (p.part ?? '') === (h.part ?? '') ? { ...p, tile } : p)) };
-  }
-  const phantimal = team.phantimal;
-  if (phantimal && phantimal.tile !== null && cells[phantimal.tile] === TILE.PLAYER && !formation.placed.some((p) => p.tile === phantimal.tile)) {
-    const partner = phantimal.partnerTile != null && phantimal.partnerTile !== phantimal.tile && cells[phantimal.partnerTile] === TILE.PLAYER && !formation.placed.some((p) => p.tile === phantimal.partnerTile) ? phantimal.partnerTile : undefined;
-    formation = { ...formation, phantimal: { name: formation.phantimal?.name ?? phantimal.name, tile: phantimal.tile, ...(partner != null ? { partnerTile: partner } : {}) } };
-  }
-  return formation;
-}
-
 export const applyToOpponent = (current: OpponentState, team: RoundTeam, cells: number[]): OpponentState => opponentFromTeam(team, cells, current);
 
-/** The Deployment's known tiles put over the form's Side B placement, likewise. */
-function opponentWithKnownTiles(current: OpponentState, team: RoundTeam, cells: number[]): OpponentState {
-  let opponent = opponentWithStates(current, team);
+/** The Deployment's known tiles put over a side's placement, where the map allows them (the zone is the side's) and the tile is free. */
+function withKnownTiles<S extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: PlacedPhantimal | null }>(current: S, team: RoundTeam, cells: number[], zone: number): S {
+  const same = (p: { hero: string; part?: string }, h: RoundHero) => p.hero === h.hero && (p.part ?? '') === (h.part ?? '');
+  let state = current;
   for (const h of team.heroes) {
-    if (h.tile === null || cells[h.tile] !== TILE.ENEMY) continue;
+    if (h.tile === null || cells[h.tile] !== zone) continue;
     const tile = h.tile;
-    if (opponent.placed.some((p) => p.tile === tile && !(p.hero === h.hero && (p.part ?? '') === (h.part ?? '')))) continue;
-    opponent = { ...opponent, placed: opponent.placed.map((p) => (p.hero === h.hero && (p.part ?? '') === (h.part ?? '') ? { ...p, tile } : p)) };
+    if (state.placed.some((p) => p.tile === tile && !same(p, h))) continue;
+    state = { ...state, placed: state.placed.map((p) => (same(p, h) ? { ...p, tile } : p)) };
   }
   const phantimal = team.phantimal;
-  if (phantimal && phantimal.tile !== null && cells[phantimal.tile] === TILE.ENEMY && !opponent.placed.some((p) => p.tile === phantimal.tile)) {
-    const partner = phantimal.partnerTile != null && phantimal.partnerTile !== phantimal.tile && cells[phantimal.partnerTile] === TILE.ENEMY && !opponent.placed.some((p) => p.tile === phantimal.partnerTile) ? phantimal.partnerTile : undefined;
-    opponent = { ...opponent, phantimal: { name: opponent.phantimal?.name ?? phantimal.name, tile: phantimal.tile, ...(partner != null ? { partnerTile: partner } : {}) } };
+  if (phantimal && phantimal.tile !== null && cells[phantimal.tile] === zone && !state.placed.some((p) => p.tile === phantimal.tile)) {
+    const partner = phantimal.partnerTile != null && phantimal.partnerTile !== phantimal.tile && cells[phantimal.partnerTile] === zone && !state.placed.some((p) => p.tile === phantimal.partnerTile) ? phantimal.partnerTile : undefined;
+    state = { ...state, phantimal: { name: state.phantimal?.name ?? phantimal.name, tile: phantimal.tile, ...(partner != null ? { partnerTile: partner } : {}) } };
   }
-  return opponent;
+  return state;
 }
 
 /** The team a Player fielded in a saved fight, with Side A's tiles: a Player who stood on Side B has the board turned back. */

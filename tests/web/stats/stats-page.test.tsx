@@ -17,6 +17,9 @@ beforeEach(() => {
       if (url === '/api/stats-settings') {
         return defaultModes === 'fail' ? Response.json({ error: 'No' }, { status: 500 }) : Response.json({ modes: defaultModes, defaults: [], available: [] });
       }
+      if (url === '/api/seasons') {
+        return Response.json([{ number: 9, current: true, stages: 0, phantimals: 0, records: 0, tournaments: 0 }, { number: 8, current: false, stages: 0, phantimals: 0, records: 5, tournaments: 1 }, { number: 7, current: false, stages: 3, phantimals: 0, records: 2, tournaments: 0 }]);
+      }
       if (url === '/api/tags') return Response.json([{ tag: 'Luna', count: 2 }]);
       if (url === '/api/stats/summary') {
         return Response.json({ records: [{ mode: 'Arena', records: 4, wins: 3, first: '2026-10-01', last: '2026-10-29' }], tags: [{ tag: 'Luna', records: 2 }] });
@@ -128,6 +131,21 @@ describe('Statistics page', () => {
     await user.click(screen.getByRole('tab', { name: 'Players' }));
     expect(await screen.findByRole('button', { name: 'Mode: Arena, Guild Duel' })).toBeTruthy();
     await waitFor(() => expect(requests.some((u) => u.startsWith('/api/stats/players') && u.includes('mode=Arena&mode=Guild+Duel'))).toBe(true));
+  });
+
+  it('filters by the season the records were played in, offering the seasons that have records, in every view but the overview', async () => {
+    const user = userEvent.setup();
+    render(<StatsPage />);
+    expect(screen.queryByRole('button', { name: /Played in season/ })).toBeNull(); // the overview has no filters
+    await user.click(screen.getByRole('tab', { name: 'Heroes' }));
+    await user.click(await screen.findByRole('button', { name: 'Played in season: All' }));
+    const list = within(screen.getByRole('group', { name: 'Played in season' }));
+    expect(list.queryByLabelText('Season 9')).toBeNull(); // the current season has no record yet
+    await user.click(list.getByLabelText('Season 8'));
+    await waitFor(() => expect(requests.some((u) => u.startsWith('/api/stats/heroes?') && u.includes('playedIn=8'))).toBe(true));
+    await user.click(screen.getByRole('tab', { name: 'Stages' }));
+    expect(await screen.findByRole('button', { name: 'Played in season: Season 8' })).toBeTruthy();
+    await waitFor(() => expect(requests.some((u) => u.startsWith('/api/stats/stages') && u.includes('playedIn=8'))).toBe(true));
   });
 
   it('can still show every mode: the default is a starting choice, not a restriction', async () => {
@@ -247,7 +265,7 @@ describe('Statistics page', () => {
   it('switches hero groups between pairs and trios, asking for at least 3 games of a trio', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
-    await user.click(screen.getByRole('tab', { name: 'Hero groups' }));
+    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
     expect(await screen.findByText('83%')).toBeTruthy(); // pairs first
     await user.click(screen.getByRole('radio', { name: 'Trios' }));
     expect(await screen.findByText('75%')).toBeTruthy();
@@ -262,7 +280,7 @@ describe('Statistics page', () => {
   it('keeps a minimum the player typed when the group size changes', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
-    await user.click(screen.getByRole('tab', { name: 'Hero groups' }));
+    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
     await user.clear(screen.getByLabelText('At least (games)'));
     await user.type(screen.getByLabelText('At least (games)'), '7');
     await user.click(screen.getByRole('radio', { name: 'Trios' }));
@@ -272,7 +290,7 @@ describe('Statistics page', () => {
   it('shows pairs and stages', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
-    await user.click(screen.getByRole('tab', { name: 'Hero groups' }));
+    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
     expect(await screen.findByText('83%')).toBeTruthy();
     await user.click(screen.getByRole('tab', { name: 'Stages' }));
     expect(await screen.findByText('S8 · Normal · 120')).toBeTruthy();

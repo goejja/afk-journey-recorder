@@ -30,6 +30,22 @@ describe('hero admin API', () => {
     expect(db.prepare('SELECT count(*) FROM hero_pvp_hint').pluck().get()).toBe(129);
   });
 
+  it('keeps range, energy and mechanic tags apart from the hero: dated, manual, tags sorted and unique, and the hero stays imported', async () => {
+    expect((await list()).find((h) => h.name === 'Alna')).toMatchObject({ attributes: null });
+    const body = { range: 1, energy: [0, 200], mechanics: ['Dot', 'execute', 'dot'], releasedInSeason: 5 };
+    const response = await send('PUT', '/api/admin/heroes/Alna/attributes', body);
+    const today = db.prepare("SELECT date('now', 'localtime')").pluck().get();
+    expect(await response.json()).toMatchObject({ name: 'Alna', source: 'import', attributes: { range: 1, energy: [0, 200], mechanics: ['dot', 'execute'], releasedInSeason: 5, setOn: today, source: 'manual' } });
+    expect(await error(await send('PUT', '/api/admin/heroes/Alna/attributes', { ...body, range: -1 }))).toContain('Range cannot be negative');
+    expect((await send('PUT', '/api/admin/heroes/Nobody/attributes', body)).status).toBe(404);
+    // an empty form removes the row, and a deleted hero takes its attributes with it
+    await send('PUT', '/api/admin/heroes/Alna/attributes', { range: null, energy: [], mechanics: [], releasedInSeason: null });
+    expect(db.prepare('SELECT count(*) FROM hero_attribute').pluck().get()).toBe(0);
+    await send('PUT', '/api/admin/heroes/Alna/attributes', body);
+    expect((await send('DELETE', '/api/admin/heroes/Alna')).status).toBe(204);
+    expect(db.prepare('SELECT count(*) FROM hero_attribute').pluck().get()).toBe(0);
+  });
+
   it('keeps the player\'s PVP Tier hint apart from the hero: it is dated, manual and leaves the hero as imported', async () => {
     const response = await send('PUT', '/api/admin/heroes/Alna/pvp-hint', { pvpTier: 'B', pvpRole: 'Tank' });
     expect(await response.json()).toMatchObject({ name: 'Alna', pvpTier: 'B', pvpRole: 'Tank', pvpSource: 'manual', source: 'import' });

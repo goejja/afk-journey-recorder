@@ -94,14 +94,10 @@ export function ReadForm({ state, mode, setMode, files, setFiles, reuse, chooseR
           }}
         >
           <label className="field">
-            Season
-            <input type="number" min={1} value={adding.season} onChange={(e) => setAdding({ ...adding, season: e.target.value })} />
-          </label>
-          <label className="field">
             Tournament number
             <input type="number" min={1} value={adding.number} onChange={(e) => setAdding({ ...adding, number: e.target.value })} />
           </label>
-          <button className="primary" type="submit" disabled={busy || !adding.season || !adding.number}>
+          <button className="primary" type="submit" disabled={busy || !adding.number}>
             Add Tournament
           </button>
         </form>

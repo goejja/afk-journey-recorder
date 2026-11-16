@@ -12,7 +12,7 @@ export function useRoundChoice(mode: ArenaMode, restore: ImportStart | undefined
   const [tournamentId, setTournamentId] = useState<number | null>(null);
   const [round, setRound] = useState<Round>('Group stage');
   const [season, setSeason] = useState<number | null>(null);
-  const [adding, setAdding] = useState<{ season: string; number: string } | null>(null);
+  const [adding, setAdding] = useState<{ number: string } | null>(null);
 
   const pickTournament = useCallback((all: Tournament[], id: number | null, keepRound?: Round | null) => {
     const picked = all.find((t) => t.id === id) ?? all[0] ?? null;
@@ -36,14 +36,14 @@ export function useRoundChoice(mode: ArenaMode, restore: ImportStart | undefined
   const chosen: ImportRound | null = mode === 'Super League' && picked ? { tournamentId: picked.id, round, label: nameOf(picked) } : null;
   const warnings = chosen ? roundWarnings({ tournamentId: chosen.tournamentId, round }, tournaments) : [];
 
-  /** Opens the form for a new Tournament, with the current season and the next number. */
-  const startAdding = () => setAdding(adding ? null : { season: String(season ?? ''), number: String(Math.max(0, ...tournaments.filter((t) => t.season === season).map((t) => t.number)) + 1) });
+  /** Opens the form for a new Tournament, with the next number of the current season (the season itself is not asked for). */
+  const startAdding = () => setAdding(adding ? null : { number: String(Math.max(0, ...tournaments.filter((t) => t.season === season).map((t) => t.number)) + 1) });
   const addTournament = () =>
     attempt(async () => {
       if (!adding) return;
-      const all = await api.addTournament({ season: Number(adding.season), number: Number(adding.number) });
+      const all = await api.addTournament({ number: Number(adding.number) });
       setTournaments(all);
-      pickTournament(all, all.find((t) => t.season === Number(adding.season) && t.number === Number(adding.number))?.id ?? null);
+      pickTournament(all, all.find((t) => t.season === season && t.number === Number(adding.number))?.id ?? null);
       setAdding(null);
     });
 

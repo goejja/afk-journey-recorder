@@ -54,3 +54,30 @@ describe('statistics default modes', () => {
     expect((await send('GET', '/api/stats/heroes')).status).toBe(200);
   });
 });
+
+describe('counter rule', () => {
+  it('starts as 65% over 5 games, with the defaults listed', async () => {
+    expect(await json(send('GET', '/api/counter-rule'))).toEqual({ winRate: 0.65, minGames: 5, defaults: { winRate: 0.65, minGames: 5 } });
+  });
+
+  it('saves a rule, and goes back to the defaults without touching the modes', async () => {
+    await send('PUT', '/api/stats-settings', { modes: ['Stage'] });
+    expect(await json(send('PUT', '/api/counter-rule', { winRate: 0.7, minGames: 8 }))).toMatchObject({ winRate: 0.7, minGames: 8 });
+    expect(await json(send('GET', '/api/counter-rule'))).toMatchObject({ winRate: 0.7, minGames: 8 });
+    await send('DELETE', '/api/stats-settings');
+    expect(await json(send('GET', '/api/counter-rule'))).toMatchObject({ winRate: 0.7, minGames: 8 });
+
+    expect(await json(send('DELETE', '/api/counter-rule'))).toMatchObject({ winRate: 0.65, minGames: 5 });
+  });
+
+  it.each([
+    ['no values', {}],
+    ['a win rate under 50%', { winRate: 0.4, minGames: 5 }],
+    ['a win rate over 100%', { winRate: 1.2, minGames: 5 }],
+    ['no games', { winRate: 0.65, minGames: 0 }],
+    ['a part of a game', { winRate: 0.65, minGames: 2.5 }],
+    ['more than 50 games', { winRate: 0.65, minGames: 51 }],
+  ])('refuses %s', async (_name, body) => {
+    expect((await send('PUT', '/api/counter-rule', body)).status).toBe(400);
+  });
+});

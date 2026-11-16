@@ -36,6 +36,15 @@ const toDraft = (h: HeroAdmin): Draft => ({
   summon: h.summon?.part ?? '',
   count: String(h.summon?.count ?? 1),
 });
+/** What the range, energy and tag fields hold: text, so a half-typed list does not fight the player. */
+const attributesDraft = (h: HeroAdmin | null) => ({
+  range: String(h?.attributes?.range ?? ''),
+  energy: h?.attributes?.energy.join(', ') ?? '',
+  mechanics: h?.attributes?.mechanics.join(', ') ?? '',
+  season: String(h?.attributes?.releasedInSeason ?? ''),
+});
+const listOf = (text: string) => text.split(',').map((part) => part.trim()).filter(Boolean);
+const numberOf = (text: string) => (text.trim() === '' ? null : Number(text));
 const same = (a: Draft, b: Draft) => JSON.stringify(a) === JSON.stringify(b);
 
 const toBody = (d: Draft) => ({
@@ -78,6 +87,7 @@ export function HeroAdminPage() {
   const [origins, setOrigins] = useState<string[]>([]);
   const [pvpTiers, setPvpTiers] = useState<string[]>([]);
   const [hint, setHint] = useState({ pvpTier: '', pvpRole: '' });
+  const [attributes, setAttributes] = useState(attributesDraft(null));
   const [tierChecks, setTierChecks] = useState<TierCheck[]>([]);
   const [departing, setDeparting] = useState(false);
   const { error, setError, run: act, confirmDelete, confirmDiscard, dialog } = useCrud();
@@ -85,6 +95,7 @@ export function HeroAdminPage() {
   const current = items.find((h) => h.name === selected) ?? null;
   const hintOf = (h: HeroAdmin | null) => ({ pvpTier: h?.pvpTier ?? '', pvpRole: h?.pvpRole ?? '' });
   const hintDirty = current !== null && JSON.stringify(hint) !== JSON.stringify(hintOf(current));
+  const attributesDirty = current !== null && JSON.stringify(attributes) !== JSON.stringify(attributesDraft(current));
   const dirty = current ? !same(draft, toDraft(current)) : !same(draft, blank());
 
   const reload = useCallback(async (select?: string | null) => {
@@ -97,6 +108,7 @@ export function HeroAdminPage() {
       const item = loaded.find((h) => h.name === select);
       setDraft(item ? toDraft(item) : blank());
       setHint({ pvpTier: item?.pvpTier ?? '', pvpRole: item?.pvpRole ?? '' });
+      setAttributes(attributesDraft(item ?? null));
     }
   }, []);
 
@@ -118,15 +130,27 @@ export function HeroAdminPage() {
   const run = (action: () => Promise<string | null | undefined>) => act(action, reload);
 
   async function open(name: string | null) {
-    if ((dirty || hintDirty) && !(await confirmDiscard())) return;
+    if ((dirty || hintDirty || attributesDirty) && !(await confirmDiscard())) return;
     setError(null);
     setSelected(name);
     const item = items.find((h) => h.name === name);
     setDraft(item ? toDraft(item) : blank());
     setHint(hintOf(item ?? null));
+    setAttributes(attributesDraft(item ?? null));
   }
 
   const saveHint = () => run(async () => (await api.savePvpHint(current!.name, { pvpTier: (hint.pvpTier || null) as HeroAdmin['pvpTier'], pvpRole: (hint.pvpRole || null) as HeroAdmin['pvpRole'] })).name);
+  const saveAttributes = () =>
+    run(async () =>
+      (
+        await api.saveHeroAttributes(current!.name, {
+          range: numberOf(attributes.range),
+          energy: listOf(attributes.energy).map(Number),
+          mechanics: listOf(attributes.mechanics),
+          releasedInSeason: numberOf(attributes.season),
+        })
+      ).name,
+    );
   const save = () => run(async () => (current ? await api.saveAdminHero(current.name, toBody(draft)) : await api.createHero(toBody(draft))).name);
   const remove = async () => {
     if (await confirmDelete(`Delete the hero "${current!.name}"?`)) {
@@ -279,6 +303,29 @@ export function HeroAdminPage() {
                   An outside opinion, not a result of your battles and not the hero's own tier. It never changes a score or the heroes a formation is built from, and saving it leaves the hero as imported.
                 </p>
                 {tierChecks.find((c) => c.hero === current.name) && <p className="muted">{tierChecks.find((c) => c.hero === current.name)!.text}</p>}
+              </>
+            )}
+
+            {current && (
+              <>
+                <h3>Range, energy and mechanic tags</h3>
+                <div className="filters">
+                  <input type="number" min={0} placeholder="Range" aria-label="Range" value={attributes.range} onChange={(e) => setAttributes({ ...attributes, range: e.target.value })} />
+                  <input placeholder="Energy, like 0, 200" aria-label="Energy" value={attributes.energy} onChange={(e) => setAttributes({ ...attributes, energy: e.target.value })} />
+                  <input type="number" min={0} placeholder="Released in season" aria-label="Released in season" value={attributes.season} onChange={(e) => setAttributes({ ...attributes, season: e.target.value })} />
+                </div>
+                <input className="wide" placeholder="Mechanic tags, separated by commas" aria-label="Mechanic tags" value={attributes.mechanics} onChange={(e) => setAttributes({ ...attributes, mechanics: e.target.value })} />
+                <div className="actions">
+                  <button onClick={() => void saveAttributes()} disabled={!attributesDirty}>
+                    Save attributes
+                  </button>
+                </div>
+                <p className="muted">
+                  {current.attributes
+                    ? `${current.attributes.source === 'external' ? 'Copied from an outside source' : 'Set by you'} on ${current.attributes.setOn}. `
+                    : 'None yet. '}
+                  Facts about the hero, not a result of your battles: they place a hero on the Lean side of the board and are in no score or sample size. Saving them leaves the hero as imported.
+                </p>
               </>
             )}
 

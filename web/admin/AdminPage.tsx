@@ -5,7 +5,7 @@ import { MapPicker } from '../MapPicker.js';
 import { urlOf } from '../../src/shared/contract.js';
 import { adminContract } from '../../src/shared/contracts/admin.js';
 import { ScoreSettingsAdmin } from '../advisor/index.js';
-import { api, type AgentSettings, type Boss, type BossRule, type DefaultMode, type DefaultSlot, type GameMap, type StatsSettingsView, type WeeklySetups, type SeasonEntry } from '../backend.js';
+import { api, type AgentSettings, type Boss, type CounterRuleView, type BossRule, type DefaultMode, type DefaultSlot, type GameMap, type StatsSettingsView, type WeeklySetups, type SeasonEntry } from '../backend.js';
 import { BossRules } from '../dream-hunt/BossRules.js';
 import { CleanupPage } from '../reader/CleanupPage.js';
 import { ImagesPage } from '../reader/ImagesPage.js';
@@ -48,6 +48,48 @@ function StatsSettingsAdmin() {
       <div className="actions">
         <button className="primary" onClick={() => void run(() => api.saveStatsSettings(draft), show, 'Saved.')}>Save modes</button>
         <button onClick={() => void run(() => api.resetStatsSettings(), show, 'Back to the PvP modes.')}>Use the PvP modes</button>
+      </div>
+    </>
+  );
+}
+
+/** When a Formation group counts as a counter of another in Statistics, the Counter Advisor and the query command (ADR 0039). */
+function CounterRuleAdmin() {
+  const [view, setView] = useState<CounterRuleView | null>(null);
+  const [rate, setRate] = useState('');
+  const [games, setGames] = useState('');
+  const { error, message, run } = useCrud();
+
+  const show = (v: CounterRuleView) => (setView(v), setRate(String(Math.round(v.winRate * 1000) / 10)), setGames(String(v.minGames)));
+  useEffect(() => {
+    void run(() => api.counterRule(), show);
+  }, [run]);
+
+  if (!view) return error ? <p className="error" role="alert">{error}</p> : null;
+  return (
+    <>
+      <h3>Counters</h3>
+      <p className="muted">
+        A Formation group counters another when it met it in at least this many games and won at least this share of them. A record with fewer games is shown as
+        anecdote and is never called a counter. The Statistics page, the Counter Advisor and the query command use this rule; it changes no Win Score.
+      </p>
+      {error && <p className="error" role="alert">{error}</p>}
+      {message && <p role="status">{message}</p>}
+      <div className="actions">
+        <label className="field" title="From 50 to 100">
+          Counter win rate (%)
+          <input type="number" min={50} max={100} step={1} value={rate} onChange={(e) => setRate(e.target.value)} />
+          <span className="muted">default {Math.round(view.defaults.winRate * 100)}</span>
+        </label>
+        <label className="field" title="From 1 to 50">
+          Minimum games
+          <input type="number" min={1} max={50} step={1} value={games} onChange={(e) => setGames(e.target.value)} />
+          <span className="muted">default {view.defaults.minGames}</span>
+        </label>
+      </div>
+      <div className="actions">
+        <button className="primary" onClick={() => void run(() => api.saveCounterRule({ winRate: Number(rate) / 100, minGames: Number(games) }), show, 'Saved.')}>Save counter rule</button>
+        <button onClick={() => void run(() => api.resetCounterRule(), show, 'Back to the default rule.')}>Use the default rule</button>
       </div>
     </>
   );
@@ -100,8 +142,8 @@ function GeneralAdmin() {
     <section>
       <h3>Seasons</h3>
       <p className="muted">
-        The current season is where Arena and Dream Hunt records and new stages start, and the artifacts offered first. A season that stages or phantimals already
-        name cannot be removed.
+        The current season is the one every new record is played in (a Battle of a Tournament takes the Tournament's), and where new stages start, and the artifacts offered first.
+        A season that stages, phantimals, records or Tournaments already name cannot be removed.
       </p>
       {error && (
         <p className="error" role="alert">
@@ -130,7 +172,7 @@ function GeneralAdmin() {
                   <button disabled={s.current} onClick={() => void run(() => api.setCurrentSeason(s.number))}>
                     Make current
                   </button>
-                  <button className="danger" disabled={s.current || s.stages + s.phantimals > 0} onClick={() => void run(() => api.deleteSeason(s.number))}>
+                  <button className="danger" disabled={s.current || s.stages + s.phantimals + s.records + s.tournaments > 0} onClick={() => void run(() => api.deleteSeason(s.number))}>
                     Remove
                   </button>
                 </>
@@ -139,7 +181,7 @@ function GeneralAdmin() {
               <strong>Season {s.number}</strong>
               {s.current && <span className="badge">current</span>}
               <span className="muted">
-                {s.stages} stages · {s.phantimals} phantimals
+                {s.stages} stages · {s.phantimals} phantimals · {s.records} records
               </span>
             </RecordRow>
           </li>
@@ -148,6 +190,7 @@ function GeneralAdmin() {
       <UpdateDateAdmin />
       <ScoreSettingsAdmin />
       <StatsSettingsAdmin />
+      <CounterRuleAdmin />
     </section>
   );
 }

@@ -11,7 +11,7 @@ import { battleFormationIdProblem, saveBattleFormationIds, sharedHeroInBattle, t
 import { anyOf, limitParam, listParam } from '../params.js';
 import { hasAnyTag, loadTags, saveTags } from './tags.js';
 import { fightFormationIdProblem, formationContext, formationHeroNames, insertFormation, loadFormation, loadRoster, replaceFormation, validateSnapshots } from './formations.js';
-import { hasName, mapCells } from '../db-helpers.js';
+import { hasName, mapCells, seasonOfNewRecord } from '../db-helpers.js';
 import { dreamHuntContract, type Boss, type BossRule } from '../../shared/contracts/dream-hunt.js';
 import { fail, serve } from '../contract.js';
 
@@ -45,7 +45,7 @@ export function loadDreamHuntAttempts(db: Database.Database, filters: DreamHuntF
   else if (filters.rule) (where.push('d.boss_rule = ?'), params.push(filters.rule));
   const rows = db
     .prepare(
-      `SELECT a.id, a.outcome, a.note, a.created_at AS createdAt, a.battle_id AS battleId, a.battle_position AS battlePosition,
+      `SELECT a.id, a.outcome, a.note, a.created_at AS createdAt, a.season, a.battle_id AS battleId, a.battle_position AS battlePosition,
               d.boss_name AS boss, d.map_name AS mapName, d.time_seconds AS timeSeconds, d.boss_rule AS bossRule,
               b.formation_id AS battleFormationId
        FROM attempt a JOIN dream_hunt_attempt d ON d.attempt_id = a.id LEFT JOIN battle b ON b.id = a.battle_id
@@ -151,8 +151,8 @@ export function dreamHuntRoutes(db: Database.Database, loadRules: () => HeroStat
   function insertFight(body: any, checked: Exclude<ReturnType<typeof check>, { error: string }>, link?: { battleId: number; position: number }): number {
     const attemptId = Number(
       db
-        .prepare("INSERT INTO attempt (mode, outcome, note, battle_id, battle_position) VALUES ('Dream Hunt', ?, ?, ?, ?)")
-        .run(body.outcome, checked.note, link?.battleId ?? null, link?.position ?? null).lastInsertRowid,
+        .prepare("INSERT INTO attempt (mode, outcome, note, battle_id, battle_position, season) VALUES ('Dream Hunt', ?, ?, ?, ?, ?)")
+        .run(body.outcome, checked.note, link?.battleId ?? null, link?.position ?? null, seasonOfNewRecord(db, link?.battleId)).lastInsertRowid,
     );
     db.prepare('INSERT INTO dream_hunt_attempt (attempt_id, boss_name, map_name, time_seconds, boss_rule) VALUES (?, ?, ?, ?, ?)').run(
       attemptId,

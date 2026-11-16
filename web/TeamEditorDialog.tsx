@@ -43,7 +43,9 @@ export function TeamEditorDialog({ title, team, maps, heroes, artifacts, phantim
     const made = teamOfOwn(state.formation);
     if (!map || !made) return onClose();
     const known = state.guess ? withoutGuess(made, state.guess, map.name) : made;
-    onSave({ ...known, mapName: map.name, ...(team.seenAs ? { seenAs: team.seenAs } : {}) });
+    // the Map says where the tiles were placed, so a team left with no tile has none
+    const placed = known.heroes.some((h) => h.tile !== null) || known.phantimal?.tile != null;
+    onSave({ ...known, ...(placed ? { mapName: map.name } : {}), ...(team.seenAs ? { seenAs: team.seenAs } : {}) });
   };
 
   const map = maps.find((m) => m.name === mapName);

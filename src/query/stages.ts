@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { summarizeCompositions, type DreamHuntRun } from '../domain/dream-hunt.js';
-import { listOf, MAX_ROWS, placeholders } from './filters.js';
+import { listOf, MAX_ROWS, placeholders, seasonsOf, type StatFilters } from './filters.js';
 
 /** Every past attempt on one stage, newest first, with the formations used. */
 export function stageHistory(db: Database.Database, key: { season: number; kind: string; number: number; phase?: number }) {
@@ -46,12 +46,14 @@ export function dreamHuntBest(db: Database.Database, boss: string, filters: { ru
 }
 
 /** Win rate on each stage that has attempts, newest season and highest stage first. */
-export function stageStats(db: Database.Database, filters: { kind?: string | string[]; season?: number; tag?: string | string[]; minGames?: number } = {}) {
+export function stageStats(db: Database.Database, filters: { kind?: string | string[]; season?: number; playedIn?: StatFilters['playedIn']; tag?: string | string[]; minGames?: number } = {}) {
   const where: string[] = [];
   const params: unknown[] = [];
   const kinds = listOf(filters.kind);
   if (kinds.length) (where.push(`s.kind IN (${placeholders(kinds)})`), params.push(...kinds));
   if (filters.season !== undefined) (where.push('s.season = ?'), params.push(filters.season));
+  const seasons = seasonsOf(filters.playedIn);
+  if (seasons.length) (where.push(`a.season IN (${placeholders(seasons.map(String))})`), params.push(...seasons));
   const tags = listOf(filters.tag);
   if (tags.length) (where.push(`a.id IN (SELECT attempt_id FROM attempt_tag WHERE tag IN (${placeholders(tags)}))`), params.push(...tags));
   return db

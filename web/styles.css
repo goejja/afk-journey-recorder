@@ -216,7 +216,7 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .attempt-top:has(> .battle-info) > .attempt-info { grid-area: info; }
 .attempt-top:has(> .battle-info) > .attempt-actions { grid-area: actions; }
 /* A stage attempt on one line: the result, the stage, the formation, the tags, the buttons. */
-.stage-row { display: grid; grid-template-columns: 3.5rem 12rem 4.5rem 9.5rem 26rem minmax(0, 1fr) auto; column-gap: var(--sp-3); align-items: center; }
+.stage-row { display: grid; grid-template-columns: 3.5rem 12rem 4.5rem 9.5rem 2.5rem 26rem minmax(0, 1fr) auto; column-gap: var(--sp-3); align-items: center; }
 .stage-row .team { margin-top: 0; }
 .stage-row > .badge { justify-self: start; }
 .stage-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -403,7 +403,7 @@ a.button:hover { background: var(--panel-hi); }
 .week { margin-bottom: var(--sp-3); }
 .week-head { display: flex; gap: var(--sp-2); align-items: center; width: 100%; text-align: left; margin-bottom: var(--sp-2); background: var(--panel-hi); }
 .day-strip { display: flex; gap: var(--sp-2); align-items: center; }
-.day-fight { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-1); border: 2px solid var(--border); border-radius: var(--r-control); min-width: 44px; }
+.day-fight { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-1); border: 2px solid var(--border); border-radius: var(--r-control); width: 3.5rem; box-sizing: border-box; } /* one width for every slot, so a strip is as wide on every day */
 .day-fight.win { border-color: var(--win-soft); }
 .day-fight.loss { border-color: var(--danger-soft); }
 .day-fight.blank { opacity: 0.35; border-style: dashed; justify-content: center; }
@@ -416,7 +416,13 @@ a.button:hover { background: var(--panel-hi); }
 
 /* The same columns on every collapsed row, so the texts line up from one row to the next. */
 .day-info, .battle-info { display: grid; align-items: center; column-gap: var(--sp-3); }
-.day-info { grid-template-columns: auto 7rem 6.5rem 10rem 9.5rem 8rem minmax(0, 1fr); }
+.day-info { grid-template-columns: auto 7rem 6.5rem 10rem 9.5rem 2.5rem 8rem minmax(0, 1fr); }
+/* A fight on its own line: portrait, boss, result, time, rule, date, season, Formation ID, tags; one cell for each, empty when it has no value, so the columns line up from row to row. */
+.fight-line { display: grid; grid-template-columns: 2rem 12rem 7rem 5rem 8rem 9.5rem 2.5rem 8rem minmax(0, 1fr); column-gap: var(--sp-3); align-items: center; }
+/* In a day's card the fight's number leads, and the date, season and tags belong to the day. */
+.fight-line.in-battle { grid-template-columns: 4.5rem 2rem 12rem 7rem 5rem 8rem; }
+.fight-line > .badge { justify-self: start; white-space: nowrap; }
+.fight-boss { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .battle-info { grid-template-columns: 2.5rem 16rem 3.5rem 11rem minmax(0, 1fr); }
 .mode-chip { flex: none; justify-self: start; width: 2.5rem; padding: 1px 0; text-align: center; border-radius: var(--r-pill); font-size: var(--font-sm); font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--mode) 22%, var(--panel)); border: 1px solid color-mix(in srgb, var(--mode) 60%, var(--border)); }
 .mode-arena { --mode: var(--mode-arena); }
@@ -530,3 +536,38 @@ a.button:hover { background: var(--panel-hi); }
 .deployment-note { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--font-sm); }
 .deployment-repair { display: flex; align-items: end; gap: var(--sp-2); flex-wrap: wrap; padding: 0 0 var(--sp-2); }
 .sync-edit { display: flex; align-items: center; gap: var(--sp-2); padding-left: var(--sp-5); }
+
+/* The counter matrix of Statistics: a cell tints green above 50% and red below, stronger the further from 50% (--heat, in percent). */
+.counter-matrix th[scope='row'] { text-align: left; white-space: nowrap; }
+.counter-matrix td { text-align: center; }
+.counter-matrix td.win { background: color-mix(in srgb, var(--win) calc(var(--heat) * 1%), transparent); }
+.counter-matrix td.loss { background: color-mix(in srgb, var(--danger) calc(var(--heat) * 1%), transparent); }
+.counter-matrix td.faded { opacity: 0.5; }
+.counter-matrix td.mirror { background: var(--panel-hi); }
+.counter-matrix .games { display: block; font-size: var(--font-xs); color: var(--muted); }
+
+/* Formation groups: a leaderboard of bars, one row per group, the card in a Dialog that slides in from the right */
+.overlay.side { place-items: stretch end; }
+.overlay-box.side { width: min(900px, 94vw); height: 100%; max-height: none; border-radius: 0; border-width: 0 0 0 1px; align-content: start; animation: slide-in 0.15s ease-out; }
+@keyframes slide-in { from { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .overlay-box.side { animation: none; } }
+.group-list { --slot: 2.5rem; display: grid; gap: var(--sp-1); }
+.group-heroes { display: flex; gap: var(--sp-1); align-items: flex-start; }
+.group-hero { display: inline-flex; flex-direction: column; align-items: center; min-width: var(--slot); }
+.group-hero small { font-size: var(--font-xs); color: var(--muted); }
+.group-sep { width: 1px; align-self: stretch; background: var(--border); }
+/* one column template for the column titles, the Archetype headings and the group rows */
+.group-row { --slot: 2.5rem; display: grid; grid-template-columns: 1.5rem calc(var(--core-n, 3) * (var(--slot) + var(--sp-1))) calc(var(--flex-n, 3) * (var(--slot) + var(--sp-1))) minmax(6rem, 1fr) 4rem 5rem 4rem 4rem 6rem; align-items: center; gap: var(--sp-3); width: 100%; padding: var(--sp-1) var(--sp-2); border: 0; border-radius: var(--r-control); background: none; color: inherit; font: inherit; text-align: left; }
+button.group-row { cursor: pointer; }
+button.group-row:hover { background: var(--panel-hi); }
+.group-row.low { opacity: 0.7; }
+.group-list-head { color: var(--muted); font-size: var(--font-sm); }
+.group-archetype-head { border-bottom: 1px solid var(--border); border-radius: 0; }
+.group-archetype > .group-row:not(.group-archetype-head) { padding-top: var(--sp-1); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.group-bar { display: block; height: var(--sp-4); background: var(--danger-soft); border-radius: var(--r-control); overflow: hidden; }
+.group-bar-win { display: block; height: 100%; background: var(--win-soft); }
+.group-card-head { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.counter-matrix th[scope="row"] { white-space: nowrap; }
+.group-rank { display: inline-block; min-width: 1.5rem; margin-right: var(--sp-2); text-align: right; font-variant-numeric: tabular-nums; }
+.counter-matrix th[scope="row"] .group-heroes { display: inline-flex; vertical-align: middle; }

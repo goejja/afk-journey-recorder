@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RECORD_MODES } from '../../src/domain/arena.js';
 import { weaponLabel } from '../../src/domain/exclusive-weapon.js';
 import { isSmallSample, SMALL_SAMPLE } from '../../src/domain/stats.js';
@@ -6,115 +6,18 @@ import { STAGE_KINDS } from '../../src/domain/stage.js';
 import { useLoad } from '../useLoad.js';
 import { api, type ArtifactStat, type HeroStat, type MapStat, type RowStat, type RuleStat, type PairStat, type PlayerStat, type StageStat, type Summary, type TrioStat } from '../backend.js';
 import { FormationGroups } from './FormationGroups.js';
-import { Portrait } from '../Portrait.js';
+import { Partners } from './Partners.js';
+import { heroCell, rateColumns, StatsTable, WinBar } from './StatsTable.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { TagFilter } from '../Tags.js';
-import { percent, toggled } from '../format.js';
+import { percent } from '../format.js';
 
-type View = 'overview' | 'players' | 'formations' | 'heroes' | 'pairs' | 'artifacts' | 'maps' | 'stages' | 'phantimals';
+type View = 'overview' | 'players' | 'formations' | 'heroes' | 'pairs' | 'partners' | 'artifacts' | 'maps' | 'stages' | 'phantimals';
 
-
-function WinBar({ wins, games }: { wins: number; games: number }) {
-  const rate = games === 0 ? 0 : wins / games;
-  return (
-    <span className="winbar" role="img" aria-label={`${percent(rate)} of ${games}`}>
-      <span className="winbar-fill" style={{ width: percent(rate) }} />
-    </span>
-  );
-}
-
-interface Column<Row> {
-  key: string;
-  header: string;
-  value: (row: Row) => number | string;
-  render?: (row: Row) => ReactNode;
-}
-
-/** A table whose columns sort on a click; rows with a small sample are dimmed and flagged. */
-function StatsTable<Row extends { games: number; wins: number }>({ rows, columns, rowKey, detail, label }: {
-  /** Names the table for screen readers, when a page holds several. */
-  label?: string;
-  rows: Row[];
-  columns: Column<Row>[];
-  rowKey: (row: Row) => string;
-  /** Rows that open on a click of their first cell, closed at first: the label of the opened region and what it holds. */
-  detail?: { label: (row: Row) => string; render: (row: Row) => ReactNode };
-}) {
-  const [sort, setSort] = useState<{ key: string; descending: boolean } | null>(null);
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const toggle = (key: string) => setOpen((old) => toggled(old, key));
-  const sorted = useMemo(() => {
-    const column = columns.find((c) => c.key === sort?.key);
-    if (!column || !sort) return rows;
-    return [...rows].sort((a, b) => {
-      const x = column.value(a);
-      const y = column.value(b);
-      const order = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y));
-      return sort.descending ? -order : order;
-    });
-  }, [rows, columns, sort]);
-
-  if (rows.length === 0) return <p className="muted">Nothing to show with these filters.</p>;
-  return (
-    <table className="board" aria-label={label}>
-      <thead>
-        <tr>
-          {columns.map((c) => (
-            <th key={c.key} aria-sort={sort?.key === c.key ? (sort.descending ? 'descending' : 'ascending') : undefined}>
-              <button className="link" onClick={() => setSort({ key: c.key, descending: sort?.key === c.key ? !sort.descending : true })}>
-                {c.header}
-              </button>
-            </th>
-          ))}
-          <th>Win rate</th>
-        </tr>
-      </thead>
-      <tbody>
-        {sorted.map((row) => {
-          const key = rowKey(row);
-          const opened = detail !== undefined && open.has(key);
-          return (
-            <Fragment key={key}>
-              <tr className={isSmallSample(row.games) ? 'low' : undefined}>
-                {columns.map((c, i) => {
-                  const cell = c.render ? c.render(row) : c.value(row);
-                  return (
-                    <td key={c.key}>
-                      {detail && i === 0 ? (
-                        <button className="link" aria-expanded={opened} onClick={() => toggle(key)}>
-                          {opened ? '▾' : '▸'} {cell}
-                        </button>
-                      ) : (
-                        cell
-                      )}
-                    </td>
-                  );
-                })}
-                <td>
-                  <WinBar wins={row.wins} games={row.games} />
-                  {isSmallSample(row.games) && <span className="badge few"> few games</span>}
-                </td>
-              </tr>
-              {opened && (
-                <tr>
-                  <td colSpan={columns.length + 1}>
-                    <div role="region" aria-label={detail.label(row)}>
-                      {detail.render(row)}
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
 
 /** Rank by equipment level, with how many Players fielded the hero in each state. It is asked for when a hero is opened. */
-function HeroDistributionGrid({ hero, mode, tag, player }: { hero: string; mode: string[]; tag: string[]; player: string[] }) {
-  const { data: distribution, error } = useLoad(() => api.statsHeroDistribution(hero, { mode, tag, player }), [hero, mode, tag, player]);
+function HeroDistributionGrid({ hero, mode, tag, player, playedIn }: { hero: string; mode: string[]; tag: string[]; player: string[]; playedIn: string[] }) {
+  const { data: distribution, error } = useLoad(() => api.statsHeroDistribution(hero, { mode, tag, player, playedIn }), [hero, mode, tag, player, playedIn]);
 
   if (error) return <p className="error" role="alert">{error}</p>;
   if (!distribution) return <p className="muted">Loading…</p>;
@@ -154,8 +57,8 @@ function HeroDistributionGrid({ hero, mode, tag, player }: { hero: string; mode:
 }
 
 /** A hero's win rate by row of the board. Asked for when a hero is opened. */
-function HeroRows({ hero, mode, tag, player }: { hero: string; mode: string[]; tag: string[]; player: string[] }) {
-  const { data: rows, error } = useLoad(() => api.statsHeroRows(hero, { mode, tag, player }), [hero, mode, tag, player]);
+function HeroRows({ hero, mode, tag, player, playedIn }: { hero: string; mode: string[]; tag: string[]; player: string[]; playedIn: string[] }) {
+  const { data: rows, error } = useLoad(() => api.statsHeroRows(hero, { mode, tag, player, playedIn }), [hero, mode, tag, player, playedIn]);
 
   if (error) return <p className="error" role="alert">{error}</p>;
   if (!rows) return null;
@@ -175,11 +78,6 @@ function HeroRows({ hero, mode, tag, player }: { hero: string; mode: string[]; t
   );
 }
 
-const heroCell = (name: string) => (
-  <span className="unit-inline">
-    <Portrait kind="hero" name={name} size={24} /> {name}
-  </span>
-);
 const formationCell = (heroes: string[]) => (
   <span className="unit-inline">
     {heroes.map((h, i) => (
@@ -187,12 +85,6 @@ const formationCell = (heroes: string[]) => (
     ))}
   </span>
 );
-const rateColumns = <Row extends { games: number; wins: number; winRate: number }>(): Column<Row>[] => [
-  { key: 'games', header: 'Games', value: (r) => r.games },
-  { key: 'wins', header: 'Wins', value: (r) => r.wins },
-  { key: 'winRate', header: 'Rate', value: (r) => r.winRate, render: (r) => percent(r.winRate) },
-];
-
 /** The stored records whose Phantimal its own heroes cannot have brought (ADR 0029). Read only: nothing here changes a record. */
 function FactionMismatchList() {
   const { data, error } = useLoad(() => api.factionMismatches(), []);
@@ -240,6 +132,9 @@ export function StatsPage() {
   const [modesReady, setModesReady] = useState(false);
   const [tag, setTag] = useState<string[]>([]);
   const [player, setPlayer] = useState<string[]>([]);
+  // The seasons records were played in (ADR 0038), as numbers written out; none means every season.
+  const [playedIn, setPlayedIn] = useState<string[]>([]);
+  const [seasons, setSeasons] = useState<string[]>([]);
   const [excludeDefault, setExcludeDefault] = useState(false);
   const [knownPlayers, setKnownPlayers] = useState<PlayerStat[] | null>(null);
   const [min, setMin] = useState('1');
@@ -265,7 +160,7 @@ export function StatsPage() {
 
   useEffect(() => {
     if (!modesReady) return;
-    const filters = { tag, player, excludeDefault: excludeDefault ? 'true' : '', min: String(Math.max(1, Number(min) || 1)) };
+    const filters = { tag, player, playedIn, excludeDefault: excludeDefault ? 'true' : '', min: String(Math.max(1, Number(min) || 1)) };
     const withMode = { ...filters, mode };
     // An answer that comes after the filters changed again is dropped, so a slow old request cannot overwrite a newer one.
     let live = true;
@@ -276,13 +171,14 @@ export function StatsPage() {
       };
     const load = {
       overview: () => api.statsSummary().then(keep(setSummary)),
-      players: () => api.statsPlayers({ mode, excludeDefault: filters.excludeDefault, min: filters.min }).then(keep(setPlayers)),
+      players: () => api.statsPlayers({ mode, playedIn, excludeDefault: filters.excludeDefault, min: filters.min }).then(keep(setPlayers)),
       formations: () => Promise.resolve(), // the Formations view loads its own report
+      partners: () => Promise.resolve(), // the Partners view loads its own report
       heroes: () => api.statsHeroes(withMode).then(keep(setHeroes)),
       pairs: () => (size === 3 ? api.statsTrios(withMode).then(keep(setTrios)) : api.statsPairs(withMode).then(keep(setPairs))),
       artifacts: () => api.statsArtifacts(withMode).then(keep(setArtifacts)),
       maps: () => Promise.all([api.statsMaps(withMode).then(keep(setMaps)), api.statsRules(withMode).then(keep(setRules))]).then(() => undefined),
-      stages: () => api.statsStages({ tag, min: filters.min, kind }).then(keep(setStages)),
+      stages: () => api.statsStages({ tag, min: filters.min, kind, playedIn }).then(keep(setStages)),
       phantimals: () => Promise.resolve(), // the Phantimal check loads its own list
     }[view];
     load().then(
@@ -292,10 +188,16 @@ export function StatsPage() {
     return () => {
       live = false;
     };
-  }, [modesReady, view, mode, tag, player, min, kind, size, excludeDefault]);
+  }, [modesReady, view, mode, tag, player, playedIn, min, kind, size, excludeDefault]);
+
+  // The seasons to choose from, read once when a view that filters by season is first opened.
+  const filtersBySeason = view !== 'overview' && view !== 'phantimals';
+  useEffect(() => {
+    if (filtersBySeason && seasons.length === 0) api.seasons().then((all) => setSeasons(all.filter((s) => s.records > 0).map((s) => String(s.number))), () => undefined);
+  }, [filtersBySeason, seasons.length]);
 
   // The Players to choose from, read once when a view that filters by Player is first opened.
-  const filtersByPlayer = view === 'formations' || view === 'heroes' || view === 'pairs' || view === 'artifacts' || view === 'maps';
+  const filtersByPlayer = view === 'formations' || view === 'heroes' || view === 'pairs' || view === 'partners' || view === 'artifacts' || view === 'maps';
   useEffect(() => {
     if (filtersByPlayer && knownPlayers === null) api.statsPlayers({}).then(setKnownPlayers, () => setKnownPlayers([]));
   }, [filtersByPlayer, knownPlayers]);
@@ -306,7 +208,7 @@ export function StatsPage() {
     if (min === (next === 3 ? '1' : '3')) setMin(next === 3 ? '3' : '1');
   }
 
-  const formationFilters = useMemo(() => ({ mode, tag, player, excludeDefault, min: String(Math.max(1, Number(min) || 1)) }), [mode, tag, player, excludeDefault, min]);
+  const formationFilters = useMemo(() => ({ mode, tag, player, playedIn, excludeDefault, min: String(Math.max(1, Number(min) || 1)) }), [mode, tag, player, playedIn, excludeDefault, min]);
   const modes: readonly string[] = RECORD_MODES;
 
   return (
@@ -316,7 +218,7 @@ export function StatsPage() {
         hero is counted on both sides, with the result flipped for Side B.
       </p>
       <div className="tabs" role="tablist">
-        {([['overview', 'Overview'], ['players', 'Players'], ['formations', 'Formations'], ['heroes', 'Heroes'], ['pairs', 'Hero groups'], ['artifacts', 'Artifacts'], ['maps', 'Maps & rules'], ['stages', 'Stages'], ['phantimals', 'Phantimal check']] as const).map(([key, label]) => (
+        {([['overview', 'Overview'], ['players', 'Players'], ['formations', 'Formations'], ['heroes', 'Heroes'], ['pairs', 'Hero pairs and trios'], ['partners', 'Partners'], ['artifacts', 'Artifacts'], ['maps', 'Maps & rules'], ['stages', 'Stages'], ['phantimals', 'Phantimal check']] as const).map(([key, label]) => (
           <button key={key} role="tab" aria-selected={view === key} className={view === key ? 'active' : undefined} onClick={() => setView(key)}>
             {label}
           </button>
@@ -324,7 +226,7 @@ export function StatsPage() {
       </div>
       {view !== 'overview' && (
         <div className="filters">
-          {(view === 'players' || view === 'formations' || view === 'heroes' || view === 'pairs' || view === 'artifacts' || view === 'maps') && (
+          {(view === 'players' || view === 'formations' || view === 'heroes' || view === 'pairs' || view === 'partners' || view === 'artifacts' || view === 'maps') && (
             <MultiSelect label="Mode" options={[...modes]} value={mode} onChange={setMode} />
           )}
           {view === 'pairs' && (
@@ -336,6 +238,7 @@ export function StatsPage() {
               ))}
             </div>
           )}
+          {filtersBySeason && <MultiSelect label="Played in season" options={seasons} value={playedIn} onChange={setPlayedIn} format={(s) => `Season ${s}`} />}
           {view === 'stages' && (
             <MultiSelect label="Kind" options={[...STAGE_KINDS]} value={kind} onChange={setKind} />
           )}
@@ -439,6 +342,7 @@ export function StatsPage() {
         />
       )}
       {view === 'formations' && modesReady && <FormationGroups filters={formationFilters} />}
+      {view === 'partners' && modesReady && <Partners filters={formationFilters} />}
       {view === 'phantimals' && <FactionMismatchList />}
       {view === 'artifacts' && (
         <StatsTable
@@ -464,8 +368,8 @@ export function StatsPage() {
             label: (r) => `Rank and equipment of ${r.hero}`,
             render: (r) => (
               <>
-                <HeroDistributionGrid hero={r.hero} mode={mode} tag={tag} player={player} />
-                <HeroRows hero={r.hero} mode={mode} tag={tag} player={player} />
+                <HeroDistributionGrid hero={r.hero} mode={mode} tag={tag} player={player} playedIn={playedIn} />
+                <HeroRows hero={r.hero} mode={mode} tag={tag} player={player} playedIn={playedIn} />
               </>
             ),
           }}

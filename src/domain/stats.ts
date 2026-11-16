@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ARENA_MODES } from './arena.js';
-import { problemWith } from './schema.js';
+import { numberFrom, problemWith } from './schema.js';
 
 /** Fewer comparable records than this is anecdote: a win rate from it says little. */
 export const SMALL_SAMPLE = 5;
@@ -27,6 +27,20 @@ export const validateStatsModes = (modes: unknown): string | null => problemWith
 
 /** The modes of a valid list, each once, in the order of `STATS_MODES`. */
 export const orderedStatsModes = (modes: string[]): string[] => STATS_MODES.filter((m) => modes.includes(m));
+
+/** A Formation group counters another when its head-to-head record is at least this win rate, over at least this many games, until the player chooses others in Admin (ADR 0039). */
+export const DEFAULT_COUNTER_WIN_RATE = 0.65;
+export const DEFAULT_COUNTER_MIN_GAMES = SMALL_SAMPLE;
+
+export const CounterRuleSchema = z.object(
+  {
+    winRate: numberFrom(0.5, 1, 'The counter win rate is a number from 50% to 100%'),
+    minGames: numberFrom(1, 50, 'The minimum games of a counter is a whole number from 1 to 50').int('The minimum games of a counter is a whole number from 1 to 50'),
+  },
+  { error: 'Give the counter win rate and the minimum games' },
+);
+export type CounterRule = z.infer<typeof CounterRuleSchema>;
+export const DEFAULT_COUNTER_RULE: CounterRule = { winRate: DEFAULT_COUNTER_WIN_RATE, minGames: DEFAULT_COUNTER_MIN_GAMES };
 
 /** A value to three decimals, as the query output and the Win Score report it. */
 export const round3 = (value: number) => Math.round(value * 1000) / 1000;

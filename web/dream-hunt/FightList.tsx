@@ -100,20 +100,21 @@ function FightRow({ fight: f, onEdit, onDelete, onClone, shares, inBattle = fals
   return (
     <>
       <div className="attempt-top">
-        <div className="attempt-info">
+        <div className={`attempt-info fight-line${inBattle ? ' in-battle' : ''}`}>
           {inBattle && <strong>Fight {f.battlePosition}</strong>}
           <Portrait kind="boss" name={f.boss} size={32} />
-          {inBattle ? <span>{f.boss}</span> : <strong>{f.boss}</strong>}
+          {inBattle ? <span className="fight-boss">{f.boss}</span> : <strong className="fight-boss">{f.boss}</strong>}
           <span className={f.outcome === 'Win' ? 'badge win' : 'badge loss'}>
             {f.outcome === 'Win' ? 'Cleared' : 'Not cleared'}
           </span>
-          {f.outcome === 'Win' && f.timeSeconds !== null && <strong {...shaded(shares, f)}>{formatDuration(f.timeSeconds)}</strong>}
-          {f.bossRule && <span className="badge">{f.bossRule}</span>}
+          {f.outcome === 'Win' && f.timeSeconds !== null ? <strong {...shaded(shares, f)}>{formatDuration(f.timeSeconds)}</strong> : <span />}
+          {f.bossRule ? <span className="badge">{f.bossRule}</span> : <span />}
           {!inBattle && (
             <>
               <span className="muted">{f.createdAt}</span>
-              <TagBadges tags={f.tags} />
-              <FormationIdBadge code={f.formation.formationId} />
+              <span className="badge" title="The season the record was played in">S{f.season}</span>
+              <span><FormationIdBadge code={f.formation.formationId} /></span>
+              <span className="tags-cell"><TagBadges tags={f.tags} /></span>
             </>
           )}
         </div>
@@ -265,6 +266,7 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
             )}
             {rule ? <span className="badge">{rule}</span> : <span />}
             <span className="muted">{item.fights[0]!.createdAt}</span>
+            <span className="badge" title="The season the record was played in">S{item.fights[0]!.season}</span>
             <span><FormationIdBadge code={item.fights[0]!.battleFormationId} /></span>
             <span className="tags-cell"><TagBadges tags={item.fights[0]!.tags} /></span>
           </div>

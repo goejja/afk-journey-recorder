@@ -34,6 +34,8 @@ export type Enemy = z.infer<typeof Enemy>;
 export const Attempt = z.object({
   id: z.number(),
   createdAt: z.string(),
+  /** The season the record was played in (ADR 0038), set when it was saved; the stage's own season is `stage.season`. */
+  season: z.number(),
   outcome: z.enum(['Win', 'Loss']),
   note: z.string().nullable(),
   tags: z.array(z.string()),

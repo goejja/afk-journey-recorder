@@ -6,17 +6,19 @@ import { AdminPage } from '../../../web/admin/AdminPage.js';
 
 let requests: { method: string; url: string; body?: any; headers?: Record<string, string> }[];
 const seasons = [
-  { number: 8, current: true, stages: 3, phantimals: 2 },
-  { number: 7, current: false, stages: 0, phantimals: 1 },
-  { number: 6, current: false, stages: 0, phantimals: 0 },
+  { number: 8, current: true, stages: 3, phantimals: 2, records: 0, tournaments: 0 },
+  { number: 7, current: false, stages: 0, phantimals: 1, records: 0, tournaments: 0 },
+  { number: 6, current: false, stages: 0, phantimals: 0, records: 0, tournaments: 0 },
 ];
 const agent = { preset: 'claude', model: 'opus', timeoutMinutes: 10, presets: ['claude', 'opencode'], tools: {} };
 let agentTools: Record<string, unknown>;
 let statsModes: string[];
+let counterRule: { winRate: number; minGames: number };
 
 beforeEach(() => {
   requests = [];
   statsModes = ['Arena', 'Supreme Arena', 'Super League', 'Guild Duel'];
+  counterRule = { winRate: 0.65, minGames: 5 };
   agentTools = {
     claude: { installed: true, path: '/opt/bin/claude', version: '2.1.308 (Claude Code)', models: ['opus', 'sonnet', 'haiku'] },
     opencode: { installed: false, path: null, version: null, models: null },
@@ -27,7 +29,7 @@ beforeEach(() => {
       const method = init?.method ?? 'GET';
       requests.push({ method, url, body: typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body, headers: init?.headers as Record<string, string> });
       if (url === '/api/seasons' && method === 'GET') return Response.json(seasons);
-      if (url === '/api/seasons' && method === 'POST') return Response.json([{ number: 9, current: false, stages: 0, phantimals: 0 }, ...seasons], { status: 201 });
+      if (url === '/api/seasons' && method === 'POST') return Response.json([{ number: 9, current: false, stages: 0, phantimals: 0, records: 0, tournaments: 0 }, ...seasons], { status: 201 });
       if (url === '/api/seasons/current' && method === 'PUT') return Response.json(seasons.map((s) => ({ ...s, current: s.number === 7 })));
       if (url === '/api/tags' && method === 'GET') return Response.json([{ tag: 'Luna', count: 3 }]);
       if (url.startsWith('/api/defaults/') && method === 'PUT') return Response.json({ 'Supreme Arena': { slots: JSON.parse(init!.body as string).slots, updatedAt: '2026-10-30 10:00:00' }, 'Super League': { slots: [], updatedAt: null }, 'Guild Duel': { slots: [], updatedAt: null }, 'Dream Hunt': { slots: [], updatedAt: null } });
@@ -43,6 +45,11 @@ beforeEach(() => {
         if (method === 'PUT') statsModes = JSON.parse(init!.body as string).modes;
         if (method === 'DELETE') statsModes = defaults;
         return Response.json({ modes: statsModes, defaults, available });
+      }
+      if (url === '/api/counter-rule') {
+        if (method === 'PUT') counterRule = JSON.parse(init!.body as string);
+        if (method === 'DELETE') counterRule = { winRate: 0.65, minGames: 5 };
+        return Response.json({ ...counterRule, defaults: { winRate: 0.65, minGames: 5 } });
       }
       if (url === '/api/admin/restore') return Response.json({ restoredRows: 42, savedAs: 'data/backups/before-restore-x.db' });
       if (url === '/api/admin/agent' && method === 'GET') return Response.json(agent);
@@ -168,6 +175,23 @@ describe('Admin page', () => {
     await user.click(screen.getByRole('button', { name: 'Use the PvP modes' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'DELETE' && r.url === '/api/stats-settings')).toBe(true));
     await waitFor(() => expect((within(screen.getByRole('group', { name: 'Statistics starts with these modes' })).getByRole('checkbox', { name: 'Arena' }) as HTMLInputElement).checked).toBe(true));
+  });
+
+  it('sets when a Formation group counts as a counter, in percent, and goes back to the defaults', async () => {
+    const user = userEvent.setup();
+    render(<AdminPage />);
+    const rate = (await screen.findByLabelText(/Counter win rate/)) as HTMLInputElement;
+    expect(rate.value).toBe('65');
+    expect((screen.getByLabelText(/^Minimum games/) as HTMLInputElement).value).toBe('5');
+    await user.clear(rate);
+    await user.type(rate, '70');
+    await user.clear(screen.getByLabelText(/^Minimum games/));
+    await user.type(screen.getByLabelText(/^Minimum games/), '8');
+    await user.click(screen.getByRole('button', { name: 'Save counter rule' }));
+    await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/counter-rule')?.body).toEqual({ winRate: 0.7, minGames: 8 }));
+    await user.click(screen.getByRole('button', { name: 'Use the default rule' }));
+    await waitFor(() => expect((screen.getByLabelText(/Counter win rate/) as HTMLInputElement).value).toBe('65'));
+    expect((screen.getByLabelText(/^Minimum games/) as HTMLInputElement).value).toBe('5');
   });
 
   it('offers a backup download and restores a file only after confirming', async () => {

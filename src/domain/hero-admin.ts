@@ -74,6 +74,21 @@ export const PvpHintBodySchema = z.object(
 
 export type PvpHintBody = z.output<typeof PvpHintBodySchema>;
 
+/** What a hero's range, energy and mechanic tags are set to (ADR 0037); both lists empty and no range or season removes the row. */
+export const HeroAttributesBodySchema = z.object(
+  {
+    range: optional(z.number({ error: 'Range must be a whole number' }).int('Range must be a whole number').min(0, 'Range cannot be negative')),
+    energy: z.array(z.number({ error: 'Energy values must be whole numbers' }).int('Energy values must be whole numbers').min(0, 'Energy cannot be negative'), { error: 'Energy must be a list of numbers' }).max(4, 'Energy has at most 4 values'),
+    mechanics: z
+      .array(z.string({ error: 'A mechanic tag must be text' }).trim().min(1, 'A mechanic tag cannot be empty').max(40, 'A mechanic tag is at most 40 characters'), { error: 'Mechanics must be a list of tags' })
+      .max(30, 'A hero has at most 30 mechanic tags'),
+    releasedInSeason: optional(z.number({ error: 'The season must be a whole number' }).int('The season must be a whole number').min(0, 'The season cannot be negative')),
+  },
+  { error: 'Attributes need a range, energy values, mechanic tags and a season' },
+);
+
+export type HeroAttributesBody = z.output<typeof HeroAttributesBodySchema>;
+
 /** What a Placement Rule is created or changed with (ADR 0036). The hero is the one the rule is listed under, never changed here. */
 export const PlacementRuleBodySchema = z.object(
   {

@@ -7,7 +7,7 @@ const Settings = z.custom<AgentSettings>();
 const Job = z.custom<AgentJob>();
 
 export const agentContract = {
-  settings: endpoint({ method: 'GET', path: '/api/admin/agent', response: Settings }),
+  get: endpoint({ method: 'GET', path: '/api/admin/agent', response: Settings }),
   save: endpoint({ method: 'PUT', path: '/api/admin/agent', body: AgentSettingsSchema, response: Settings }),
   /** Looks for the installed agent programs and the models they offer; it runs programs, so only when asked. */
   refresh: endpoint({ method: 'POST', path: '/api/admin/agent/refresh', response: Settings }),

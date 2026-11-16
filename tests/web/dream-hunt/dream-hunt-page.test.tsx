@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
+import { columnsOf } from '../css-columns.js';
 import { DreamHuntPage } from '../../../web/dream-hunt/DreamHuntPage.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
@@ -65,6 +66,26 @@ const placeHero = async (user: ReturnType<typeof userEvent.setup>, name: RegExp)
 const posts = () => requests.filter((r) => r.method === 'POST' && r.url === '/api/dream-hunt/battle-groups').flatMap((r) => (r.body.fights as any[]).map((fight) => ({ ...r, body: fight })));
 
 describe('Fights list', () => {
+  it('gives every cell of a day and of a fight its own grid column, empty when it has no value', async () => {
+    const bosses = ['Illucia', 'Blightshroom', 'Crazed Shellbrute', 'Lady Starfallen', 'Mirage Frostspike'];
+    const fight = (id: number, battleId: number | null, position: number | null, win: boolean) => ({
+      id, createdAt: '2026-01-05 10:00:00', season: 8, outcome: win ? 'Win' : 'Loss', note: null, boss: bosses[id % 5], mapName: 'Open', timeSeconds: win ? 60 : null, bossRule: null, tags: [], battleId, battlePosition: position, battleFormationId: null, formation,
+    });
+    const attempts = [fight(1, null, null, false), ...bosses.map((_, i) => fight(10 + i, 2, i + 1, i % 2 === 0))];
+    const fetchBefore = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/dream-hunt/attempts') && (init?.method ?? 'GET') === 'GET' ? Response.json(attempts) : fetchBefore(url, init))));
+    const user = userEvent.setup();
+    render(<DreamHuntPage />);
+    await user.click(await screen.findByRole('tab', { name: 'Fights' }));
+    const day = (await screen.findByRole('listitem', { name: 'Dream Hunt day' })).querySelector('.day-info')!;
+    expect(day.children).toHaveLength(columnsOf('.day-info'));
+    const line = document.querySelector('.fight-line:not(.in-battle)')!;
+    expect(line.children).toHaveLength(columnsOf('.fight-line'));
+    await user.click(screen.getByRole('button', { name: 'Show fights' }));
+    const inDay = document.querySelector('.fight-line.in-battle')!;
+    expect(inDay.children.length).toBeLessThanOrEqual(columnsOf('.fight-line.in-battle'));
+  });
+
   it('colours the clear times of a boss from green to red within a week, and not those of another week or boss', async () => {
     const fight = (id: number, boss: string, createdAt: string, timeSeconds: number) => ({
       id, createdAt, outcome: 'Win', note: null, boss, mapName: 'Open', timeSeconds, bossRule: null, tags: [], battleId: null, battlePosition: null, battleFormationId: null, formation,
@@ -150,6 +171,28 @@ describe('Dream Hunt page', () => {
     await user.click(await screen.findByRole('tab', { name: 'Best teams' }));
     expect(await screen.findByText('few clears')).toBeTruthy();
     expect(screen.getAllByRole('img', { name: /best 1:00, median 1:15, worst 1:30/ }).length).toBeGreaterThan(0);
+  });
+
+  it('shows the answer for the rule chosen last, even when an earlier request answers after it', async () => {
+    const user = userEvent.setup();
+    const before = globalThis.fetch;
+    let releaseAny: () => void = () => undefined;
+    const slowAny = new Promise<void>((resolve) => (releaseAny = resolve));
+    // only the board of the rule chosen last holds a team flagged "few clears"
+    const board = (rule: string, key: string) => ({ boss: 'King Croaker', rule, attempts: 1, compositions: [composition(key, { lowConfidence: rule === 'Berserk' })] });
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (!url.startsWith('/api/dream-hunt/leaderboard')) return before(url, init);
+      if (url.includes('rule=Berserk')) return Response.json(board('Berserk', 'berserk-team'));
+      await slowAny; // the first request, for every rule, answers only after the second one
+      return Response.json(board('any', 'any-team'));
+    }));
+    render(<DreamHuntPage />);
+    await user.click(await screen.findByRole('tab', { name: 'Best teams' }));
+    await user.selectOptions(await screen.findByLabelText('Rule'), 'Berserk');
+    expect(await screen.findByText('few clears')).toBeTruthy();
+    releaseAny();
+    await new Promise((resolve) => setTimeout(resolve, 20)); // let the late answer arrive
+    expect(screen.getByText('few clears')).toBeTruthy();
   });
 
   it('opens a team to show each placement with its fights and times', async () => {

@@ -3,7 +3,7 @@ import { pathOf, queryStringOf, Upload, urlOf, type ClientInput, type Endpoint }
 import { artifactsContract } from '../src/shared/contracts/artifacts.js';
 import { defaultsContract } from '../src/shared/contracts/defaults.js';
 import { mapsContract } from '../src/shared/contracts/maps.js';
-import { heroesContract } from '../src/shared/contracts/heroes.js';
+import { heroesContract, type HeroAttributesBody } from '../src/shared/contracts/heroes.js';
 import { unitRulesContract } from '../src/shared/contracts/unit-rules.js';
 import { updateDateContract } from '../src/shared/contracts/update-date.js';
 import { recordStatesContract } from '../src/shared/contracts/record-states.js';
@@ -16,7 +16,7 @@ import { seasonsContract } from '../src/shared/contracts/seasons.js';
 import { battlesContract } from '../src/shared/contracts/battles.js';
 import { scenariosContract } from '../src/shared/contracts/scenarios.js';
 import { statsContract } from '../src/shared/contracts/stats.js';
-import { statsSettingsContract } from '../src/shared/contracts/stats-settings.js';
+import { counterRuleContract, statsSettingsContract } from '../src/shared/contracts/stats-settings.js';
 import { importFeedbackContract, keptPicturesContract, learnedContract, readerExamplesContract } from '../src/shared/contracts/reader.js';
 import { rosterImportContract } from '../src/shared/contracts/roster-import.js';
 import { adminContract } from '../src/shared/contracts/admin.js';
@@ -107,6 +107,7 @@ export const api = {
   createPlacementRule: (hero: string, rule: PlacementRuleBody) => call(heroesContract.createPlacementRule, { params: { name: hero }, body: rule }),
   savePlacementRule: (id: number, rule: PlacementRuleBody) => call(heroesContract.savePlacementRule, { params: { id: String(id) }, body: rule }),
   deletePlacementRule: (id: number) => call(heroesContract.removePlacementRule, { params: { id: String(id) } }),
+  saveHeroAttributes: (name: string, attributes: HeroAttributesBody) => call(heroesContract.saveAttributes, { params: { name }, body: attributes }),
   deleteHero: (name: string) => call(heroesContract.remove, { params: { name } }),
   createPhantimal: (p: Omit<Phantimal, 'source'>) => call(phantimalsContract.create, { body: p }),
   savePhantimal: (originalName: string, p: Omit<Phantimal, 'source'>) => call(phantimalsContract.save, { params: { name: originalName }, body: p }),
@@ -188,7 +189,7 @@ export const api = {
   createScenario: (scenario: ScenarioInput) => call(scenariosContract.create, { body: scenario }),
   updateScenario: (id: number, scenario: ScenarioInput) => call(scenariosContract.save, { params: { id: String(id) }, body: scenario }),
   deleteScenario: (id: number) => call(scenariosContract.remove, { params: { id: String(id) } }),
-  agentSettings: () => call(agentContract.settings),
+  agentSettings: () => call(agentContract.get),
   saveAgentSettings: (settings: Pick<AgentSettings, 'preset' | 'model' | 'timeoutMinutes'>) => call(agentContract.save, { body: settings }),
   refreshAgentTools: () => call(agentContract.refresh),
   rosterImport: () => call(rosterImportContract.state) as Promise<RosterImportState>,
@@ -229,15 +230,21 @@ export const api = {
   statsTrios: (query: Query) => call(statsContract.trios, { query }),
   statsFormationReport: (query: Query) => call(statsContract.formationReport, { query }),
   statsFormationProfile: (query: Query) => call(statsContract.formationProfile, { query }),
+  statsGroupCounters: (query: Query) => call(statsContract.groupCounters, { query }),
   statsPairs: (query: Query) => call(statsContract.pairs, { query }),
+  statsPartners: (query: Query & { hero: string }) => call(statsContract.partners, { query }),
+  statsPartnerTags: () => call(statsContract.partnerTags),
   factionMismatches: () => call(statsContract.factionMismatches),
   statsStages: (query: Query) => call(statsContract.stages, { query }),
   statsSettings: () => call(statsSettingsContract.get),
   saveStatsSettings: (modes: string[]) => call(statsSettingsContract.save, { body: { modes } }),
   updateDate: () => call(updateDateContract.get),
   saveUpdateDate: (date: string) => call(updateDateContract.save, { body: { date } }),
-  clearUpdateDate: () => call(updateDateContract.clear),
+  clearUpdateDate: () => call(updateDateContract.reset),
   resetStatsSettings: () => call(statsSettingsContract.reset),
+  counterRule: () => call(counterRuleContract.get),
+  saveCounterRule: (rule: { winRate: number; minGames: number }) => call(counterRuleContract.save, { body: rule }),
+  resetCounterRule: () => call(counterRuleContract.reset),
   defaults: () => call(defaultsContract.list),
   saveDefaults: (mode: DefaultMode, slots: DefaultSlot[]) => call(defaultsContract.save, { params: { mode }, body: { slots } }),
   clearDefaults: (mode: DefaultMode) => call(defaultsContract.clear, { params: { mode } }),
@@ -259,7 +266,7 @@ export const api = {
   updateArenaBattleGroup: (id: number, fights: ArenaBattleInput[], codes: BattleFormationIds, where?: BattleRound) =>
     call(arenaContract.updateGroup, { params: { id: String(id) }, body: { fights, ...codes, ...where } }),
   tournaments: () => call(tournamentsContract.list),
-  addTournament: (tournament: { season: number; number: number; startDate?: string | null }) => call(tournamentsContract.create, { body: tournament }),
+  addTournament: (tournament: { number: number; startDate?: string | null }) => call(tournamentsContract.create, { body: tournament }),
   roundDeployments: (tournamentId: number, round: Round) => call(roundDeploymentsContract.list, { params: { tournament: String(tournamentId), round } }),
   deleteRoundDeployment: (tournamentId: number, round: Round, profileId: number) =>
     call(roundDeploymentsContract.remove, { params: { tournament: String(tournamentId), round, profile: String(profileId) } }),

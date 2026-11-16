@@ -32,6 +32,40 @@ describe('checkProposal', () => {
     expect(check.confused.length).toBeGreaterThan(0);
     expect(check.refused).toMatch(/wrong/);
   });
+
+  it('counts what the looks of each rank were read as, apart for the known and the proposed looks', () => {
+    const proposed = around('Paragon 3', 0.4, 4);
+    const { before, after } = checkProposal(known, proposed);
+    expect(before.readAs.known.get('Supreme+')).toEqual(new Map([['Supreme+', 4]]));
+    expect(before.readAs.known.has('Paragon 3')).toBe(false);
+    expect(before.readAs.proposed.get('Paragon 3')).toEqual(new Map([[null, 4]])); // no Paragon 3 look to read from yet, and nothing else near: not sure
+    expect(after.readAs.proposed.get('Paragon 3')).toEqual(new Map([['Paragon 3', 4]]));
+    expect(after.readAs.known.get('Paragon 2')).toEqual(new Map([['Paragon 2', 4]]));
+    // every look is counted once per reading, so the counts add up to the probes
+    const counted = (readAs: typeof after.readAs) => [...readAs.known.values(), ...readAs.proposed.values()].flatMap((m) => [...m.values()]).reduce((a, b) => a + b, 0);
+    expect(counted(before.readAs)).toBe(before.overall.probes);
+    expect(counted(after.readAs)).toBe(after.overall.probes);
+  });
+
+  it('counts a wrong answer under the rank the reader names', () => {
+    const proposed = [look('Paragon 3', 0.20045), ...around('Paragon 3', 0.5, 3)];
+    const spread = [look('Supreme+', 0.2), look('Supreme+', 0.2003), look('Supreme+', 0.2006), look('Supreme+', 0.2009), ...around('Paragon 2', 0.6, 4)];
+    const { after } = checkProposal(spread, proposed);
+    expect(after.readAs.known.get('Supreme+')!.get('Paragon 3')).toBeGreaterThan(0);
+  });
+
+  it('lists the looks read right before and wrong with the proposal, and what they are now read as', () => {
+    const proposed = [look('Paragon 3', 0.20045), ...around('Paragon 3', 0.5, 3)];
+    const spread = [look('Supreme+', 0.2), look('Supreme+', 0.2003), look('Supreme+', 0.2006), look('Supreme+', 0.2009), ...around('Paragon 2', 0.6, 4)];
+    const { confused } = checkProposal(spread, proposed);
+    expect(confused.length).toBeGreaterThan(0);
+    for (const c of confused) {
+      expect(c.group).toBe('known'); // only a known look can have been read right before the proposal
+      expect(c.index).toBeLessThan(spread.length);
+      expect(c.rank).toBe('Supreme+');
+      expect(c.readAs).toBe('Paragon 3');
+    }
+  });
 });
 
 describe('pairTiles', () => {

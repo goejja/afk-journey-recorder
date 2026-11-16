@@ -4,6 +4,7 @@ import { agentTool, AGENT_PRESETS, DEFAULT_AGENT_SETTINGS, parseModelList, type 
 import type { AgentProbe } from './agent-probe.js';
 import { agentContract } from '../../shared/contracts/agent.js';
 import { serve } from '../contract.js';
+import { upsertSingleton } from '../db-helpers.js';
 
 /** The saved agent choice, or the defaults when none is saved. */
 export function loadAgentSettings(db: Database.Database): AgentSettings {
@@ -41,7 +42,7 @@ export function agentSettingsRoutes(db: Database.Database, probe: AgentProbe): H
     }
   }
 
-  serve(app, agentContract.settings, view);
+  serve(app, agentContract.get, view);
 
   serve(app, agentContract.refresh, async () => {
     const found: Record<string, ToolInfo> = {};
@@ -51,10 +52,7 @@ export function agentSettingsRoutes(db: Database.Database, probe: AgentProbe): H
   });
 
   serve(app, agentContract.save, ({ body }) => {
-    db.prepare(
-      `INSERT INTO agent_setting (id, preset, model, timeout_minutes) VALUES (1, ?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET preset = excluded.preset, model = excluded.model, timeout_minutes = excluded.timeout_minutes`,
-    ).run(body.preset, body.model, body.timeoutMinutes);
+    upsertSingleton(db, 'agent_setting', { preset: body.preset, model: body.model, timeout_minutes: body.timeoutMinutes });
     return view();
   });
 

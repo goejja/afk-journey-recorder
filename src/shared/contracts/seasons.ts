@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { SeasonNumberSchema } from '../../domain/season.js';
 import { endpoint } from '../contract.js';
 
-/** A season in the list of Admin > General, with how many stages and phantimals name it. */
-export const SeasonEntry = z.object({ number: z.number(), current: z.boolean(), stages: z.number(), phantimals: z.number() });
+/** A season in the list of Admin > General, with how many stages, phantimals, records and Tournaments name it. */
+export const SeasonEntry = z.object({ number: z.number(), current: z.boolean(), stages: z.number(), phantimals: z.number(), records: z.number(), tournaments: z.number() });
 export type SeasonEntry = z.infer<typeof SeasonEntry>;
 
 const Seasons = z.array(SeasonEntry);

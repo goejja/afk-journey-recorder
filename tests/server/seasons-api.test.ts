@@ -24,7 +24,7 @@ const json = async (response: Response | Promise<Response>) => (await response).
 
 describe('seasons', () => {
   it('starts with season 8 as the current one', async () => {
-    expect(await json(send('GET', '/api/seasons'))).toEqual([{ number: 8, current: true, stages: 0, phantimals: 0 }]);
+    expect(await json(send('GET', '/api/seasons'))).toEqual([{ number: 8, current: true, stages: 0, phantimals: 0, records: 0, tournaments: 0 }]);
   });
 
   it('adds a season, refuses a repeat or a bad number, and makes another current', async () => {
@@ -40,11 +40,21 @@ describe('seasons', () => {
   it('lists a season that stages or phantimals name, and will not remove it or the current one', async () => {
     db.prepare("INSERT INTO phantimal (name, source) VALUES ('Gervan', 'manual')").run();
     db.prepare("INSERT INTO phantimal_season (phantimal_name, season) VALUES ('Gervan', 5)").run();
-    expect(await json(send('GET', '/api/seasons'))).toContainEqual({ number: 5, current: false, stages: 0, phantimals: 1 });
+    expect(await json(send('GET', '/api/seasons'))).toContainEqual({ number: 5, current: false, stages: 0, phantimals: 1, records: 0, tournaments: 0 });
     expect((await send('DELETE', '/api/seasons/5')).status).toBe(409);
     expect((await send('DELETE', '/api/seasons/8')).status).toBe(409);
     await send('POST', '/api/seasons', { number: 6 });
     expect((await json(send('DELETE', '/api/seasons/6'))).map((s: any) => s.number)).toEqual([8, 5]);
     expect((await send('DELETE', '/api/seasons/6')).status).toBe(404);
+  });
+
+  it('also lists a season that records or Tournaments name, and will not remove it', async () => {
+    db.prepare("INSERT INTO attempt (mode, outcome, season) VALUES ('Dream Hunt', 'Win', 7)").run();
+    db.prepare('INSERT INTO tournament (season, number) VALUES (6, 1)').run();
+    const listed = await json(send('GET', '/api/seasons'));
+    expect(listed).toContainEqual({ number: 7, current: false, stages: 0, phantimals: 0, records: 1, tournaments: 0 });
+    expect(listed).toContainEqual({ number: 6, current: false, stages: 0, phantimals: 0, records: 0, tournaments: 1 });
+    expect((await send('DELETE', '/api/seasons/7')).status).toBe(409);
+    expect((await send('DELETE', '/api/seasons/6')).status).toBe(409);
   });
 });

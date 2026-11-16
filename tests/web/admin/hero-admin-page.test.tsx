@@ -63,6 +63,24 @@ describe('HeroAdminPage', () => {
     expect(await screen.findByText(/Zanie won 7 of 8.*Prydwen C/)).toBeTruthy();
   });
 
+  it('shows a hero\'s range, energy and mechanic tags with where they came from, and saves an edit as the player\'s', async () => {
+    items[0] = { ...items[0], attributes: { range: 1, energy: [0, 200], mechanics: ['cheat-death', 'dot'], releasedInSeason: 5, setOn: '2026-11-14', source: 'external' } } as any;
+    const user = userEvent.setup();
+    render(<HeroAdminPage />);
+    await user.click(await screen.findByRole('button', { name: /Alna/ }));
+    expect((screen.getByLabelText('Range') as HTMLInputElement).value).toBe('1');
+    expect((screen.getByLabelText('Energy') as HTMLInputElement).value).toBe('0, 200');
+    expect((screen.getByLabelText('Mechanic tags') as HTMLInputElement).value).toBe('cheat-death, dot');
+    expect(screen.getByText(/Copied from an outside source on 2026-11-14/)).toBeTruthy();
+    const save = screen.getByRole('button', { name: 'Save attributes' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    await user.clear(screen.getByLabelText('Range'));
+    await user.type(screen.getByLabelText('Range'), '5');
+    await user.click(save);
+    await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/admin/heroes/Alna/attributes')?.body).toEqual({ range: 5, energy: [0, 200], mechanics: ['cheat-death', 'dot'], releasedInSeason: 5 }));
+    delete (items[0] as { attributes?: unknown }).attributes;
+  });
+
   it('creates a hero with its four pieces of information and a summon', async () => {
     const user = userEvent.setup();
     render(<HeroAdminPage />);

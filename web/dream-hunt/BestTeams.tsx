@@ -2,7 +2,8 @@ import { Fragment, useEffect, useState } from 'react';
 import { formatDuration, MIN_CLEARS_FOR_CONFIDENCE } from '../../src/domain/dream-hunt.js';
 import type { LayoutSummary } from '../../src/domain/dream-hunt.js';
 import type { Layout } from '../../src/domain/layout.js';
-import { api, type Boss, type BossRule, type Composition, type GameMap, type Leaderboard } from '../backend.js';
+import { api, type Boss, type BossRule, type Composition, type GameMap } from '../backend.js';
+import { useLoad } from '../useLoad.js';
 import { useMaps } from '../useMaps.js';
 import { UnitsOnMap, type MapUnit } from '../admin/UnitsOnMap.js';
 import { TeamOverview } from '../stats/TeamOverview.js';
@@ -168,24 +169,18 @@ export function BestTeams({ bosses, rules, send }: { bosses: Boss[]; rules: Boss
   const [rule, setRule] = useState('any');
   const [tag, setTag] = useState<string[]>([]);
   const [thisWeek, setThisWeek] = useState(false);
-  const [board, setBoard] = useState<Leaderboard | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const maps = useMaps();
 
   useEffect(() => {
     if (!boss && bosses.length) setBoss((bosses.find((b) => b.attempts > 0) ?? bosses[0]!).name);
   }, [bosses, boss]);
 
-  useEffect(() => {
-    if (!boss) return;
-    api
-      .leaderboard(boss, rule, tag, thisWeek ? weekStart(new Date().toISOString()) : '')
-      .then((loaded) => {
-        setBoard(loaded);
-        setError(null);
-      })
-      .catch((e: Error) => setError(e.message));
-  }, [boss, rule, tag, thisWeek]);
+  // Only the latest request counts: a slow answer for an earlier boss or filter must not replace the one the player asked for last.
+  const { data: board = null, error } = useLoad(
+    () => api.leaderboard(boss, rule, tag, thisWeek ? weekStart(new Date().toISOString()) : ''),
+    [boss, rule, tag, thisWeek],
+    boss !== '',
+  );
 
   return (
     <div>

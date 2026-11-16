@@ -16,6 +16,9 @@ import { migration as m15 } from './015-placement-rules.js';
 import { migration as m16 } from './016-placement-rule-same-row.js';
 import { migration as m17 } from './017-tournament-semi-finals.js';
 import { migration as m18 } from './018-placement-rule-farthest.js';
+import { migration as m19 } from './019-hero-attributes.js';
+import { migration as m20 } from './020-attempt-season.js';
+import { migration as m21 } from './021-counter-setting.js';
 
 /**
  * A change to the tables of an existing database, run once in a transaction. `schema.sql` is the baseline (version 1) and is
@@ -25,4 +28,4 @@ import { migration as m18 } from './018-placement-rule-farthest.js';
  */
 export type Migration = (db: Database.Database) => void;
 
-export const migrations: Migration[] = [m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18];
+export const migrations: Migration[] = [m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21];

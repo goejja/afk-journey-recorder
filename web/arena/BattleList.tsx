@@ -64,6 +64,7 @@ function FightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDelete, o
           {!inBattle && (
             <>
               <span className="muted">{b.createdAt}</span>
+              <span className="badge" title="The season the record was played in">S{b.season}</span>
               <UnionRecap fight={b} />
               <TagBadges tags={b.tags} />
               <FormationIdBadge code={b.formation.formationId} side="A" />
@@ -211,6 +212,7 @@ export function Battles({ reference }: { reference: Reference }) {
             <Players fight={item.fights[0]!} profiles={reference.profiles} keepCell />
             <span className="badge" title="Fights won by Side A">{item.fights.filter((f) => f.outcome === 'Win').length}-{item.fights.filter((f) => f.outcome === 'Loss').length}</span>
             <span className="muted">{item.fights[0]!.createdAt}</span>
+            <span className="badge" title="The season the record was played in">S{item.fights[0]!.season}</span>
             <span className="tags-cell">
               <UnionRecap fight={item.fights[0]!} />
               <FormationIdBadge code={item.fights[0]!.battleFormationId} side="A" />

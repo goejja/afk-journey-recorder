@@ -19,10 +19,17 @@ interface HeroRow {
   pvp_role: 'Damage dealer' | 'Specialist' | 'Support' | 'Tank' | null;
   pvp_set_on: string | null;
   pvp_source: 'prydwen' | 'manual' | null;
+  attr_range: number | null;
+  attr_energy: string | null;
+  attr_mechanics: string | null;
+  attr_season: number | null;
+  attr_set_on: string | null;
+  attr_source: 'external' | 'manual' | null;
 }
 
-const SELECT_HERO = `SELECT h.name, h.tier, h.class, h.faction, h.damage_type, h.source, p.pvp_tier, p.pvp_role, p.set_on AS pvp_set_on, p.source AS pvp_source
-                      FROM hero h LEFT JOIN hero_pvp_hint p ON p.hero = h.name`;
+const SELECT_HERO = `SELECT h.name, h.tier, h.class, h.faction, h.damage_type, h.source, p.pvp_tier, p.pvp_role, p.set_on AS pvp_set_on, p.source AS pvp_source,
+                             a.range AS attr_range, a.energy AS attr_energy, a.mechanics AS attr_mechanics, a.released_season AS attr_season, a.set_on AS attr_set_on, a.source AS attr_source
+                      FROM hero h LEFT JOIN hero_pvp_hint p ON p.hero = h.name LEFT JOIN hero_attribute a ON a.hero = h.name`;
 
 /** Routes of Admin > Units > Heroes: the standard heroes' information and the units they bring. Images are the Images tab's. */
 export function heroAdminRoutes(db: Database.Database): Hono {
@@ -44,6 +51,17 @@ export function heroAdminRoutes(db: Database.Database): Hono {
     pvpRole: row.pvp_role,
     pvpSetOn: row.pvp_set_on,
     pvpSource: row.pvp_source,
+    attributes:
+      row.attr_set_on === null
+        ? null
+        : {
+            range: row.attr_range,
+            energy: JSON.parse(row.attr_energy ?? '[]'),
+            mechanics: JSON.parse(row.attr_mechanics ?? '[]'),
+            releasedInSeason: row.attr_season,
+            setOn: row.attr_set_on,
+            source: row.attr_source!,
+          },
     pair: pairOf(row.name),
     summon: summonOf(row.name),
   });
@@ -176,6 +194,26 @@ export function heroAdminRoutes(db: Database.Database): Hono {
     return toJson(find(current.name)!);
   });
 
+  // Range, energy and mechanic tags are information about the hero, kept apart from `hero` so that saving them leaves the hero as imported.
+  // Saving makes the values the player's own (`manual`); a row with nothing in it is removed.
+  serve(app, heroesContract.saveAttributes, ({ params, body }) => {
+    const current = find(params.name);
+    if (!current) return fail(404, 'Unknown hero');
+    const mechanics = [...new Set(body.mechanics.map((tag) => tag.toLowerCase()))].sort();
+    if (body.range === null && body.energy.length === 0 && mechanics.length === 0 && body.releasedInSeason === null) {
+      db.prepare('DELETE FROM hero_attribute WHERE hero = ?').run(current.name);
+    } else {
+      const same = current.attr_set_on !== null && current.attr_range === body.range && current.attr_energy === JSON.stringify(body.energy) && current.attr_mechanics === JSON.stringify(mechanics) && current.attr_season === body.releasedInSeason;
+      if (!same) {
+        db.prepare(
+          `INSERT INTO hero_attribute (hero, range, energy, mechanics, released_season, set_on, source) VALUES (?, ?, ?, ?, ?, date('now', 'localtime'), 'manual')
+           ON CONFLICT (hero) DO UPDATE SET range = excluded.range, energy = excluded.energy, mechanics = excluded.mechanics, released_season = excluded.released_season, set_on = excluded.set_on, source = 'manual'`,
+        ).run(current.name, body.range, JSON.stringify(body.energy), JSON.stringify(mechanics), body.releasedInSeason);
+      }
+    }
+    return toJson(find(current.name)!);
+  });
+
   // Placement Rules (ADR 0036). Deleting a hero deletes its rules.
   interface RuleRow { id: number; hero: string; relation: PlacementRule['relation']; effect: PlacementRule['effect']; wants_role: PlacementRule['wantsRole']; note: string; source: PlacementRule['source']; enabled: number }
   const ruleJson = (r: RuleRow): PlacementRule => ({ id: r.id, hero: r.hero, relation: r.relation, effect: r.effect, wantsRole: r.wants_role, note: r.note, source: r.source, enabled: r.enabled === 1 });
@@ -226,6 +264,7 @@ export function heroAdminRoutes(db: Database.Database): Hono {
       db.prepare('DELETE FROM hero_pair WHERE hero = ?').run(name);
       db.prepare('DELETE FROM hero_summon WHERE hero = ?').run(name);
       db.prepare('DELETE FROM hero_pvp_hint WHERE hero = ?').run(name);
+      db.prepare('DELETE FROM hero_attribute WHERE hero = ?').run(name);
       db.prepare('DELETE FROM placement_rule WHERE hero = ?').run(name);
       db.prepare('DELETE FROM hero WHERE name = ?').run(name);
     })();

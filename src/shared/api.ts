@@ -24,6 +24,8 @@ export interface FormationInput {
 export interface DreamHuntAttempt {
   id: number;
   createdAt: string;
+  /** The season the record was played in (ADR 0038), set when it was saved. */
+  season: number;
   outcome: 'Win' | 'Loss';
   note: string | null;
   boss: string;
@@ -172,6 +174,8 @@ export interface GeneratedBoard {
   recordedGames?: number;
   notes?: string[];
   note?: string;
+  /** The Formation groups that beat the group this board's enemy looks like, from the owner's own PvP records (a hint, never part of the Win Score). */
+  pastCounters?: PastCounters;
   /** The Placement Rules of the proposed team and whether its tiles satisfy them (ADR 0036). A preference, never part of the Win Score. */
   rules?: PlacementRuleLine[];
   /** What the skills of the known enemy team reach, from the enemy's own back edge. A reading, not a reason to change the proposal. */
@@ -254,7 +258,6 @@ export interface GeneratedFormation {
   sets: { matchChance: number; boards: GeneratedBoard[] }[];
   notes: string[];
 }
-
 
 export interface ScenarioInput {
   name: string;
@@ -438,6 +441,30 @@ export interface FormationProfileStat extends FormationGroupRow {
   placement: PlacementMap[];
 }
 
+/** A hero fielded on the same side as another, with the games of those sides and its share of the other hero's games. */
+export interface PartnerStat {
+  hero: string;
+  games: number;
+  wins: number;
+  winRate: number;
+  share: number;
+}
+
+/** One hero's own record and the heroes fielded with it: team membership only, not the target of a skill. */
+export interface PartnerReport {
+  hero: string;
+  games: number;
+  wins: number;
+  winRate: number;
+  partners: PartnerStat[];
+}
+
+/** A mechanic tag of the unit info with the heroes that carry it. */
+export interface PartnerTag {
+  tag: string;
+  heroes: string[];
+}
+
 export interface PairStat {
   heroA: string;
   heroB: string;
@@ -487,6 +514,8 @@ export interface ArenaBattle {
   id: number;
   mode: ArenaMode;
   createdAt: string;
+  /** The season the record was played in (ADR 0038), set when it was saved. */
+  season: number;
   outcome: 'Win' | 'Loss';
   note: string | null;
   mapName: string;
@@ -779,3 +808,66 @@ export type * from './contracts/stats-settings.js';
 export type * from './contracts/roster.js';
 export type * from './contracts/images.js';
 export type * from './contracts/roster-import.js';
+
+// The counters between Formation groups (src/query/formations.ts).
+/** One Formation group's head-to-head record against another, from the first group's side. */
+export interface Matchup {
+  /** The other group's place in the list given to `groupCounters`. */
+  vs: number;
+  games: number;
+  wins: number;
+  /** The games the other group won; with a draw, games are not wins plus losses. */
+  losses: number;
+  winRate: number;
+  /** Fewer games than the counter rule asks for: shown, never called a counter. */
+  anecdote: boolean;
+}
+
+export interface GroupCounters {
+  /** The groups this one counters: at least the rule's games and win rate against them, best win rate first. */
+  beats: Matchup[];
+  /** The groups that counter this one, by the same rule, best win rate first. */
+  losesTo: Matchup[];
+  /** Every group it met, most games first, whatever the result (the rows of the heat map). */
+  matchups: Matchup[];
+}
+
+/** A Formation group of the counters report: how it did, with its head-to-head records. */
+export interface GroupCounterRow extends GroupCounters {
+  core: string[];
+  flex: string[];
+  games: number;
+  wins: number;
+  winRate: number;
+}
+
+/** The Formation groups with their counters, and the rule that decided which are counters. */
+export interface GroupCounterReport {
+  rule: { winRate: number; minGames: number };
+  groups: GroupCounterRow[];
+}
+
+/** A Formation group that beat the enemy's group in the owner's records, with which of its Core heroes the roster has. */
+export interface PastCounter {
+  core: string[];
+  flex: string[];
+  /** The games it met the enemy's group in, and how many it won and lost. */
+  games: number;
+  wins: number;
+  losses: number;
+  /** Its win rate against the enemy's group. */
+  winRate: number;
+  /** Fewer games than the counter rule asks for: a pointer, not a counter. */
+  anecdote: boolean;
+  /** Its Core heroes the default roster has, and those it has not. */
+  have: string[];
+  missing: string[];
+}
+
+/** What the owner's records say about the Formation group an enemy team looks like: which groups beat it. */
+export interface PastCounters {
+  /** The enemy's group: the one with the most games whose Core heroes are all in the enemy team. */
+  group: { core: string[]; flex: string[]; games: number; wins: number };
+  rule: { winRate: number; minGames: number };
+  counteredBy: PastCounter[];
+}

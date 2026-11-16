@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { ROUNDS, type Round } from '../../domain/tournament.js';
 import { tournamentsContract, type Tournament } from '../../shared/contracts/tournaments.js';
 import { fail, serve } from '../contract.js';
+import { currentSeason } from '../db-helpers.js';
 
 /** Routes for the Tournaments of Super League (ADR 0020): the latest first, which is where a new import starts. */
 export function tournamentRoutes(db: Database.Database): Hono {
@@ -25,10 +26,11 @@ export function tournamentRoutes(db: Database.Database): Hono {
   serve(app, tournamentsContract.list, list);
 
   serve(app, tournamentsContract.create, ({ body }) => {
-    if (db.prepare('SELECT 1 FROM tournament WHERE season = ? AND number = ?').get(body.season, body.number)) {
-      return fail(409, `Season ${body.season} already has a Tournament ${body.number}`);
+    const season = currentSeason(db);
+    if (db.prepare('SELECT 1 FROM tournament WHERE season = ? AND number = ?').get(season, body.number)) {
+      return fail(409, `Season ${season} already has a Tournament ${body.number}`);
     }
-    db.prepare('INSERT INTO tournament (season, number, start_date) VALUES (?, ?, ?)').run(body.season, body.number, body.startDate);
+    db.prepare('INSERT INTO tournament (season, number, start_date) VALUES (?, ?, ?)').run(season, body.number, body.startDate);
     return list();
   });
 

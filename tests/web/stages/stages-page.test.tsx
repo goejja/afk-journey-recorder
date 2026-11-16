@@ -4,6 +4,7 @@ import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import { StagesPage } from '../../../web/stages/StagesPage.js';
+import { columnsOf } from '../css-columns.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
 const rowLengths = [2, 5, 6, 6, 7, 6, 6, 5, 2];
@@ -185,6 +186,18 @@ describe('StagesPage', () => {
     render(<StagesPage />);
     await screen.findByRole('list', { name: 'Attempts' });
     expect(screen.queryByText(/Showing the latest/)).toBeNull();
+  });
+
+  it('gives every cell of a record its own grid column, so the buttons stay at the right of the first line', async () => {
+    attempts = [{
+      id: 3, outcome: 'Win', buffLevel: null, note: 'n', tags: ['Luna'], createdAt: '2026-10-29', season: 8,
+      stage: { id: 7, season: 8, phase: 0, kind: 'Normal', number: 100, mapName: 'Open', attemptCount: 1, enemies: [] },
+      formation: { artifact: null, phantimal: null, assist: null, heroes: [] },
+    }];
+    render(<StagesPage />);
+    const row = (await screen.findByRole('list', { name: 'Attempts' })).querySelector('.stage-row')!;
+    expect(row.children).toHaveLength(columnsOf('.stage-row'));
+    expect(row.lastElementChild!.className).toBe('attempt-actions');
   });
 
   it('shows an empty state', async () => {

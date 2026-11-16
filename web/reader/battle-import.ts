@@ -222,7 +222,7 @@ const unitsKey = (placed: { tile: number; hero: string; part?: string }[], phant
   JSON.stringify([placed.map((p) => [p.hero, p.part ?? '', p.tile]).sort(), phantimal ? [phantimal.name, phantimal.tile, phantimal.partnerTile ?? null] : null, artifact]);
 
 /** What differs between the two sides when a saved placement is looked for: the letter and zone, how the heroes read off the form, and how the side is placed. */
-interface PlacedSide<S extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: PlacedPhantimal | null; artifact: string }> {
+export interface PlacedSide<S extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: PlacedPhantimal | null; artifact: string }> {
   letter: 'A' | 'B';
   zone: number;
   heroesOf: (current: S, hero: string) => Omit<BattleDraftSide['heroes'][number], 'tile'>;
@@ -252,14 +252,14 @@ function knownPlacement<S extends { placed: { tile: number; hero: string; part?:
   return unitsKey(next.placed, next.phantimal, next.artifact) === unitsKey(current.placed, current.phantimal, current.artifact) ? null : next;
 }
 
-const OWN_SIDE: PlacedSide<FormationState> = {
+export const OWN_SIDE: PlacedSide<FormationState> = {
   letter: 'A',
   zone: TILE.PLAYER,
   heroesOf: (current, hero) => ({ hero, rank: current.snapshots[hero]?.rank ?? null, equipmentLevel: current.snapshots[hero]?.equipmentLevel ?? null }),
   place: placeOwn,
 };
 
-const OPPONENT_SIDE: PlacedSide<OpponentState> = {
+export const OPPONENT_SIDE: PlacedSide<OpponentState> = {
   letter: 'B',
   zone: TILE.ENEMY,
   heroesOf: (current, hero) => {
@@ -431,26 +431,20 @@ export const readingOf = (side: BattleDraftSide): ImportReading => ({
 /** The heroes of a team as they stand in the form, once each: both parts of a pair stand on their own tiles. */
 const once = (names: string[]) => [...new Set(names)];
 
-/** Your side as the form holds it. A phantimal pair is told by its first part, which a reading may have given as the other part. */
-export function keptOwn(formation: FormationState, read: ImportReading): ImportReading {
+/** A side as the form holds it. A phantimal pair is told by its first part, which a reading may have given as the other part. */
+function kept<S extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: PlacedPhantimal | null; artifact: string }>(side: PlacedSide<S>, state: S, read: ImportReading): ImportReading {
   return {
-    heroes: once(formation.placed.map((p) => p.hero)).map((hero) => ({ hero, rank: formation.snapshots[hero]?.rank ?? null, equipmentLevel: formation.snapshots[hero]?.equipmentLevel ?? null })),
-    artifact: formation.artifact ? { name: formation.artifact, level: null } : null,
-    phantimal: keptPhantimal(formation.phantimal, read.phantimal),
+    heroes: once(state.placed.map((p) => p.hero)).map((hero) => side.heroesOf(state, hero)),
+    artifact: state.artifact ? { name: state.artifact, level: null } : null,
+    phantimal: keptPhantimal(state.phantimal, read.phantimal),
   };
 }
 
+/** Your side as the form holds it. */
+export const keptOwn = (formation: FormationState, read: ImportReading): ImportReading => kept(OWN_SIDE, formation, read);
+
 /** The other side as the form holds it. */
-function keptOpponent(opponent: OpponentState, read: ImportReading): ImportReading {
-  return {
-    heroes: once(opponent.placed.map((p) => p.hero)).map((hero) => {
-      const placed = opponent.placed.find((p) => p.hero === hero)!;
-      return { hero, rank: placed.rank === '' ? null : placed.rank, equipmentLevel: placed.equipment === '' ? null : Number(placed.equipment) };
-    }),
-    artifact: opponent.artifact ? { name: opponent.artifact, level: null } : null,
-    phantimal: keptPhantimal(opponent.phantimal, read.phantimal),
-  };
-}
+const keptOpponent = (opponent: OpponentState, read: ImportReading): ImportReading => kept(OPPONENT_SIDE, opponent, read);
 
 function keptPhantimal(placed: PlacedPhantimal | null, read: string | null): string | null {
   if (!placed) return null;

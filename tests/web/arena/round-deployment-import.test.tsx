@@ -47,7 +47,7 @@ describe('a Super League battle imported into a Round', () => {
         if (url === '/api/boss-rules') return Response.json([]);
         if (url === '/api/reference') return Response.json({ ranks: ['Elite', 'Mythic+'], equipmentLevels: [0, 10], caps: [{ rank: 'Mythic+', minLevel: 0, maxLevel: 10 }] });
         if (url === '/api/tournaments') return Response.json([{ id: 2, season: 8, number: 2, startDate: null, battles: 0, rounds: [] }]);
-        if (url === '/api/seasons') return Response.json([{ number: 8, current: true, stages: 0, phantimals: 0 }]);
+        if (url === '/api/seasons') return Response.json([{ number: 8, current: true, stages: 0, phantimals: 0, records: 0, tournaments: 0 }]);
         if (url === '/api/tournaments/2/rounds/Group%20stage/deployments') return Response.json(stored);
         if (url === '/api/tournaments/2/rounds/Group%20stage/deployments' && method === 'PUT') {
           for (const entry of body.entries) {
@@ -185,6 +185,8 @@ describe('the batch table of a Super League Round', () => {
   let both: boolean;
   /** The pictures read no rank or equipment for one hero, to check the Profile's roster fills them. */
   let unreadRank = false;
+  /** A second Arena Map whose player zone starts two tiles later, so a placement guessed on it differs from the one guessed on Duel. */
+  let secondMap = false;
   const names = (side: 'A' | 'B', i: number) => [`${side}${i}a`, `${side}${i}b`];
   const everyHero = [1, 2, 3, 4, 5].flatMap((i) => [...names('A', i), ...names('B', i)]);
   const side = (id: number, name: string, playerId: string, heroes: string[], tag: string) => ({
@@ -222,6 +224,7 @@ describe('the batch table of a Super League Round', () => {
     savedFights = [];
     mirrored = false;
     unreadRank = false;
+    secondMap = false;
     both = false;
     vi.stubGlobal('window', Object.assign(window, { confirm: () => true }));
     vi.stubGlobal(
@@ -230,7 +233,7 @@ describe('the batch table of a Super League Round', () => {
         const method = init?.method ?? 'GET';
         const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
         requests.push({ method, url, body });
-        if (url === '/api/maps') return Response.json([{ name: 'Duel', tags: ['Arena'], rowLengths: [2, 5, 6, 6, 7, 6, 6, 5, 2], cells, source: 'manual', canRestore: false }]);
+        if (url === '/api/maps') return Response.json([{ name: 'Duel', tags: ['Arena'], rowLengths: [2, 5, 6, 6, 7, 6, 6, 5, 2], cells, source: 'manual', canRestore: false }, ...(secondMap ? [{ name: 'Open', tags: ['Arena'], rowLengths: [2, 5, 6, 6, 7, 6, 6, 5, 2], cells: cells.map((c, i) => (i === 38 || i === 39 ? TILE.OPEN : c)), source: 'manual', canRestore: false }] : [])]);
         if (url.startsWith('/api/heroes')) return Response.json(everyHero.map(hero));
         if (url === '/api/profiles') return Response.json([{ id: 2, name: 'Luna', playerId: '2222', isDefault: true, heroCount: 10 }, { id: 3, name: 'Rover', playerId: '3333', isDefault: false, heroCount: 10 }]);
         if (url === '/api/artifacts' || url === '/api/phantimals') return Response.json([]);
@@ -238,7 +241,7 @@ describe('the batch table of a Super League Round', () => {
         if (url === '/api/boss-rules') return Response.json([]);
         if (url === '/api/reference') return Response.json({ ranks: ['Elite', 'Mythic+'], equipmentLevels: [0, 10], caps: [{ rank: 'Mythic+', minLevel: 0, maxLevel: 10 }] });
         if (url === '/api/tournaments') return Response.json([{ id: 2, season: 8, number: 2, startDate: null, battles: 0, rounds: [] }]);
-        if (url === '/api/seasons') return Response.json([{ number: 8, current: true, stages: 0, phantimals: 0 }]);
+        if (url === '/api/seasons') return Response.json([{ number: 8, current: true, stages: 0, phantimals: 0, records: 0, tournaments: 0 }]);
         if (url === '/api/tournaments/2/rounds/Group%20stage/deployments') return Response.json(deployments);
         if (url === '/api/tournaments/2/rounds/Group%20stage/deployments' && method === 'PUT') {
           for (const entry of body.entries) {
@@ -403,6 +406,37 @@ describe('the batch table of a Super League Round', () => {
     expect(put.body.teams[0].mapName).toBe('Duel');
     expect(put.body.teams[0].heroes.map((h: any) => h.tile)).toEqual([38, 39]);
     expect(put.body.teams.slice(1).every((t: any) => t !== null)).toBe(true); // the other four stand as they were
+  });
+
+  /** Opens the editor of team 1 of Luna, whose tiles nobody placed, and returns the PUT the saved team makes. */
+  async function saveUnplacedTeam(change?: (user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) => Promise<void>) {
+    deployments[0]!.teams[0] = { ...team(1, [38, 39], 'A'), heroes: names('A', 1).map((h) => deployedHero(h, null)) };
+    const user = await openImport();
+    const view = await screen.findByRole('region', { name: 'Round Deployments' });
+    await user.click(within(view).getByRole('button', { name: /Round Deployments ·/ }));
+    await user.click(await within(view).findByRole('button', { name: /^Luna/ }));
+    await user.click(within(view).getByRole('button', { name: 'Edit team 1 of Luna' }));
+    const dialog = await screen.findByRole('dialog');
+    await change?.(user, dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Save the team' }));
+    await waitFor(() => expect(requests.some((r) => r.method === 'PUT' && r.url === '/api/tournaments/2/rounds/Group%20stage/deployments/2')).toBe(true));
+    return requests.filter((r) => r.method === 'PUT' && r.url.endsWith('/deployments/2')).at(-1)!;
+  }
+
+  it('stores no tile and no Map for a team saved untouched, whose tiles the form only guessed', async () => {
+    const put = await saveUnplacedTeam();
+    expect(put.body.teams[0].heroes.map((h: any) => h.tile)).toEqual([null, null]);
+    expect(put.body.teams[0].mapName).toBeUndefined();
+    expect(put.body.teams.slice(1).every((t: any) => t !== null)).toBe(true); // the other four stand as they were
+  });
+
+  it('stores no tile of a former Map after the Map was changed in the editor', async () => {
+    secondMap = true;
+    const put = await saveUnplacedTeam(async (user, dialog) => {
+      await user.selectOptions(within(dialog).getByLabelText('Map of the team'), 'Open');
+    });
+    expect(put.body.teams[0].heroes.map((h: any) => h.tile)).toEqual([null, null]);
+    expect(put.body.teams[0].mapName).toBeUndefined();
   });
 
   it('fills the tiles of a confirmed Deployment from the first Battle saved for it, and records the Map', async () => {

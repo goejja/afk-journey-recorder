@@ -8,7 +8,7 @@ import { dropEmptyBattles } from './battles.js';
 import { anyOf, limitParam, listParam } from '../params.js';
 import { hasAnyTag, loadTags, saveTags } from './tags.js';
 import { fightFormationIdProblem, formationContext, formationHeroNames, insertFormation, loadFormation, loadRoster, replaceFormation, validateSnapshots } from './formations.js';
-import { heroNameSet, mapCells } from '../db-helpers.js';
+import { currentSeason, heroNameSet, mapCells } from '../db-helpers.js';
 import { inTransaction } from '../transaction.js';
 import type { Enemy } from '../../shared/contracts/stages.js';
 import { stagesContract } from '../../shared/contracts/stages.js';
@@ -214,7 +214,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
 
   /** Inserts one checked attempt. Call inside a transaction. */
   function insertAttempt(body: any, checked: Exclude<ReturnType<typeof check>, { error: string }>): number {
-    const attemptId = Number(db.prepare("INSERT INTO attempt (mode, outcome, note) VALUES ('Stage', ?, ?)").run(body.outcome, checked.note).lastInsertRowid);
+    const attemptId = Number(db.prepare("INSERT INTO attempt (mode, outcome, note, season) VALUES ('Stage', ?, ?, ?)").run(body.outcome, checked.note, currentSeason(db)).lastInsertRowid);
     db.prepare('INSERT INTO stage_attempt (attempt_id, stage_id, buff_level) VALUES (?, ?, ?)').run(attemptId, checked.stage.id, checked.buffLevel);
     insertFormation(db, attemptId, body.formation, loadRoster(db), checked.stage.map_name);
     saveTags(db, attemptId, checked.tags);
@@ -310,7 +310,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
 
     const rows = db
       .prepare(
-        `SELECT a.id, a.outcome, a.note, a.created_at AS createdAt, sa.buff_level AS buffLevel,
+        `SELECT a.id, a.outcome, a.note, a.created_at AS createdAt, a.season AS playedIn, sa.buff_level AS buffLevel,
                 s.id AS stageId, s.season, s.phase, s.kind, s.number, s.map_name AS mapName
          FROM attempt a
          JOIN stage_attempt sa ON sa.attempt_id = a.id
@@ -323,6 +323,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
     return rows.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
+      season: r.playedIn,
       outcome: r.outcome,
       note: r.note,
       buffLevel: r.buffLevel,

@@ -8,21 +8,30 @@ export interface ReaderTally {
   unread: number;
 }
 
+/** Which looks a count is about: the ones already saved, or the ones a battle report proposes. */
+export type LookGroup = 'known' | 'proposed';
+
+/** For each filed rank, how often the reader named each rank (null when it was not sure). */
+export type ReadAs = Map<string, Map<string | null, number>>;
+
 export interface ReaderScore {
   overall: ReaderTally;
   byRank: Map<string, ReaderTally>;
+  /** What the looks of each rank were read as, apart for the known and the proposed looks. */
+  readAs: Record<LookGroup, ReadAs>;
 }
 
 export interface ProposalCheck {
   before: ReaderScore;
   after: ReaderScore;
-  /** Looks the reader named right before the proposed looks and names wrong with them. */
-  confused: { rank: string; index: number }[];
+  /** Looks the reader named right before the proposed looks and names wrong with them, and the rank it names now. */
+  confused: { rank: string; index: number; group: LookGroup; readAs: string }[];
   /** Why the proposal must not be applied, or null when it may. */
   refused: string | null;
 }
 
 const empty = (): ReaderTally => ({ probes: 0, correct: 0, wrong: 0, unread: 0 });
+const emptyScore = (): ReaderScore => ({ overall: empty(), byRank: new Map(), readAs: { known: new Map(), proposed: new Map() } });
 
 /** The rank the reader names for a look among the others: null when it is not sure. */
 function answer(probe: RankExample, among: RankExample[]): string | null {
@@ -30,7 +39,9 @@ function answer(probe: RankExample, among: RankExample[]): string | null {
   return reading?.confident ? reading.rank : null;
 }
 
-const tally = (score: ReaderScore, rank: string, answered: string | null) => {
+const tally = (score: ReaderScore, rank: string, group: LookGroup, answered: string | null) => {
+  const answers = score.readAs[group].get(rank) ?? score.readAs[group].set(rank, new Map()).get(rank)!;
+  answers.set(answered, (answers.get(answered) ?? 0) + 1);
   for (const t of [score.overall, score.byRank.get(rank) ?? score.byRank.set(rank, empty()).get(rank)!]) {
     t.probes++;
     if (answered === null) t.unread++;
@@ -45,17 +56,18 @@ const tally = (score: ReaderScore, rank: string, answered: string | null) => {
  * reader names a wrong rank more often with it, or when a look it read right is now read wrong.
  */
 export function checkProposal(known: RankExample[], proposed: RankExample[]): ProposalCheck {
-  const before: ReaderScore = { overall: empty(), byRank: new Map() };
-  const after: ReaderScore = { overall: empty(), byRank: new Map() };
+  const before = emptyScore();
+  const after = emptyScore();
   const confused: ProposalCheck['confused'] = [];
   const all = [...known, ...proposed];
   for (const [index, probe] of all.entries()) {
     const others = (list: RankExample[]) => list.filter((e) => e !== probe);
     const was = answer(probe, others(known));
     const now = answer(probe, others(all));
-    tally(before, probe.rank, was);
-    tally(after, probe.rank, now);
-    if (was === probe.rank && now !== null && now !== probe.rank) confused.push({ rank: probe.rank, index });
+    const group: LookGroup = index < known.length ? 'known' : 'proposed';
+    tally(before, probe.rank, group, was);
+    tally(after, probe.rank, group, now);
+    if (was === probe.rank && now !== null && now !== probe.rank) confused.push({ rank: probe.rank, index, group, readAs: now });
   }
   let refused: string | null = null;
   if (after.overall.wrong > before.overall.wrong) refused = `the reader would name ${after.overall.wrong} wrong ranks instead of ${before.overall.wrong}`;

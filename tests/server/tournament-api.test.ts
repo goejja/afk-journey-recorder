@@ -25,17 +25,17 @@ const fight = (hero: string) => ({
   opponent: { heroes: [{ tile: 0, hero: 'X' }] },
 });
 const group = (extra: Record<string, unknown> = {}, mode = 'Super League', hero = 'A') => send('POST', '/api/pvp/battle-groups', { mode, fights: [fight(hero)], ...extra });
-const makeTournament = async (season = 8, number = 2) => (await json(send('POST', '/api/tournaments', { season, number })))[0].id as number;
+const makeTournament = async (number = 2) => (await json(send('POST', '/api/tournaments', { number })))[0].id as number;
 
 describe('Tournaments', () => {
   it('lists the latest first and refuses a repeated number in a Season', async () => {
-    await makeTournament(8, 1);
-    await makeTournament(8, 2);
+    await makeTournament(1);
+    await makeTournament(2);
     const listed = await json(send('GET', '/api/tournaments'));
     expect(listed.map((t: any) => [t.season, t.number])).toEqual([[8, 2], [8, 1]]);
-    expect((await send('POST', '/api/tournaments', { season: 8, number: 2 })).status).toBe(409);
-    expect((await send('POST', '/api/tournaments', { season: 8, number: 0 })).status).toBe(400);
-    expect((await send('POST', '/api/tournaments', { season: 8, number: 3, startDate: 'soon' })).status).toBe(400);
+    expect((await send('POST', '/api/tournaments', { number: 2 })).status).toBe(409);
+    expect((await send('POST', '/api/tournaments', { number: 0 })).status).toBe(400);
+    expect((await send('POST', '/api/tournaments', { number: 3, startDate: 'soon' })).status).toBe(400);
   });
 
   it('lists the Rounds that have Battles, in playing order', async () => {

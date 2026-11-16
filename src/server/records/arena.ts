@@ -20,7 +20,7 @@ import { anyOf, limitParam, listParam } from '../params.js';
 import { declareNamedFormationId } from '../../db/formation-ids.js';
 import { loadPlayerId, normalizePlayerId, savePlayerId } from '../reference/players.js';
 import { hasAnyTag, loadTags, saveTags } from './tags.js';
-import { hasId, hasName, heroNames } from '../db-helpers.js';
+import { hasId, hasName, heroNames, seasonOfNewRecord } from '../db-helpers.js';
 import { arenaContract } from '../../shared/contracts/arena.js';
 import { fail, serve } from '../contract.js';
 
@@ -54,7 +54,7 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
     if (filters.round !== undefined) (where.push('b.round = ?'), params.push(filters.round));
     const rows = db
       .prepare(
-        `SELECT a.id, a.outcome, a.note, a.created_at AS createdAt, a.battle_id AS battleId, a.battle_position AS battlePosition, r.mode, r.map_name AS mapName, r.rule,
+        `SELECT a.id, a.outcome, a.note, a.created_at AS createdAt, a.season, a.battle_id AS battleId, a.battle_position AS battlePosition, r.mode, r.map_name AS mapName, r.rule,
                 r.opp_artifact, r.opp_assist_hero, r.opp_assist_rank, r.opp_assist_equipment,
                 r.opp_phantimal, r.opp_phantimal_tile, r.opp_phantimal_partner_tile, r.opp_formation_id, r.union_level AS unionLevel, r.opp_union_level AS opponentUnionLevel,
                 b.formation_id AS battleFormationId, b.opp_formation_id AS battleOpponentFormationId, b.tournament_id AS tournamentId, b.round
@@ -66,6 +66,7 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
       id: r.id,
       mode: r.mode,
       createdAt: r.createdAt,
+      season: r.season,
       outcome: r.outcome,
       note: r.note,
       mapName: r.mapName,
@@ -220,8 +221,8 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
   function insertFight(body: any, checked: Extract<ReturnType<typeof check>, { cells: number[] }>, link?: { battleId: number; position: number }): number {
     const attemptId = Number(
       db
-        .prepare("INSERT INTO attempt (mode, outcome, note, battle_id, battle_position) VALUES ('Arena', ?, ?, ?, ?)")
-        .run(body.outcome, checked.note, link?.battleId ?? null, link?.position ?? null).lastInsertRowid,
+        .prepare("INSERT INTO attempt (mode, outcome, note, battle_id, battle_position, season) VALUES ('Arena', ?, ?, ?, ?, ?)")
+        .run(body.outcome, checked.note, link?.battleId ?? null, link?.position ?? null, seasonOfNewRecord(db, link?.battleId)).lastInsertRowid,
     );
     saveBattleRows(attemptId, body, checked.rule, link !== undefined);
     insertFormation(db, attemptId, body.formation, new Map(), body.mapName, link !== undefined);

@@ -133,6 +133,7 @@ export function StagesPage() {
               <strong>{stageLabel(a.stage)}</strong>
               {a.buffLevel !== null ? <span className="muted">buff {a.buffLevel}</span> : <span />}
               <span className="muted">{a.createdAt}</span>
+              <span className="badge" title="The season the record was played in">S{a.season}</span>
               <TeamOverview heroes={a.formation.heroes} phantimal={a.formation.phantimal} artifact={a.formation.artifact} assist={a.formation.assist ?? null} meta="state" size={32} />
               <span className="tags-cell">
                 <TagBadges tags={a.tags} />

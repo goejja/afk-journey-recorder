@@ -22,5 +22,5 @@ export type UpdateDate = z.infer<typeof UpdateDate>;
 export const updateDateContract = {
   get: endpoint({ method: 'GET', path: '/api/update-date', response: UpdateDate }),
   save: endpoint({ method: 'PUT', path: '/api/update-date', body: DaySchema, response: UpdateDate }),
-  clear: endpoint({ method: 'DELETE', path: '/api/update-date', response: UpdateDate }),
+  reset: endpoint({ method: 'DELETE', path: '/api/update-date', response: UpdateDate }),
 };

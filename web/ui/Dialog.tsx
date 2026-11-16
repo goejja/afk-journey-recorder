@@ -16,13 +16,15 @@ interface DialogProps {
   busy?: boolean;
   /** A picker may close when the person clicks beside it; a confirmation never does. */
   closeOnBackdrop?: boolean;
+  /** A Dialog that holds a card: it slides in from the right edge, full height, instead of sitting in the middle. */
+  side?: boolean;
 }
 
 /**
  * A Dialog blocks the Page until the person answers. It traps focus, closes on Escape, and gives focus back to
  * whatever opened it. The backdrop closes it only when the Dialog is a picker.
  */
-export function Dialog({ title, message, children, actions, onCancel, initialFocus = 'confirm', busy = false, closeOnBackdrop = false }: DialogProps) {
+export function Dialog({ title, message, children, actions, onCancel, initialFocus = 'confirm', busy = false, closeOnBackdrop = false, side = false }: DialogProps) {
   const box = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
@@ -59,9 +61,9 @@ export function Dialog({ title, message, children, actions, onCancel, initialFoc
   };
 
   return (
-    <Overlay onClick={closeOnBackdrop && !busy ? onCancel : undefined}>
+    <Overlay onClick={closeOnBackdrop && !busy ? onCancel : undefined} side={side}>
       <div
-        className="overlay-box"
+        className={side ? 'overlay-box side' : 'overlay-box'}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

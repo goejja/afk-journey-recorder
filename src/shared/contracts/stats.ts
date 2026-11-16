@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import type { ArtifactStat, FactionMismatch, FormationProfileStat, FormationReport, HeroDistribution, HeroStat, MapStat, PairStat, PlayerStat, RowStat, RuleStat, StageStat, Summary, TrioStat } from '../api.js';
+import type { ArtifactStat, FactionMismatch, FormationProfileStat, FormationReport, GroupCounterReport, HeroDistribution, HeroStat, MapStat, PairStat, PartnerReport, PartnerTag, PlayerStat, RowStat, RuleStat, StageStat, Summary, TrioStat } from '../api.js';
 import { endpoint } from '../contract.js';
 
 const text = z.string().optional();
 const texts = z.union([z.string(), z.array(z.string())]).optional();
 
-/** The filters every view of sides shares: modes, tags and Players (by Player ID), each matching any of those given. */
-const common = { mode: texts, tag: texts, player: texts, excludeDefault: text };
+/** The filters every view of sides shares: modes, tags, Players (by Player ID) and the seasons records were played in, each matching any of those given. */
+const common = { mode: texts, tag: texts, player: texts, playedIn: texts, excludeDefault: text };
 const withMin = z.object({ ...common, min: text });
 
 // The answers are typed with the shapes of src/shared/api.ts; the query layer builds them.
@@ -23,10 +23,16 @@ export const statsContract = {
   /** The Formation groups under their Archetype rows with labels; `hero` (repeated) keeps the groups that hold every hero given. */
   formationReport: endpoint({ method: 'GET', path: '/api/stats/formation-report', query: withMin.extend({ hero: texts }), response: z.custom<FormationReport>() }),
   formationProfile: endpoint({ method: 'GET', path: '/api/stats/formation-profile', query: z.object({ ...common, core: texts }), response: z.custom<FormationProfileStat>() }),
+  /** Which Formation group beats which, from the PvP battles the filters select (both sides of each); the counter rule is the one saved in Admin. */
+  groupCounters: endpoint({ method: 'GET', path: '/api/stats/group-counters', query: withMin, response: z.custom<GroupCounterReport>() }),
   /** Read-only: the stored records whose Phantimal its heroes cannot have brought (ADR 0029). Never changes a record. */
   factionMismatches: endpoint({ method: 'GET', path: '/api/stats/faction-mismatches', response: list<FactionMismatch>() }),
   pairs: endpoint({ method: 'GET', path: '/api/stats/pairs', query: withMin, response: list<PairStat>() }),
+  /** The heroes fielded on the same side as `hero`, from the sides the filters select. */
+  partners: endpoint({ method: 'GET', path: '/api/stats/partners', query: withMin.extend({ hero: z.string().min(1) }), response: z.custom<PartnerReport>() }),
+  /** The mechanic tags of the unit info, each with the heroes that carry it. */
+  partnerTags: endpoint({ method: 'GET', path: '/api/stats/partner-tags', response: list<PartnerTag>() }),
   trios: endpoint({ method: 'GET', path: '/api/stats/trios', query: withMin, response: list<TrioStat>() }),
-  players: endpoint({ method: 'GET', path: '/api/stats/players', query: z.object({ mode: texts, excludeDefault: text, min: text }), response: list<PlayerStat>() }),
-  stages: endpoint({ method: 'GET', path: '/api/stats/stages', query: z.object({ kind: texts, season: text, tag: texts, min: text }), response: list<StageStat>() }),
+  players: endpoint({ method: 'GET', path: '/api/stats/players', query: z.object({ mode: texts, playedIn: texts, excludeDefault: text, min: text }), response: list<PlayerStat>() }),
+  stages: endpoint({ method: 'GET', path: '/api/stats/stages', query: z.object({ kind: texts, season: text, playedIn: texts, tag: texts, min: text }), response: list<StageStat>() }),
 };

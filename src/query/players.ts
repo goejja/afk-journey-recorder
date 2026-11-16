@@ -1,16 +1,18 @@
 import type Database from 'better-sqlite3';
-import { listOf, MAX_ROWS, placeholders } from './filters.js';
+import { listOf, MAX_ROWS, placeholders, seasonsOf, type StatFilters } from './filters.js';
 import { FORMATIONS_PER_PLAYER, sideFormations, tally } from './formations.js';
 
 /**
  * Win rate of each Player (a Player ID on a side, ADR 0006) from their own side, with the modes they were seen in, when, and the
  * formations they fielded most. `name` is the Profile that has the ID now, null when none does. Sides with no Player are left out.
  */
-export function playerStats(db: Database.Database, filters: { mode?: string | string[]; minGames?: number; excludeDefault?: boolean } = {}) {
+export function playerStats(db: Database.Database, filters: { mode?: string | string[]; playedIn?: StatFilters['playedIn']; minGames?: number; excludeDefault?: boolean } = {}) {
   const params: unknown[] = [];
   const modes = listOf(filters.mode);
   const clauses: string[] = [];
   if (modes.length) (clauses.push(`s.mode IN (${placeholders(modes)})`), params.push(...modes));
+  const seasons = seasonsOf(filters.playedIn);
+  if (seasons.length) (clauses.push(`s.attempt_id IN (SELECT id FROM attempt WHERE season IN (${placeholders(seasons.map(String))}))`), params.push(...seasons));
   if (filters.excludeDefault) clauses.push('p.player_id NOT IN (SELECT player_id FROM profile WHERE is_default = 1 AND player_id IS NOT NULL)');
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const players = db
@@ -22,7 +24,7 @@ export function playerStats(db: Database.Database, filters: { mode?: string | st
        ${where} GROUP BY p.player_id HAVING count(*) >= ? ORDER BY games DESC, winRate DESC, p.player_id LIMIT ${MAX_ROWS}`,
     )
     .all(...params, filters.minGames ?? 1) as { playerId: string; name: string | null; games: number; wins: number; winRate: number; modes: string; first: string; last: string }[];
-  const sides = sideFormations(db, { mode: filters.mode, excludeDefault: filters.excludeDefault }).filter((s) => s.playerId !== null);
+  const sides = sideFormations(db, { mode: filters.mode, playedIn: filters.playedIn, excludeDefault: filters.excludeDefault }).filter((s) => s.playerId !== null);
   return players.map((p) => ({
     ...p,
     modes: p.modes.split(',').sort(),
