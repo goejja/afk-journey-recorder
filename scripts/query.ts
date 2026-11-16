@@ -1,11 +1,12 @@
 import { parseArgs } from 'node:util';
 import { openReadonly } from '../src/db/open.js';
 import { CounterRuleSchema } from '../src/domain/stats.js';
+import { isPartnerRelation, PARTNER_RELATIONS } from '../src/domain/partner-relation.js';
 import { problemWith } from '../src/domain/schema.js';
 import { formationProfile, formationReport } from '../src/query/formation-profile.js';
 import { factionMismatches } from '../src/query/faction-mismatches.js';
 import { reviewRun } from '../src/query/review-run.js';
-import { dreamHuntBest, formationIds, parseDeployment, profiles, heroInfo, heroStats, pairStats, partnerStats, artifactStats, formationGroups, formationStats, groupCounterReport, counterSummary, counterRule, heroDistribution, heroRowStats, mapStats, ruleStats, playerIds, playerStats, roster, trioStats, runSelect, scenario, scenarios, stageHistory, stageStats, summary } from '../src/query/index.js';
+import { dreamHuntBest, formationIds, parseDeployment, profiles, heroInfo, heroStats, pairStats, partnerStats, positionalPartners, artifactStats, formationGroups, formationStats, groupCounterReport, counterSummary, counterRule, heroDistribution, heroRowStats, mapStats, ruleStats, playerIds, playerStats, roster, trioStats, runSelect, scenario, scenarios, stageHistory, stageStats, summary } from '../src/query/index.js';
 import { cliCommands, cliUsage } from '../src/advisor/index.js';
 
 const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run query -- <command> [options]
@@ -15,7 +16,7 @@ const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run quer
   profiles                                    the profiles: name, player ID, default, number of heroes
   hero-stats    [--mode M[,M]] [--tag T ...] [--min N]   win rate per hero (several modes comma-separated, --tag repeated)
   pair-stats    [--mode M[,M]] [--tag T ...] [--min N]   win rate per pair of heroes on one side
-  partner-stats --name HERO [--mode M[,M]] [--tag T ...] [--min N]   the heroes fielded on the same side as HERO (games, win rate, share of its games); team membership only, not the target of a skill
+  partner-stats --name HERO [--relation R] [--mode M[,M]] [--tag T ...] [--min N]   the heroes fielded on the same side as HERO (games, win rate, share of its games); team membership only, not the target of a skill. With --relation behind|front|adjacent|within2|sameRow|mirror|rearmost|rearmost2|daimon: who stood there at the start, with the Players and exact layouts behind each (a statistic of positions, not the target of a skill)
   artifact-stats [--mode M[,M]] [--tag T ...] [--min N]   win rate per artifact, from the side that used it
   map-stats     [--mode M[,M]] [--tag T ...] [--min N]   win rate of Side A per map (both sides share the map, so Side A only)
   rule-stats    [--mode M[,M]] [--tag T ...] [--min N]   win rate of Side A per rule
@@ -53,7 +54,7 @@ Modes: Stage, Dream Hunt, Arena, Supreme Arena, Super League, Guild Duel, Treasu
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
-    db: { type: 'string' }, mode: { type: 'string' }, tag: { type: 'string', multiple: true }, player: { type: 'string', multiple: true }, 'played-in': { type: 'string' }, 'exclude-default': { type: 'boolean' }, 'no-gap': { type: 'boolean' }, 'archetype-similarity': { type: 'string' }, min: { type: 'string' }, 'min-win-rate': { type: 'string' }, 'min-games': { type: 'string' },
+    db: { type: 'string' }, mode: { type: 'string' }, tag: { type: 'string', multiple: true }, player: { type: 'string', multiple: true }, 'played-in': { type: 'string' }, 'exclude-default': { type: 'boolean' }, 'no-gap': { type: 'boolean' }, 'archetype-similarity': { type: 'string' }, min: { type: 'string' }, 'min-win-rate': { type: 'string' }, 'min-games': { type: 'string' }, relation: { type: 'string' },
     enemy: { type: 'string' }, core: { type: 'string' }, hero: { type: 'string', multiple: true }, team: { type: 'string' }, 'min-similarity': { type: 'string' }, limit: { type: 'string' },
     run: { type: 'string' }, season: { type: 'string' }, kind: { type: 'string' }, number: { type: 'string' }, phase: { type: 'string' },
     boss: { type: 'string' }, profile: { type: 'string' }, against: { type: 'string' }, 'min-sample': { type: 'string' }, 'prior-strength': { type: 'string' }, 'stronger-weight': { type: 'string' }, rule: { type: 'string' }, id: { type: 'string' }, scenario: { type: 'string' }, name: { type: 'string' }, units: { type: 'string' }, phantimal: { type: 'string' },
@@ -87,7 +88,11 @@ try {
       case 'profiles': return profiles(db);
       case 'hero-stats': return heroStats(db, { ...statFilters, minGames: num(values.min) });
       case 'pair-stats': return pairStats(db, { ...statFilters, minGames: num(values.min) });
-      case 'partner-stats': return partnerStats(db, need('name'), { ...statFilters, minGames: num(values.min) });
+      case 'partner-stats': {
+        if (values.relation === undefined) return partnerStats(db, need('name'), { ...statFilters, minGames: num(values.min) });
+        if (!isPartnerRelation(values.relation)) throw new Error(`--relation is one of ${PARTNER_RELATIONS.join(', ')}`);
+        return positionalPartners(db, need('name'), values.relation, { ...statFilters, minGames: num(values.min) });
+      }
       case 'artifact-stats': return artifactStats(db, { ...statFilters, minGames: num(values.min) });
       case 'map-stats': return mapStats(db, { ...statFilters, minGames: num(values.min) });
       case 'rule-stats': return ruleStats(db, { ...statFilters, minGames: num(values.min) });

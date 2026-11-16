@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { ArtifactStat, FactionMismatch, FormationProfileStat, FormationReport, GroupCounterReport, HeroDistribution, HeroStat, MapStat, PairStat, PartnerReport, PartnerTag, PlayerStat, RowStat, RuleStat, StageStat, Summary, TrioStat } from '../api.js';
+import type { ArtifactStat, FactionMismatch, FormationProfileStat, FormationReport, GroupCounterReport, HeroDistribution, HeroStat, MapStat, PairStat, PartnerReport, PartnerTag, PositionalPartnerReport, PlayerStat, RowStat, RuleStat, StageStat, Summary, TrioStat } from '../api.js';
+import { PARTNER_RELATIONS } from '../../domain/partner-relation.js';
 import { endpoint } from '../contract.js';
 
 const text = z.string().optional();
@@ -30,6 +31,8 @@ export const statsContract = {
   pairs: endpoint({ method: 'GET', path: '/api/stats/pairs', query: withMin, response: list<PairStat>() }),
   /** The heroes fielded on the same side as `hero`, from the sides the filters select. */
   partners: endpoint({ method: 'GET', path: '/api/stats/partners', query: withMin.extend({ hero: z.string().min(1) }), response: z.custom<PartnerReport>() }),
+  /** Who stood in a relation (behind, around, in the same game row...) to `hero` at the start of the fight. */
+  partnerPositions: endpoint({ method: 'GET', path: '/api/stats/partner-positions', query: withMin.extend({ hero: z.string().min(1), relation: z.enum(PARTNER_RELATIONS) }), response: z.custom<PositionalPartnerReport>() }),
   /** The mechanic tags of the unit info, each with the heroes that carry it. */
   partnerTags: endpoint({ method: 'GET', path: '/api/stats/partner-tags', response: list<PartnerTag>() }),
   trios: endpoint({ method: 'GET', path: '/api/stats/trios', query: withMin, response: list<TrioStat>() }),

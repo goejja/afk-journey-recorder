@@ -6,7 +6,7 @@
 
 export { type Filters, type StatFilters, APPEARANCES, whereFor, playerIds, runSelect } from './filters.js';
 export { summary, profileIdOf, roster, profiles } from './overview.js';
-export { partnerStats, partnerTags } from './partners.js';
+export { partnerStats, partnerTags, positionalPartners } from './partners.js';
 export { heroStats, pairStats, heroDistribution, trioStats, artifactStats, mapStats, ruleStats, heroRowStats } from './hero-stats.js';
 export { formationStats, type GroupHero, type FormationGroup, formationGroups, groupSides, type Archetype, formationArchetypes, groupCounters, groupCounterReport, counterBattles, counterRule, counterSummary, type CounterBattle, type CounterSide } from './formations.js';
 export { playerStats } from './players.js';

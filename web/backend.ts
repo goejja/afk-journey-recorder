@@ -1,3 +1,4 @@
+import type { PartnerRelation } from '../src/domain/partner-relation.js';
 import type { z } from 'zod';
 import { pathOf, queryStringOf, Upload, urlOf, type ClientInput, type Endpoint } from '../src/shared/contract.js';
 import { artifactsContract } from '../src/shared/contracts/artifacts.js';
@@ -233,6 +234,7 @@ export const api = {
   statsGroupCounters: (query: Query) => call(statsContract.groupCounters, { query }),
   statsPairs: (query: Query) => call(statsContract.pairs, { query }),
   statsPartners: (query: Query & { hero: string }) => call(statsContract.partners, { query }),
+  statsPartnerPositions: (query: Query & { hero: string; relation: PartnerRelation }) => call(statsContract.partnerPositions, { query }),
   statsPartnerTags: () => call(statsContract.partnerTags),
   factionMismatches: () => call(statsContract.factionMismatches),
   statsStages: (query: Query) => call(statsContract.stages, { query }),

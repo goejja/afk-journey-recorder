@@ -459,6 +459,27 @@ export interface PartnerReport {
   partners: PartnerStat[];
 }
 
+/** An ally that stood in a relation to a hero at the start of the fight, with the games and the evidence behind it. */
+export interface PositionalPartnerStat extends PartnerStat {
+  /** Distinct Players and distinct exact layouts of the sides behind these games. */
+  players: number;
+  layouts: number;
+  /** At least 5 games and half or more of them in one exact layout: one repeated formation, not several. */
+  oneLayout: boolean;
+}
+
+/** Who stood where in relation to one hero: team positions, not the target of a skill. */
+export interface PositionalPartnerReport {
+  hero: string;
+  relation: string;
+  /** The sides that held the hero, and how many of them had nobody in that place. */
+  games: number;
+  wins: number;
+  winRate: number;
+  empty: number;
+  partners: PositionalPartnerStat[];
+}
+
 /** A mechanic tag of the unit info with the heroes that carry it. */
 export interface PartnerTag {
   tag: string;

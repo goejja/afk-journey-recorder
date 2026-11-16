@@ -37,3 +37,38 @@ const BACK_DEPTH = Math.min(...Array.from({ length: TILE_COUNT }, (_, tile) => d
 
 /** The game row of a tile counted from its side's back edge: 1 is the back row, up to 15 for the front one. */
 export const gameRowOf = (tile: number, side: Side): number => depthOf(tile, side) - BACK_DEPTH + 1;
+
+/** The tile a fixed relation points to from a tile, or null when it points off the board. `rearmost` is not a tile: see `rearmostOf`. */
+export function relatedTile(relation: 'behind' | 'mirror', tile: number, side: Side): number | null {
+  const own = side === 'A' ? tile : turn(tile);
+  let found: number | null;
+  if (relation === 'behind') {
+    // Side A faces up the board, so its back edge is the bottom and "behind" is the bottom left neighbour.
+    found = tileAt(rowOfTile(own) + 1, xOf(own) - 0.5);
+  } else {
+    const row = rowOfTile(own);
+    const index = own - STARTS[row]!;
+    const mirrored = ROW_LENGTHS[row]! - 1 - index;
+    found = mirrored === index ? null : STARTS[row]! + mirrored;
+  }
+  return found === null ? null : side === 'A' ? found : turn(found);
+}
+
+/**
+ * Orders units from the back edge of their side to the front: by game row, then inside a row the rightmost of the side's own frame
+ * (the one counted farther back) first.
+ */
+export const backToFront = (side: Side) => (a: { tile: number }, b: { tile: number }) =>
+  depthOf(a.tile, side) - depthOf(b.tile, side) || xOf(OWN_TILE(b.tile, side)) - xOf(OWN_TILE(a.tile, side));
+
+/** Which of some standing units is the rearmost of its side (the game's definition: the back game row, then its rightmost unit), or null. */
+export function rearmostOf<T extends { tile: number }>(units: T[], side: Side): T | null {
+  return units.length === 0 ? null : units.reduce((best, unit) => (backToFront(side)(unit, best) < 0 ? unit : best));
+}
+
+/** The fewest steps between two tiles, moving to a neighbouring hexagon each step (a line down changes the position by half a tile). */
+export function stepsBetween(a: number, b: number): number {
+  const lines = Math.abs(rowOfTile(a) - rowOfTile(b));
+  const across = Math.abs(xOf(a) - xOf(b));
+  return lines + Math.max(0, across - lines / 2);
+}

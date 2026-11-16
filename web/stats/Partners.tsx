@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { PARTNER_RELATIONS, PARTNER_RELATION_TEXT, type PartnerRelation } from '../../src/domain/partner-relation.js';
 import { isSmallSample, SMALL_SAMPLE } from '../../src/domain/stats.js';
-import { api, type PartnerStat } from '../backend.js';
+import { api, type PartnerStat, type PositionalPartnerStat } from '../backend.js';
 import { percent, record } from '../format.js';
 import { useLoad } from '../useLoad.js';
 import { heroCell, rateColumns, StatsTable } from './StatsTable.js';
@@ -14,6 +15,48 @@ interface Filters {
 }
 
 const ANY = '';
+
+/** Who stood in one relation to the hero at the start of the fight; the relation is chosen in a select. */
+function Positions({ hero, filters }: { hero: string; filters: Filters }) {
+  const [relation, setRelation] = useState<PartnerRelation>('behind');
+  const report = useLoad(
+    () => api.statsPartnerPositions({ hero, relation, mode: filters.mode, player: filters.player, playedIn: filters.playedIn, excludeDefault: filters.excludeDefault ? 'true' : '', min: filters.min }),
+    [hero, relation, filters],
+  );
+  const data = report.data;
+  return (
+    <>
+      <h3>Where they stood</h3>
+      <p className="muted">
+        Who stood there at the start of the fight, from the recorded tiles; not necessarily the target of the skill. A side counts once for each ally in the place.
+      </p>
+      <label className="field">
+        Place
+        <select value={relation} onChange={(e) => setRelation(e.target.value as PartnerRelation)}>
+          {PARTNER_RELATIONS.map((r) => <option key={r} value={r}>{PARTNER_RELATION_TEXT[r]}</option>)}
+        </select>
+      </label>
+      {report.error && <p className="error" role="alert">{report.error}</p>}
+      {data && (
+        <>
+          <p className="muted">{data.empty} of {data.games} games had nobody there.</p>
+          <StatsTable<PositionalPartnerStat>
+            label={`Heroes that stood ${PARTNER_RELATION_TEXT[relation].toLowerCase()} of ${hero}`}
+            rows={data.partners}
+            rowKey={(r) => r.hero}
+            columns={[
+              { key: 'hero', header: 'Stood there', value: (r) => r.hero, render: (r) => heroCell(r.hero) },
+              ...rateColumns<PositionalPartnerStat>(),
+              { key: 'share', header: `Share of ${hero}'s games`, value: (r) => r.share, render: (r) => percent(r.share) },
+              { key: 'players', header: 'Players', value: (r) => r.players },
+              { key: 'layouts', header: 'Layouts', value: (r) => r.layouts, render: (r) => <>{r.layouts}{r.oneLayout && <span className="badge few" title="Half or more of these games are one exact formation">mostly one layout</span>}</> },
+            ]}
+          />
+        </>
+      )}
+    </>
+  );
+}
 
 /** The heroes fielded on the same side as one hero, counted from the owner's own records; the hero is picked from a mechanic tag's heroes or from all. */
 export function Partners({ filters }: { filters: Filters }) {
@@ -72,6 +115,7 @@ export function Partners({ filters }: { filters: Filters }) {
               { key: 'share', header: `Share of ${data.hero}'s games`, value: (r) => r.share, render: (r) => percent(r.share) },
             ]}
           />
+          <Positions hero={data.hero} filters={filters} />
         </>
       )}
     </>

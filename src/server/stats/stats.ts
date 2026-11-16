@@ -1,9 +1,10 @@
 import type Database from 'better-sqlite3';
 import { Hono, type Context } from 'hono';
-import type { ArtifactStat, HeroStat, PairStat, PartnerReport, StageStat, Summary, TrioStat } from '../../shared/api.js';
+import type { ArtifactStat, HeroStat, PairStat, PartnerReport, PositionalPartnerReport, StageStat, Summary, TrioStat } from '../../shared/api.js';
 import { statsContract } from '../../shared/contracts/stats.js';
 import { formationProfile, formationReport } from '../../query/formation-profile.js';
-import { artifactStats, groupCounterReport, heroDistribution, heroRowStats, heroStats, mapStats, ruleStats, pairStats, partnerStats, partnerTags, playerStats, trioStats, stageStats, summary } from '../../query/index.js';
+import { artifactStats, groupCounterReport, heroDistribution, heroRowStats, heroStats, mapStats, ruleStats, pairStats, partnerStats, partnerTags, positionalPartners, playerStats, trioStats, stageStats, summary } from '../../query/index.js';
+import { isPartnerRelation, PARTNER_RELATIONS } from '../../domain/partner-relation.js';
 import { factionMismatches } from '../../query/faction-mismatches.js';
 import { fail, serve } from '../contract.js';
 import { listParam } from '../params.js';
@@ -34,6 +35,13 @@ export function statsRoutes(db: Database.Database): Hono {
   serve(app, statsContract.partners, (_, c) => {
     const hero = c.req.query('hero');
     return hero ? (partnerStats(db, hero, withMin(c)) as PartnerReport) : fail(400, 'A hero is required');
+  });
+  serve(app, statsContract.partnerPositions, (_, c) => {
+    const hero = c.req.query('hero');
+    const relation = c.req.query('relation') ?? '';
+    if (!hero) return fail(400, 'A hero is required');
+    if (!isPartnerRelation(relation)) return fail(400, `The relation is one of ${PARTNER_RELATIONS.join(', ')}`);
+    return positionalPartners(db, hero, relation, withMin(c)) as PositionalPartnerReport;
   });
   serve(app, statsContract.partnerTags, () => partnerTags(db));
   serve(app, statsContract.trios, (_, c) => trioStats(db, withMin(c)) as TrioStat[]);
