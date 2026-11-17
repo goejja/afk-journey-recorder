@@ -177,8 +177,8 @@ describe('finder', () => {
     await fight({ boss: 'Thalassa', timeSeconds: 65, formation: team(['B', 'A', 'E']) });
     await fight({ boss: 'Thalassa', timeSeconds: 66, formation: team(['B', 'A', 'E']) });
 
-    const found = await json(send('GET', '/api/dream-hunt/finder?hero=A&hero=B'));
-    expect(found.heroes).toEqual(['A', 'B']);
+    const found = await json(send('GET', '/api/dream-hunt/finder?include=A&include=B'));
+    expect(found.include).toEqual(['A', 'B']);
     expect(found.attempts).toBe(5);
     expect(found.bosses.map((b: any) => [b.boss, b.attempts])).toEqual([['Thalassa', 3], ['King Croaker', 2]]);
     const croaker = found.bosses.find((b: any) => b.boss === 'King Croaker');
@@ -191,9 +191,86 @@ describe('finder', () => {
     await send('POST', '/api/boss-rules', { name: 'Boost' });
     await fight({ bossRule: 'Boost' });
     await fight({});
-    expect((await json(send('GET', '/api/dream-hunt/finder?hero=A&rule=none'))).attempts).toBe(1);
-    expect((await json(send('GET', '/api/dream-hunt/finder?hero=A&rule=any'))).attempts).toBe(2);
-    expect((await json(send('GET', '/api/dream-hunt/finder?hero=D'))).bosses).toEqual([]);
+    expect((await json(send('GET', '/api/dream-hunt/finder?include=A&rule=none'))).attempts).toBe(1);
+    expect((await json(send('GET', '/api/dream-hunt/finder?include=A&rule=any'))).attempts).toBe(2);
+    expect((await json(send('GET', '/api/dream-hunt/finder?include=D'))).bosses).toEqual([]);
+  });
+});
+
+describe('Normal and Rule times on the leaderboard', () => {
+  beforeEach(async () => {
+    await send('POST', '/api/boss-rules', { name: 'Boost' });
+    await send('POST', '/api/boss-rules', { name: 'Double' });
+    await fight({ timeSeconds: 100 });
+    await fight({ timeSeconds: 120 });
+    await fight({ timeSeconds: 40, bossRule: 'Boost' });
+    await fight({ timeSeconds: 50, bossRule: 'Double' });
+    await fight({ timeSeconds: 30, bossRule: 'Boost', formation: team(['A', 'D', 'E']) }); // cleared only under a Rule
+    await fight({ timeSeconds: 200, formation: team(['B', 'D', 'E']) });
+  });
+  const board = (query = '') => json(send('GET', `/api/dream-hunt/leaderboard?boss=King%20Croaker${query}`));
+
+  it('under Any, keeps the figures to the fights with no Rule and reports the fights under a Rule apart', async () => {
+    const { compositions } = await board();
+    expect(compositions.map((c: any) => c.heroes.join(''))).toEqual(['ABC', 'BDE', 'ADE']); // cleared only under a Rule comes last
+    expect(compositions[0]).toMatchObject({ attempts: 2, clears: 2, bestSeconds: 100, worstSeconds: 120 });
+    expect(compositions[0].rule).toEqual({ attempts: 2, clears: 2, bestSeconds: 40, medianSeconds: 45, worstSeconds: 50, times: [40, 50], rules: ['Boost', 'Double'] });
+    expect(compositions[1].rule).toBeNull();
+    expect(compositions[2]).toMatchObject({ attempts: 0, clears: 0 });
+    expect(compositions[2].rule).toMatchObject({ attempts: 1, clears: 1, times: [30] });
+    expect(compositions[0].layouts[0].rule).toMatchObject({ attempts: 2 });
+  });
+
+  it('counts every fight of the Rule asked for, or none under a Rule for No rule', async () => {
+    const { compositions: ruled } = await board('&rule=Boost');
+    expect(ruled.map((c: any) => [c.heroes.join(''), c.attempts, c.rule])).toEqual([['ADE', 1, null], ['ABC', 1, null]]);
+    const { compositions: none } = await board('&rule=none');
+    expect(none.map((c: any) => [c.heroes.join(''), c.attempts, c.rule])).toEqual([['ABC', 2, null], ['BDE', 1, null]]);
+  });
+
+  it('splits the Finder the same way', async () => {
+    const found = await json(send('GET', '/api/dream-hunt/finder?include=A'));
+    expect(found.bosses[0].compositions.map((c: any) => [c.heroes.join(''), c.attempts, c.rule?.attempts ?? 0])).toEqual([['ABC', 2, 2], ['ADE', 0, 1]]);
+  });
+});
+
+describe('the Include and Exclude hero filters', () => {
+  beforeEach(async () => {
+    await fight({ timeSeconds: 100, formation: team(['A', 'B', 'C']) });
+    await fight({ timeSeconds: 90, formation: team(['A', 'B', 'C']) });
+    await fight({ timeSeconds: 80, formation: team(['A', 'B', 'D']) });
+    await fight({ timeSeconds: 70, formation: team(['A', 'D', 'E']) });
+    await fight({ boss: 'Thalassa', timeSeconds: 60, formation: team(['C', 'E', 'A']) });
+  });
+  const teams = (board: any) => board.compositions.map((c: any) => c.heroes.join('')).sort();
+
+  it('keeps on the leaderboard the teams with every included hero and none of the excluded ones, with their own fights', async () => {
+    const board = (query: string) => json(send('GET', `/api/dream-hunt/leaderboard?boss=King%20Croaker${query}`));
+    expect(teams(await board('&include=A&include=B'))).toEqual(['ABC', 'ABD']);
+    expect(teams(await board('&exclude=D'))).toEqual(['ABC']);
+    expect(teams(await board('&include=A&exclude=B&exclude=C'))).toEqual(['ADE']);
+    const kept = await board('&exclude=D');
+    expect(kept).toMatchObject({ include: [], exclude: ['D'], attempts: 2 });
+    expect(kept.compositions[0]).toMatchObject({ attempts: 2, clears: 2, bestSeconds: 90, worstSeconds: 100 });
+    expect((await json(send('GET', '/api/dream-hunt/leaderboard?boss=King%20Croaker&include=Z'))).compositions).toEqual([]);
+  });
+
+  it('applies both filters in the Finder, and asks for at least one hero', async () => {
+    const found = await json(send('GET', '/api/dream-hunt/finder?include=E&exclude=D'));
+    expect(found).toMatchObject({ include: ['E'], exclude: ['D'], attempts: 1 });
+    expect(found.bosses.map((b: any) => b.boss)).toEqual(['Thalassa']);
+    expect((await json(send('GET', '/api/dream-hunt/finder?exclude=A'))).attempts).toBe(0);
+    expect((await send('GET', '/api/dream-hunt/finder')).status).toBe(400);
+  });
+
+  it('refuses a hero that is both included and excluded', async () => {
+    expect((await send('GET', '/api/dream-hunt/leaderboard?boss=King%20Croaker&include=A&exclude=A')).status).toBe(400);
+    expect((await send('GET', '/api/dream-hunt/finder?include=A&exclude=A')).status).toBe(400);
+  });
+
+  it('offers the heroes with a recorded fight, against one boss or any', async () => {
+    expect(await json(send('GET', '/api/dream-hunt/heroes?boss=Thalassa'))).toEqual(['A', 'C', 'E']);
+    expect(await json(send('GET', '/api/dream-hunt/heroes'))).toEqual(['A', 'B', 'C', 'D', 'E']);
   });
 });
 

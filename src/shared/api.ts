@@ -3,7 +3,7 @@ import type { ArenaMode } from '../domain/arena.js';
 import type { AdvisorPlan } from './advisor.js';
 import type { DefaultMode, DefaultSlot } from '../domain/defaults.js';
 import type { EquipmentCap, HeroStateRules } from '../domain/hero-state.js';
-import type { LayoutSummary } from '../domain/dream-hunt.js';
+import type { LayoutSummary, RuleTimes } from '../domain/dream-hunt.js';
 import type { LayoutUnit } from '../domain/layout.js';
 import type { FormationJson } from './contracts/formation.js';
 import type { Attempt, StageKey, StageKind } from './contracts/stages.js';
@@ -57,18 +57,23 @@ export interface Composition {
   latestAttemptId: number;
   latest: Attempt['formation'];
   layouts: LayoutSummary[];
+  /** Under Rule = Any the figures above are those of the fights with no Rule, and these are the fights under a Rule (null when there are none). */
+  rule: RuleTimes | null;
 }
 
 export interface Leaderboard {
   boss: string;
+  include: string[];
+  exclude: string[];
   rule: string;
   attempts: number;
   compositions: Composition[];
 }
 
-/** The Finder's answer: the compositions holding every asked-for hero, per boss, the boss with the most fights first. */
+/** The Finder's answer: the compositions holding every included hero and none of the excluded ones, per boss, the boss with the most fights first. */
 export interface FinderResult {
-  heroes: string[];
+  include: string[];
+  exclude: string[];
   rule: string;
   attempts: number;
   bosses: { boss: string; attempts: number; compositions: Composition[] }[];

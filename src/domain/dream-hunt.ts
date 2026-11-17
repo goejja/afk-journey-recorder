@@ -73,6 +73,21 @@ export interface DreamHuntRun {
   /** Where the team stood and on which map; without it the run only counts for its composition. */
   mapName?: string;
   layout?: Layout;
+  /** The Rule the fight was played under, if any; it only matters to `summarizeCompositions` when asked to split by Rule. */
+  bossRule?: string | null;
+}
+
+/** The figures of a team's fights played under a Rule (any Rule, all together): they are shown beside the normal ones, never ranked. */
+export interface RuleTimes {
+  attempts: number;
+  clears: number;
+  bestSeconds: number | null;
+  medianSeconds: number | null;
+  worstSeconds: number | null;
+  /** Every clear time, fastest first: each is a dot on the times bar. */
+  times: number[];
+  /** The distinct Rules these fights were played under. */
+  rules: string[];
 }
 
 /** One way a composition was set up on a map, with how its fights went. */
@@ -87,6 +102,8 @@ export interface LayoutSummary {
   worstSeconds: number | null;
   lowConfidence: boolean;
   latestAttemptId: number;
+  /** The fights under a Rule when the summary is split by Rule (the figures above are then those without a Rule); null when there are none. */
+  rule: RuleTimes | null;
 }
 
 export interface CompositionSummary {
@@ -106,6 +123,13 @@ export interface CompositionSummary {
   latestAttemptId: number;
   /** Each distinct map and Layout the team was fought with, fastest first (see summarizeLayouts). */
   layouts: LayoutSummary[];
+  /** The fights under a Rule when the summary is split by Rule (the figures above are then those without a Rule); null when there are none. */
+  rule: RuleTimes | null;
+}
+
+/** A team with no clear without a Rule but a clear under one: it looks as good as its boost, so it ranks behind the others. */
+export function isRuleOnly(summary: { clears: number; rule: RuleTimes | null }): boolean {
+  return summary.clears === 0 && (summary.rule?.clears ?? 0) > 0;
 }
 
 const median = (sorted: number[]) => {
@@ -113,11 +137,36 @@ const median = (sorted: number[]) => {
   return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
 };
 
+const clearTimes = (runs: DreamHuntRun[]) => runs.filter((r) => r.outcome === 'Win' && r.timeSeconds !== null).map((r) => r.timeSeconds!).sort((a, b) => a - b);
+
+/** The figures of the fights played under a Rule, or null when there are none. */
+function ruleTimes(runs: DreamHuntRun[]): RuleTimes | null {
+  if (runs.length === 0) return null;
+  const times = clearTimes(runs);
+  return {
+    attempts: runs.length,
+    clears: times.length,
+    bestSeconds: times[0] ?? null,
+    medianSeconds: times.length ? median(times) : null,
+    worstSeconds: times.at(-1) ?? null,
+    times,
+    rules: [...new Set(runs.map((r) => r.bossRule!))].sort(),
+  };
+}
+
+/** Splits the fights into those with no Rule and those under one; unsplit, every fight counts as a normal one. */
+const splitByRule = (runs: DreamHuntRun[], split: boolean) =>
+  split ? { normal: runs.filter((r) => !r.bossRule), ruled: runs.filter((r) => r.bossRule) } : { normal: runs, ruled: [] };
+
+/** Which group a summary ranks in: cleared without a Rule, cleared only under one, or never cleared. */
+const tier = (s: { clears: number; rule: RuleTimes | null }) => (s.clears > 0 ? 0 : isRuleOnly(s) ? 1 : 2);
+
 /**
  * Splits the fights of one composition by map and Layout. Layouts with clears come first, fastest median first,
- * then the one with more clears; the thinly tested ones are flagged. Layouts never cleared come last.
+ * then the one with more clears; the thinly tested ones are flagged. Layouts cleared only under a Rule follow, then
+ * the ones never cleared.
  */
-function summarizeLayouts(group: DreamHuntRun[]): LayoutSummary[] {
+function summarizeLayouts(group: DreamHuntRun[], split: boolean): LayoutSummary[] {
   const byLayout = new Map<string, DreamHuntRun[]>();
   for (const run of group) {
     if (!run.layout) continue;
@@ -126,25 +175,34 @@ function summarizeLayouts(group: DreamHuntRun[]): LayoutSummary[] {
   }
   return [...byLayout.entries()]
     .map(([key, runs]): LayoutSummary => {
-      const times = runs.filter((r) => r.outcome === 'Win' && r.timeSeconds !== null).map((r) => r.timeSeconds!).sort((a, b) => a - b);
+      const { normal, ruled } = splitByRule(runs, split);
+      const times = clearTimes(normal);
       return {
         key,
         mapName: runs[0]!.mapName ?? '',
         layout: runs[0]!.layout!,
-        attempts: runs.length,
+        attempts: normal.length,
         clears: times.length,
         bestSeconds: times[0] ?? null,
         medianSeconds: times.length ? median(times) : null,
         worstSeconds: times.at(-1) ?? null,
         lowConfidence: times.length < MIN_CLEARS_FOR_CONFIDENCE,
         latestAttemptId: Math.max(...runs.map((r) => r.attemptId)),
+        rule: ruleTimes(ruled),
       };
     })
     .sort((a, b) => {
-      if ((a.clears > 0) !== (b.clears > 0)) return a.clears > 0 ? -1 : 1;
+      if (tier(a) !== tier(b)) return tier(a) - tier(b);
       if (a.clears > 0) return a.medianSeconds! - b.medianSeconds! || b.clears - a.clears;
-      return b.attempts - a.attempts;
+      if (tier(a) === 1) return a.rule!.medianSeconds! - b.rule!.medianSeconds!;
+      return b.attempts + (b.rule?.attempts ?? 0) - (a.attempts + (a.rule?.attempts ?? 0));
     });
+}
+
+/** Whether a team holds every `include` hero and none of the `exclude` heroes (the Include and Exclude filters of Best teams and the Finder). */
+export function keepsHeroes(heroes: string[], include: string[], exclude: string[]): boolean {
+  const held = new Set(heroes);
+  return include.every((hero) => held.has(hero)) && !exclude.some((hero) => held.has(hero));
 }
 
 /**
@@ -152,38 +210,45 @@ function summarizeLayouts(group: DreamHuntRun[]): LayoutSummary[] {
  * the spread of their clear times, because times vary from fight to fight. Ranking: compositions with
  * enough clears to trust come first, fastest median first, so one lucky run cannot top the list; thinly
  * tested ones follow (still ranked by median, but flagged); never-cleared ones come last.
+ *
+ * With `splitRules` the figures are those of the fights with no Rule only, and the fights under a Rule go
+ * to `rule`: a Rule boosts the player, so it must not decide the ranking, the clear rate or the flag. A composition
+ * cleared only under a Rule ranks after the ones cleared without, then the ones never cleared.
  */
-export function summarizeCompositions(runs: DreamHuntRun[]): CompositionSummary[] {
+export function summarizeCompositions(runs: DreamHuntRun[], { splitRules = false } = {}): CompositionSummary[] {
   const groups = new Map<string, DreamHuntRun[]>();
   for (const run of runs) {
     const key = `${[...run.heroes].sort().join('|')}#${run.artifact ?? ''}`;
     groups.set(key, [...(groups.get(key) ?? []), run]);
   }
   const summaries = [...groups.entries()].map(([key, group]): CompositionSummary => {
-    const times = group.filter((r) => r.outcome === 'Win' && r.timeSeconds !== null).map((r) => r.timeSeconds!).sort((a, b) => a - b);
+    const { normal, ruled } = splitByRule(group, splitRules);
+    const times = clearTimes(normal);
     return {
       key,
       heroes: [...group[0]!.heroes].sort(),
       artifact: group[0]!.artifact,
-      attempts: group.length,
+      attempts: normal.length,
       clears: times.length,
-      clearRate: times.length / group.length,
+      clearRate: normal.length ? times.length / normal.length : 0,
       bestSeconds: times[0] ?? null,
       medianSeconds: times.length ? median(times) : null,
       meanSeconds: times.length ? times.reduce((sum, t) => sum + t, 0) / times.length : null,
       worstSeconds: times.at(-1) ?? null,
       lowConfidence: times.length < MIN_CLEARS_FOR_CONFIDENCE,
       latestAttemptId: Math.max(...group.map((r) => r.attemptId)),
-      layouts: summarizeLayouts(group),
+      layouts: summarizeLayouts(group, splitRules),
+      rule: ruleTimes(ruled),
     };
   });
   return summaries.sort((a, b) => {
-    if ((a.clears > 0) !== (b.clears > 0)) return a.clears > 0 ? -1 : 1;
+    if (tier(a) !== tier(b)) return tier(a) - tier(b);
     if (a.clears > 0) {
       if (a.lowConfidence !== b.lowConfidence) return a.lowConfidence ? 1 : -1;
       return a.medianSeconds! - b.medianSeconds! || b.clearRate - a.clearRate || b.attempts - a.attempts;
     }
-    return b.attempts - a.attempts;
+    if (tier(a) === 1) return a.rule!.medianSeconds! - b.rule!.medianSeconds! || b.rule!.clears - a.rule!.clears;
+    return b.attempts + (b.rule?.attempts ?? 0) - (a.attempts + (a.rule?.attempts ?? 0));
   });
 }
 

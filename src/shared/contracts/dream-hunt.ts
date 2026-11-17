@@ -33,7 +33,9 @@ export const dreamHuntContract = {
   createDay: endpoint({ method: 'POST', path: '/api/dream-hunt/battle-groups', body: DayBody, response: Day, status: 201 }),
   /** Edits a whole day: the fights given are the day's fights now. */
   updateDay: endpoint({ method: 'PUT', path: '/api/dream-hunt/battle-groups/:id', body: DayBody, response: Day }),
-  leaderboard: endpoint({ method: 'GET', path: '/api/dream-hunt/leaderboard', query: z.object({ boss: text, rule: text, tag: texts, since: text }), response: z.custom<Leaderboard>() }),
-  /** The compositions that hold every hero asked for, whatever the boss. */
-  finder: endpoint({ method: 'GET', path: '/api/dream-hunt/finder', query: z.object({ hero: texts, rule: text, tag: texts }), response: z.custom<FinderResult>() }),
+  leaderboard: endpoint({ method: 'GET', path: '/api/dream-hunt/leaderboard', query: z.object({ boss: text, rule: text, tag: texts, since: text, include: texts, exclude: texts }), response: z.custom<Leaderboard>() }),
+  /** The compositions that hold every included hero and none of the excluded ones, whatever the boss. */
+  finder: endpoint({ method: 'GET', path: '/api/dream-hunt/finder', query: z.object({ include: texts, exclude: texts, rule: text, tag: texts }), response: z.custom<FinderResult>() }),
+  /** The heroes with a recorded Dream Hunt fight, against one boss or any, for the hero filters. */
+  fightHeroes: endpoint({ method: 'GET', path: '/api/dream-hunt/heroes', query: z.object({ boss: text }), response: z.array(z.string()) }),
 };

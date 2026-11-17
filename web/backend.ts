@@ -178,10 +178,11 @@ export const api = {
   createDreamHuntAttempt: (attempt: DreamHuntInput) => call(dreamHuntContract.create, { body: attempt }),
   updateDreamHuntAttempt: (id: number, attempt: DreamHuntInput) =>
     call(dreamHuntContract.update, { params: { id: String(id) }, body: attempt }),
-  finder: (heroes: string[], rule: string, tag: string[] = []) =>
-    call(dreamHuntContract.finder, { query: { hero: heroes, rule, tag } }),
-  leaderboard: (boss: string, rule: string, tag: string[] = [], since = '') =>
-    call(dreamHuntContract.leaderboard, { query: { boss, rule, tag, since } }),
+  finder: (include: string[], exclude: string[], rule: string, tag: string[] = []) =>
+    call(dreamHuntContract.finder, { query: { include, exclude, rule, tag } }),
+  leaderboard: (boss: string, rule: string, tag: string[] = [], since = '', include: string[] = [], exclude: string[] = []) =>
+    call(dreamHuntContract.leaderboard, { query: { boss, rule, tag, since, include, exclude } }),
+  fightHeroes: (boss = '') => call(dreamHuntContract.fightHeroes, { query: { boss } }),
   previewCleanup: (selection: CleanupRequest) => call(cleanupContract.preview, { body: selection }),
   deleteCleanup: (selection: CleanupRequest, expectedCount: number) =>
     call(cleanupContract.delete, { body: { ...selection, expectedCount } }),

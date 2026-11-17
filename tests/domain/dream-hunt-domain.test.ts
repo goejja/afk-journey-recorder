@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatDuration,
   formatDurationFixed,
+  isRuleOnly,
   parseDuration,
   summarizeCompositions,
   validateDreamHuntResult,
@@ -129,6 +130,48 @@ describe('summarizeCompositions', () => {
     ]);
     expect(result.map((s) => s.heroes[0])).toEqual(['FastSure', 'Fast', 'Slow', 'Never']);
     expect(result.at(-1)).toMatchObject({ clears: 0, medianSeconds: null, bestSeconds: null, lowConfidence: true });
+  });
+
+  describe('split by Rule', () => {
+    const ruled = (heroes: string[], outcome: 'Win' | 'Loss', seconds: number | null, bossRule: string): DreamHuntRun => ({ ...run(heroes, outcome, seconds), bossRule });
+    const split = (runs: DreamHuntRun[]) => summarizeCompositions(runs, { splitRules: true });
+
+    it('keeps the figures to the fights with no Rule and reports the fights under a Rule apart', () => {
+      const [summary] = split([run(['A'], 'Win', 100), run(['A'], 'Loss', null), ruled(['A'], 'Win', 40, 'Boost'), ruled(['A'], 'Win', 50, 'Double'), ruled(['A'], 'Loss', null, 'Boost')]);
+      expect(summary).toMatchObject({ attempts: 2, clears: 1, clearRate: 0.5, bestSeconds: 100, medianSeconds: 100, worstSeconds: 100 });
+      expect(summary!.rule).toEqual({ attempts: 3, clears: 2, bestSeconds: 40, medianSeconds: 45, worstSeconds: 50, times: [40, 50], rules: ['Boost', 'Double'] });
+    });
+
+    it('has no Rule figures for a team never fought under a Rule, and counts every fight when not asked to split', () => {
+      expect(split([run(['A'], 'Win', 100)])[0]!.rule).toBeNull();
+      const [all] = summarizeCompositions([run(['A'], 'Win', 100), ruled(['A'], 'Win', 40, 'Boost')]);
+      expect(all).toMatchObject({ attempts: 2, clears: 2, bestSeconds: 40 });
+      expect(all!.rule).toBeNull();
+    });
+
+    it('ranks a team cleared only under a Rule after the ones cleared without, even when it is faster, and flags it', () => {
+      const result = split([run(['Slow'], 'Win', 120), ruled(['Boosted'], 'Win', 20, 'Boost'), run(['Never'], 'Loss', null), run(['Slow'], 'Win', 125), run(['Slow'], 'Win', 130)]);
+      expect(result.map((s) => s.heroes[0])).toEqual(['Slow', 'Boosted', 'Never']);
+      expect(isRuleOnly(result[1]!)).toBe(true);
+      expect(isRuleOnly(result[0]!)).toBe(false);
+      expect(result[1]).toMatchObject({ attempts: 0, clears: 0, clearRate: 0, medianSeconds: null });
+    });
+
+    it('does not let Rule clears count towards the few-clears flag', () => {
+      const [summary] = split([run(['A'], 'Win', 100), ruled(['A'], 'Win', 40, 'Boost'), ruled(['A'], 'Win', 41, 'Boost'), ruled(['A'], 'Win', 42, 'Boost')]);
+      expect(summary!.lowConfidence).toBe(true);
+    });
+
+    it('splits each layout the same way and puts a layout cleared only under a Rule after the others', () => {
+      const placed = (tiles: number[], bossRule: string | null, seconds: number): DreamHuntRun => ({
+        ...run(['A'], 'Win', seconds),
+        bossRule,
+        mapName: 'M',
+        layout: { units: [{ kind: 'hero' as const, hero: 'A', part: '', tile: tiles[0]! }] },
+      });
+      const [summary] = split([placed([38], 'Boost', 20), placed([39], null, 90), placed([39], 'Boost', 30)]);
+      expect(summary!.layouts.map((l) => [l.attempts, l.clears, l.rule?.attempts ?? 0])).toEqual([[1, 1, 1], [0, 0, 1]]);
+    });
   });
 
   it('ranks a composition with enough clears above a faster one that was cleared only once', () => {

@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
 import { normalizeTags } from '../../domain/tags.js';
 import { sharedHero } from '../../domain/arena.js';
-import { DREAM_HUNT_FIGHTS, summarizeCompositions, validateDreamHuntResult, type DreamHuntRun } from '../../domain/dream-hunt.js';
+import { DREAM_HUNT_FIGHTS, keepsHeroes, summarizeCompositions, validateDreamHuntResult, type DreamHuntRun } from '../../domain/dream-hunt.js';
 import { validateFormation } from '../../domain/formation.js';
 import { layoutFrom } from '../../domain/layout.js';
 import type { HeroStateRules } from '../../domain/hero-state.js';
@@ -286,48 +286,66 @@ export function dreamHuntRoutes(db: Database.Database, loadRules: () => HeroStat
       artifact: a.formation.artifact,
       outcome: a.outcome,
       timeSeconds: a.timeSeconds,
+      bossRule: a.bossRule,
       mapName: a.mapName,
       layout: layoutFrom({ heroes: a.formation.heroes.map((h) => ({ tile: h.tile, hero: h.name, part: h.part })), phantimal: a.formation.phantimal }),
     }));
 
+  /** The include and exclude heroes of a request; a hero in both lists is the player's mistake, not an empty answer. */
+  const heroFilters = (c: Parameters<typeof listParam>[0]): { include: string[]; exclude: string[] } | { error: string } => {
+    const include = [...new Set(listParam(c, 'include') ?? [])];
+    const exclude = [...new Set(listParam(c, 'exclude') ?? [])];
+    const both = include.find((hero) => exclude.includes(hero));
+    return both ? { error: `${both} cannot be both included and excluded` } : { include, exclude };
+  };
+  const holds = (a: DreamHuntAttempt, f: { include: string[]; exclude: string[] }) => keepsHeroes(a.formation.heroes.map((h) => h.name), f.include, f.exclude);
+
+  // The heroes the Include and Exclude pickers offer: the ones with a recorded fight, against one boss when asked.
+  serve(app, dreamHuntContract.fightHeroes, (_, c) => {
+    const boss = c.req.query('boss');
+    return [...new Set(loadAttempts({ boss: boss ? [boss] : undefined, limit: 100000 }).flatMap((a) => a.formation.heroes.map((h) => h.name)))].sort((a, b) => a.localeCompare(b));
+  });
+
   // Times vary from fight to fight, so fights are grouped by composition (same heroes and artifact)
-  // and each group reports best, median, mean and worst time plus its clear rate.
+  // and each group reports best, median, mean and worst time plus its clear rate. Under Rule = Any the figures
+  // are those of the fights with no Rule, and the fights under a Rule are reported apart (`rule`).
   serve(app, dreamHuntContract.leaderboard, (_, c) => {
     const boss = c.req.query('boss');
     if (!boss || !bossExists(boss)) return fail(400, 'Pick a boss');
     const rule = c.req.query('rule');
     const since = c.req.query('since');
-    const attempts = loadAttempts({ boss: [boss], rule: rule && rule !== 'any' ? rule : undefined, tag: listParam(c, 'tag'), since: since && /^\d{4}-\d{2}-\d{2}$/.test(since) ? since : undefined, limit: 100000 });
+    const filters = heroFilters(c);
+    if ('error' in filters) return fail(400, filters.error);
+    const attempts = loadAttempts({ boss: [boss], rule: rule && rule !== 'any' ? rule : undefined, tag: listParam(c, 'tag'), since: since && /^\d{4}-\d{2}-\d{2}$/.test(since) ? since : undefined, limit: 100000 }).filter((a) => holds(a, filters));
     const runs = toRuns(attempts);
     const byId = new Map(attempts.map((a) => [a.id, a]));
     return {
       boss,
+      ...filters,
       rule: rule ?? 'any',
       attempts: attempts.length,
-      compositions: summarizeCompositions(runs).map((s) => ({ ...s, latest: byId.get(s.latestAttemptId)!.formation })),
+      compositions: summarizeCompositions(runs, { splitRules: rule === undefined || rule === 'any' }).map((s) => ({ ...s, latest: byId.get(s.latestAttemptId)!.formation })),
     };
   });
 
-  // The Finder: the compositions that hold every hero asked for, whatever the boss, grouped by boss because times only compare within one.
+  // The Finder: the compositions that hold every included hero and none of the excluded ones, whatever the boss, grouped by boss because times only compare within one.
   serve(app, dreamHuntContract.finder, (_, c) => {
-    const heroes = [...new Set(listParam(c, 'hero') ?? [])];
-    if (heroes.length === 0) return fail(400, 'Pick at least one hero');
+    const filters = heroFilters(c);
+    if ('error' in filters) return fail(400, filters.error);
+    if (filters.include.length + filters.exclude.length === 0) return fail(400, 'Pick at least one hero');
     const rule = c.req.query('rule');
-    const attempts = loadAttempts({ rule: rule && rule !== 'any' ? rule : undefined, tag: listParam(c, 'tag'), limit: 100000 }).filter((a) => {
-      const placed = new Set(a.formation.heroes.map((h) => h.name));
-      return heroes.every((hero) => placed.has(hero));
-    });
+    const attempts = loadAttempts({ rule: rule && rule !== 'any' ? rule : undefined, tag: listParam(c, 'tag'), limit: 100000 }).filter((a) => holds(a, filters));
     const byBoss = new Map<string, DreamHuntAttempt[]>();
     for (const a of attempts) byBoss.set(a.boss, [...(byBoss.get(a.boss) ?? []), a]);
     return {
-      heroes,
+      ...filters,
       rule: rule ?? 'any',
       attempts: attempts.length,
       bosses: [...byBoss.entries()]
         .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
         .map(([boss, fights]) => {
           const byId = new Map(fights.map((a) => [a.id, a]));
-          return { boss, attempts: fights.length, compositions: summarizeCompositions(toRuns(fights)).map((s) => ({ ...s, latest: byId.get(s.latestAttemptId)!.formation })) };
+          return { boss, attempts: fights.length, compositions: summarizeCompositions(toRuns(fights), { splitRules: rule === undefined || rule === 'any' }).map((s) => ({ ...s, latest: byId.get(s.latestAttemptId)!.formation })) };
         }),
     };
   });

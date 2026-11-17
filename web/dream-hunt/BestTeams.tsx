@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useState } from 'react';
-import { formatDuration, MIN_CLEARS_FOR_CONFIDENCE } from '../../src/domain/dream-hunt.js';
-import type { LayoutSummary } from '../../src/domain/dream-hunt.js';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { formatDuration, isRuleOnly, MIN_CLEARS_FOR_CONFIDENCE } from '../../src/domain/dream-hunt.js';
+import type { LayoutSummary, RuleTimes } from '../../src/domain/dream-hunt.js';
 import type { Layout } from '../../src/domain/layout.js';
 import { api, type Boss, type BossRule, type Composition, type GameMap } from '../backend.js';
 import { useLoad } from '../useLoad.js';
@@ -10,6 +10,7 @@ import { TeamOverview } from '../stats/TeamOverview.js';
 import { TagFilter } from '../Tags.js';
 import { weekStart } from '../weeks.js';
 import { toggled } from '../format.js';
+import { HeroFilter } from './HeroFilter.js';
 
 const MINI_TILE_WIDTH = 26;
 
@@ -27,6 +28,17 @@ export function LayoutMap({ mapName, layout, map }: { mapName: string; layout: L
   );
 }
 
+/** What the fights under a Rule came to, written apart from the fights without one. */
+function RuleFacts({ rule, alone }: { rule: RuleTimes; alone: boolean }) {
+  return (
+    <div className="muted rule-line" title={`Under ${rule.rules.join(', ')}`}>
+      {alone ? 'Only under a Rule: ' : 'Under a Rule: '}
+      {rule.attempts} {rule.attempts === 1 ? 'fight' : 'fights'}, {rule.clears} {rule.clears === 1 ? 'clear' : 'clears'}
+      {rule.clears > 0 && <>, best {formatDuration(rule.bestSeconds!)}, median {formatDuration(rule.medianSeconds!)}, worst {formatDuration(rule.worstSeconds!)}</>}
+    </div>
+  );
+}
+
 /** The Layouts a team was fought with, fastest first. */
 function LayoutList({ boss, composition, maps, send }: { boss: string; composition: Composition; maps: GameMap[]; send?: SendToSimulator }) {
   const { layouts } = composition;
@@ -39,17 +51,22 @@ function LayoutList({ boss, composition, maps, send }: { boss: string; compositi
           <div className="layout-facts">
             <strong>{l.mapName}</strong>
             {index === 0 && l.clears > 0 && <span className="badge"> fastest</span>}
-            <div>
-              {l.attempts} {l.attempts === 1 ? 'fight' : 'fights'}, {l.clears} {l.clears === 1 ? 'clear' : 'clears'}
-              {l.clears > 0 && l.lowConfidence && <span className="badge few"> few clears</span>}
-            </div>
-            {l.clears > 0 ? (
-              <div className="muted">
-                best {formatDuration(l.bestSeconds!)}, median {formatDuration(l.medianSeconds!)}, worst {formatDuration(l.worstSeconds!)}
-              </div>
-            ) : (
-              <div className="muted">never cleared</div>
+            {(l.attempts > 0 || !l.rule) && (
+              <>
+                <div>
+                  {l.attempts} {l.attempts === 1 ? 'fight' : 'fights'}, {l.clears} {l.clears === 1 ? 'clear' : 'clears'}
+                  {l.clears > 0 && l.lowConfidence && <span className="badge few"> few clears</span>}
+                </div>
+                {l.clears > 0 ? (
+                  <div className="muted">
+                    best {formatDuration(l.bestSeconds!)}, median {formatDuration(l.medianSeconds!)}, worst {formatDuration(l.worstSeconds!)}
+                  </div>
+                ) : (
+                  <div className="muted">never cleared</div>
+                )}
+              </>
             )}
+            {l.rule && <RuleFacts rule={l.rule} alone={l.attempts === 0} />}
             {send && <SendButton boss={boss} composition={composition} layout={l} send={send} />}
           </div>
         </li>
@@ -58,14 +75,31 @@ function LayoutList({ boss, composition, maps, send }: { boss: string; compositi
   );
 }
 
-/** Where a composition's clear times fall: best to worst as a bar, with a tick for the median. */
-function TimeSpread({ best, median, worst, scaleMax }: { best: number; median: number; worst: number; scaleMax: number }) {
+/** Where a composition's clear times fall: best to worst as a bar, with a tick for the median, and a hollow dot for each clear under a Rule. */
+function TimeSpread({ best, median, worst, ruleTimes, scaleMax }: { best: number | null; median: number | null; worst: number | null; ruleTimes: number[]; scaleMax: number }) {
   const pct = (seconds: number) => `${(seconds / scaleMax) * 100}%`;
+  const parts = [best !== null && `best ${formatDuration(best)}, median ${formatDuration(median!)}, worst ${formatDuration(worst!)}`, ruleTimes.length > 0 && `under a Rule ${ruleTimes.map(formatDuration).join(', ')}`];
   return (
-    <span className="spread" role="img" aria-label={`best ${formatDuration(best)}, median ${formatDuration(median)}, worst ${formatDuration(worst)}`}>
-      <span className="spread-range" style={{ left: pct(best), width: `max(4px, calc(${pct(worst)} - ${pct(best)}))` }} />
-      <span className="spread-median" style={{ left: pct(median) }} />
+    <span className="spread" role="img" aria-label={parts.filter(Boolean).join('; ')}>
+      {best !== null && <span className="spread-range" style={{ left: pct(best), width: `max(4px, calc(${pct(worst!)} - ${pct(best)}))` }} />}
+      {best !== null && <span className="spread-median" style={{ left: pct(median!) }} />}
+      {ruleTimes.map((seconds, i) => (
+        <span key={i} className="spread-dot" style={{ left: pct(seconds) }} />
+      ))}
     </span>
+  );
+}
+
+/** A cell with the figure of the fights without a Rule on one line and, under it, the figure of the fights under one. A team never fought under a Rule has the single line. */
+function Stacked({ normal, rule, title }: { normal: ReactNode; rule: ReactNode | null; title?: string }) {
+  if (rule === null) return <>{normal}</>;
+  return (
+    <>
+      <div>{normal}</div>
+      <div className="muted rule-line" title={title}>
+        {rule}
+      </div>
+    </>
   );
 }
 
@@ -84,11 +118,61 @@ function SendButton({ boss, composition, layout, send }: { boss: string; composi
   );
 }
 
+/** The Fights, Clear rate, Times, Median and Best–worst cells of a team: the fights without a Rule, and the ones under a Rule beneath them. */
+function FigureCells({ composition: c, scaleMax }: { composition: Composition; scaleMax: number }) {
+  const rule = c.rule ?? null;
+  const title = rule ? `Under ${rule.rules.join(', ')}` : undefined;
+  const none = <span className="muted">–</span>;
+  const rate = (clears: number, attempts: number) => (
+    <>
+      {Math.round((clears / attempts) * 100)}% <span className="muted">({clears}/{attempts})</span>
+    </>
+  );
+  const ruleOnly = isRuleOnly(c);
+  return (
+    <>
+      <td>
+        <Stacked normal={c.attempts > 0 ? c.attempts : none} rule={rule && `${rule.attempts} under a Rule`} title={title} />
+      </td>
+      <td>
+        <Stacked normal={c.attempts > 0 ? rate(c.clears, c.attempts) : none} rule={rule && (rule.attempts > 0 ? rate(rule.clears, rule.attempts) : none)} title={title} />
+      </td>
+      <td>
+        {c.clears > 0 || rule?.clears ? (
+          <TimeSpread best={c.bestSeconds} median={c.medianSeconds} worst={c.worstSeconds} ruleTimes={rule?.times ?? []} scaleMax={scaleMax} />
+        ) : (
+          <span className="muted">never cleared</span>
+        )}
+      </td>
+      <td>
+        <Stacked
+          normal={
+            <>
+              {c.medianSeconds !== null ? formatDuration(c.medianSeconds) : '–'}
+              {c.clears > 0 && c.lowConfidence && <span className="badge few"> few clears</span>}
+              {ruleOnly && <span className="badge few"> Rule only</span>}
+            </>
+          }
+          rule={rule && (rule.medianSeconds !== null ? formatDuration(rule.medianSeconds) : '–')}
+          title={title}
+        />
+      </td>
+      <td>
+        <Stacked
+          normal={c.clears > 0 ? `${formatDuration(c.bestSeconds!)}–${formatDuration(c.worstSeconds!)}` : '–'}
+          rule={rule && (rule.clears > 0 ? `${formatDuration(rule.bestSeconds!)}–${formatDuration(rule.worstSeconds!)}` : '–')}
+          title={title}
+        />
+      </td>
+    </>
+  );
+}
+
 /** Teams as a table, best first, each openable to its placements. Used by Best teams and the Finder. */
 export function CompositionTable({ boss, compositions, maps, send }: { boss: string; compositions: Composition[]; maps: GameMap[]; send?: SendToSimulator }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const toggle = (key: string) => setOpen((current) => toggled(current, key));
-  const scaleMax = Math.max(1, ...compositions.map((c) => c.worstSeconds ?? 0));
+  const scaleMax = Math.max(1, ...compositions.flatMap((c) => [c.worstSeconds ?? 0, c.rule?.worstSeconds ?? 0]));
   return (
     <table className="board">
       <thead>
@@ -128,22 +212,7 @@ export function CompositionTable({ boss, compositions, maps, send }: { boss: str
                 </span>
               </div>
             </td>
-            <td>{c.attempts}</td>
-            <td>
-              {Math.round(c.clearRate * 100)}% <span className="muted">({c.clears}/{c.attempts})</span>
-            </td>
-            <td>
-              {c.clears > 0 ? (
-                <TimeSpread best={c.bestSeconds!} median={c.medianSeconds!} worst={c.worstSeconds!} scaleMax={scaleMax} />
-              ) : (
-                <span className="muted">never cleared</span>
-              )}
-            </td>
-            <td>
-              {c.medianSeconds !== null ? formatDuration(c.medianSeconds) : '–'}
-              {c.clears > 0 && c.lowConfidence && <span className="badge few"> few clears</span>}
-            </td>
-            <td>{c.clears > 0 ? `${formatDuration(c.bestSeconds!)}–${formatDuration(c.worstSeconds!)}` : '–'}</td>
+            <FigureCells composition={c} scaleMax={scaleMax} />
             {send && (
               <td>
                 <SendButton boss={boss} composition={c} send={send} />
@@ -169,6 +238,8 @@ export function BestTeams({ bosses, rules, send }: { bosses: Boss[]; rules: Boss
   const [rule, setRule] = useState('any');
   const [tag, setTag] = useState<string[]>([]);
   const [thisWeek, setThisWeek] = useState(false);
+  const [include, setInclude] = useState<string[]>([]);
+  const [exclude, setExclude] = useState<string[]>([]);
   const maps = useMaps();
 
   useEffect(() => {
@@ -177,10 +248,12 @@ export function BestTeams({ bosses, rules, send }: { bosses: Boss[]; rules: Boss
 
   // Only the latest request counts: a slow answer for an earlier boss or filter must not replace the one the player asked for last.
   const { data: board = null, error } = useLoad(
-    () => api.leaderboard(boss, rule, tag, thisWeek ? weekStart(new Date().toISOString()) : ''),
-    [boss, rule, tag, thisWeek],
+    () => api.leaderboard(boss, rule, tag, thisWeek ? weekStart(new Date().toISOString()) : '', include, exclude),
+    [boss, rule, tag, thisWeek, include.join('|'), exclude.join('|')],
     boss !== '',
   );
+  // The heroes offered are those with a recorded fight against this boss, so the list follows the boss.
+  const { data: offered = [] } = useLoad(() => api.fightHeroes(boss), [boss], boss !== '');
 
   return (
     <div>
@@ -209,18 +282,23 @@ export function BestTeams({ bosses, rules, send }: { bosses: Boss[]; rules: Boss
         <label className="check">
           <input type="checkbox" checked={thisWeek} onChange={(e) => setThisWeek(e.target.checked)} /> This week only
         </label>
+        <HeroFilter offered={offered} include={include} exclude={exclude} onChange={(next) => (setInclude(next.include), setExclude(next.exclude))} />
       </div>
       <p className="muted">
         Clear times vary from fight to fight, so each team is judged on all its fights: the bar runs from its best to its worst time, the tick marks
         the median. Teams with at least {MIN_CLEARS_FOR_CONFIDENCE} clears are ranked first, fastest median first; teams with fewer are shown after,
-        flagged, because one lucky run can mislead. The same heroes and artifact count as one team wherever they stand; open a team to see where its heroes stood, fastest placement first.
+        flagged, because one lucky run can mislead. Fights under a Rule have a boost you may not have, so with Rule = Any the figures and the bar
+        are those of the fights without a Rule, the fights under one are written beneath in grey and shown as hollow dots, and a team cleared only
+        under a Rule is ranked last of the cleared ones and flagged. The same heroes and artifact count as one team wherever they stand; open a team to see where its heroes stood, fastest placement first.
       </p>
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
-      {board && board.compositions.length === 0 && <p className="muted">No fights recorded for this boss yet.</p>}
+      {board && board.compositions.length === 0 && (
+        <p className="muted">{include.length + exclude.length > 0 ? 'No recorded team matches these heroes.' : 'No fights recorded for this boss yet.'}</p>
+      )}
       {board && board.compositions.length > 0 && <CompositionTable boss={board.boss} compositions={board.compositions} maps={maps} send={send} />}
     </div>
   );
