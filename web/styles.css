@@ -141,13 +141,17 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 .tier-S { color: var(--tier-s); }
 .tier-A { color: var(--tier-a); }
 .tier-R { color: var(--tier-r); }
-.state { position: relative; display: grid; justify-items: center; gap: var(--sp-1); width: calc(100% - 2 * var(--sp-2)); min-height: 0; margin: 0 var(--sp-2) var(--sp-2); padding: var(--sp-1) var(--sp-4); border: 1px solid transparent; border-radius: var(--r-control); background: transparent; }
+.state { display: grid; justify-items: center; gap: var(--sp-1); margin: 0 var(--sp-2) var(--sp-2); }
+/* A rank or an equipment on a Card: a button that opens a Popover of the values it can take. */
+.state-value { display: inline-flex; gap: var(--sp-1); align-items: baseline; min-height: 0; padding: var(--sp-1) var(--sp-2); border: 1px solid transparent; border-radius: var(--r-control); background: transparent; }
+.state-value:hover, .state-value[aria-expanded="true"] { background: var(--panel-hi); border-color: var(--border); }
+/* A short list under the control that opened it; its place is set in code. A list taller than the room left scrolls. */
+.popover { position: fixed; z-index: var(--z-popover); display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); background: var(--panel); border: 1px solid var(--accent); border-radius: var(--r-control); }
+.popover button { display: flex; justify-content: center; gap: var(--sp-1); min-height: var(--control-h-compact); border: 0; border-radius: 0; background: transparent; white-space: nowrap; }
+.popover button:hover:not(:disabled) { background: var(--panel-hi); }
+.popover button[aria-pressed="true"] { background: var(--side-a-tile); box-shadow: inset 3px 0 0 var(--accent); }
 .state-fixed { padding: var(--sp-1) 0; }
-.state-fixed:hover { background: transparent; border-color: transparent; }
 .card-main:disabled { opacity: 1; cursor: default; }
-.state:hover { background: var(--panel-hi); border-color: var(--border); }
-.edit-hint { position: absolute; right: var(--sp-2); top: 50%; transform: translateY(-50%); color: var(--muted); font-size: var(--font-md); }
-.state:hover .edit-hint { color: var(--accent); }
 .rank-text { font-size: var(--font-sm); font-weight: 700; color: var(--muted); }
 /* The game's colour of a rank as the text colour, lightened toward the text colour so the darker ranks read on a dark Card. */
 .rank-colour-rare { color: color-mix(in srgb, var(--rank-rare) 70%, var(--text)); }
@@ -160,11 +164,7 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 .rank-colour-paragon-2 { color: color-mix(in srgb, var(--rank-paragon-2) 70%, var(--text)); }
 .rank-colour-paragon-3 { color: color-mix(in srgb, var(--rank-paragon-3) 70%, var(--text)); }
 .rank-colour-paragon-4 { background: var(--rank-paragon-4); -webkit-background-clip: text; background-clip: text; color: transparent; }
-span.weapon-line { display: inline-flex; gap: var(--sp-1); align-items: baseline; font-size: var(--font-sm); font-weight: 600; color: var(--muted); }
-.state-editor { display: grid; gap: var(--sp-2); }
-.choice-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
-.chip-choice { min-height: var(--control-h-compact); padding: 0 var(--sp-2); border-radius: var(--r-control); }
-.chip-choice[aria-pressed="true"] { border-color: var(--accent); background: var(--side-a-tile); }
+.weapon-line { display: inline-flex; gap: var(--sp-1); align-items: baseline; font-size: var(--font-sm); font-weight: 600; color: var(--muted); }
 
 a { text-decoration: none; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-color); font-weight: 600; }

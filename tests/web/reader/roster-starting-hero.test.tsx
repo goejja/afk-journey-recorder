@@ -26,9 +26,9 @@ describe('starting heroes on the Roster page', () => {
     const chippy = within(cards.find((c) => c.querySelector('.name')?.textContent === 'Chippy')!);
     const sam = within(cards.find((c) => c.querySelector('.name')?.textContent === 'Sam')!);
     expect((chippy.getByTitle('Starting hero: always on the roster') as HTMLButtonElement).disabled).toBe(true);
-    expect(chippy.queryByRole('button', { name: /Edit the rank and equipment/ })).toBeNull();
+    expect(chippy.queryByRole('button', { name: /^Rank of/ })).toBeNull();
     expect(chippy.getByText('Rare')).toBeTruthy();
-    expect(sam.getByRole('button', { name: /Edit the rank and equipment/ })).toBeTruthy();
+    expect(sam.getByRole('button', { name: /^Rank of/ })).toBeTruthy();
     expect(sam.getByTitle('Remove from roster')).toBeTruthy();
   });
 });

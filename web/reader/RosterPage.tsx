@@ -3,7 +3,7 @@ import { WeaponStars, weaponOptionText } from '../WeaponStars.js';
 import { weaponLabel } from '../../src/domain/exclusive-weapon.js';
 import { HeroIcons } from '../HeroIcons.js';
 import { RankText } from '../RankText.js';
-import { Dialog } from '../ui/Dialog.js';
+import { Popover } from '../ui/Popover.js';
 import { allowedEquipmentLevels, allowedRanks, equipmentForRank } from '../../src/domain/hero-state.js';
 import { api, type Hero, type Profile, type Rules } from '../backend.js';
 import { distinct, heroMatches, TIER_ORDER } from '../heroFilter.js';
@@ -315,11 +315,23 @@ function HeroCard(props: {
   onChange: (rank: string | null, level: number | null) => void;
 }) {
   const { hero, rules } = props;
-  const [editing, setEditing] = useState(false);
+  // The value whose list is open, and the button it hangs under; a press anywhere else closes it.
+  const [editing, setEditing] = useState<'rank' | 'equipment' | null>(null);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const starting = hero.tier === 'R'; // the starting heroes are on every roster, at Rare
   const levels = allowedEquipmentLevels(hero.rank, rules);
   // Only the ranks the hero's tier allows, highest first so the strongest options are at the top of the list.
   const ranks = [...allowedRanks(hero.tier, rules.ranks)].reverse();
+
+  const close = useCallback(() => setEditing(null), []);
+  const toggle = (field: 'rank' | 'equipment', button: HTMLElement) => {
+    setAnchor(button);
+    setEditing(editing === field ? null : field);
+  };
+  const pick = (change: () => void) => {
+    change();
+    setEditing(null);
+  };
 
   function changeRank(rank: string) {
     props.onChange(rank, equipmentForRank(hero.equipmentLevel, rank, rules));
@@ -340,61 +352,45 @@ function HeroCard(props: {
         </div>
       )}
       {hero.owned && !starting && (
-        <button type="button" className="state" onClick={() => setEditing(true)} aria-label={`Edit the rank and equipment of ${hero.name}`} title="Edit the rank and equipment">
-          <RankText rank={hero.rank} />
+        <div className="state">
+          <button type="button" className="state-value" aria-expanded={editing === 'rank'} aria-label={`Rank of ${hero.name}: ${hero.rank ?? 'not set'}`} title="Change the rank" onClick={(e) => toggle('rank', e.currentTarget)}>
+            <RankText rank={hero.rank} />
+          </button>
           {levels.length > 0 && (
-            <span className="weapon-line">
+            <button type="button" className="state-value weapon-line" aria-expanded={editing === 'equipment'} aria-label={`Equipment of ${hero.name}: ${hero.equipmentLevel === null ? 'none' : weaponLabel(hero.equipmentLevel)}`} title="Change the equipment" onClick={(e) => toggle('equipment', e.currentTarget)}>
               {hero.equipmentLevel === null ? <span className="muted">No equipment</span> : <><WeaponStars level={hero.equipmentLevel} /> <span>{weaponLabel(hero.equipmentLevel)}</span></>}
-            </span>
+            </button>
           )}
-          <span className="edit-hint" aria-hidden="true">✎</span>
-        </button>
+        </div>
       )}
-      {editing && (
-        <Dialog
-          title={hero.name}
-          onCancel={() => setEditing(false)}
-          closeOnBackdrop
-          initialFocus="cancel"
-          actions={
-            <div className="overlay-actions">
-              <button data-cancel onClick={() => setEditing(false)}>
-                Close
-              </button>
-            </div>
-          }
-        >
-          <div className="state-editor">
-            <span className="field">Rank</span>
-            <div className="choice-chips">
+      {editing && anchor && (
+        <Popover anchor={anchor} label={editing === 'rank' ? `Rank of ${hero.name}` : `Equipment of ${hero.name}`} onClose={close}>
+          {editing === 'rank' ? (
+            <>
               {hero.rank === null && (
-                <button type="button" className="chip-choice" aria-pressed disabled>
+                <button type="button" aria-pressed disabled>
                   Not set
                 </button>
               )}
               {ranks.map((r) => (
-                <button key={r} type="button" className="chip-choice" aria-pressed={r === hero.rank} onClick={() => changeRank(r)}>
-                  {r}
+                <button key={r} type="button" aria-pressed={r === hero.rank} onClick={() => pick(() => changeRank(r))}>
+                  <RankText rank={r} />
                 </button>
               ))}
-            </div>
-            <span className="field">Equipment</span>
-            {levels.length === 0 ? (
-              <p className="muted">Equipment starts at Mythic+.</p>
-            ) : (
-              <div className="choice-chips">
-                <button type="button" className="chip-choice" aria-pressed={hero.equipmentLevel === null} onClick={() => props.onChange(hero.rank, null)}>
-                  None
+            </>
+          ) : (
+            <>
+              {[...levels].reverse().map((l) => (
+                <button key={l} type="button" aria-pressed={l === hero.equipmentLevel} onClick={() => pick(() => props.onChange(hero.rank, l))}>
+                  {weaponOptionText(l)}
                 </button>
-                {[...levels].reverse().map((l) => (
-                  <button key={l} type="button" className="chip-choice" aria-pressed={l === hero.equipmentLevel} onClick={() => props.onChange(hero.rank, l)}>
-                    {weaponOptionText(l)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </Dialog>
+              ))}
+              <button type="button" aria-pressed={hero.equipmentLevel === null} onClick={() => pick(() => props.onChange(hero.rank, null))}>
+                None
+              </button>
+            </>
+          )}
+        </Popover>
       )}
     </article>
   );
