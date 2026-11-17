@@ -12,6 +12,8 @@ import { fail, file, serve } from '../contract.js';
 const IMAGE_KINDS = ['hero', 'enemy', 'phantimal', 'boss', 'artifact'] as const;
 export type ImageKind = (typeof IMAGE_KINDS)[number];
 
+const ICON_KINDS = { class: 'class', faction: 'factions' } as const;
+
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 const MIME_BY_EXTENSION: Record<ImageType, string> = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
 const EXTENSION_BY_MIME = new Map(Object.entries(MIME_BY_EXTENSION).map(([extension, mime]) => [mime, extension as ImageType]));
@@ -93,6 +95,14 @@ export function imageRoutes(db: Database.Database, imagesDir: string): Hono {
     if (!image) return fail(404, 'No image');
     const extension = image.file.slice(image.file.lastIndexOf('.') + 1).toLowerCase();
     return file(readFileSync(image.file), MIME_BY_EXTENSION[extension as ImageType] ?? 'application/octet-stream', { 'cache-control': 'no-cache' });
+  });
+
+  serve(app, imagesContract.icon, ({ params }) => {
+    const folder = ICON_KINDS[params.kind as keyof typeof ICON_KINDS];
+    if (!folder) return fail(404, 'Unknown icon kind');
+    const path = join(root, 'icons', folder, `${safeFileName(params.name).toLowerCase()}.png`);
+    if (!existsSync(path)) return fail(404, 'No icon');
+    return file(readFileSync(path), 'image/png', { 'cache-control': 'no-cache' });
   });
 
   serve(app, imagesContract.list, ({ params }) => {

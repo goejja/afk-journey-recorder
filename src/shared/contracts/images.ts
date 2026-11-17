@@ -9,6 +9,8 @@ const Image = z.object({ name: z.string(), source: ImageSource });
 export const imagesContract = {
   /** The best image for a unit: an uploaded one, else the imported one. `kind` is hero, enemy, phantimal, boss or artifact. */
   portrait: endpoint({ method: 'GET', path: '/api/portrait/:kind/:name', response: Binary }),
+  /** The round game icon of a hero class or faction (`kind` is class or faction), kept in images/icons; 404 where there is none. */
+  icon: endpoint({ method: 'GET', path: '/api/icon/:kind/:name', response: Binary }),
   list: endpoint({ method: 'GET', path: '/api/images/:kind', response: z.array(Image) }),
   /** Keeps an uploaded PNG, JPEG, WebP or GIF (at most 2 MB) for a unit. */
   upload: endpoint({ method: 'PUT', path: '/api/images/:kind/:name', body: Upload, response: z.object({ name: z.string(), source: z.literal('custom') }) }),

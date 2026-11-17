@@ -94,6 +94,8 @@ export function RosterImport({ profile, profiles, heroes, rules, onClose, onAppl
   const [error, setError] = useState<string | null>(null);
   const [screen, setScreen] = useState<ImportScreen>('info');
   const [files, setFiles] = useState<File[]>([]);
+  /** Where the heroes of a Player Info picture go: the profile its player name matches (''), or the one chosen. A Resonating Hall picture always goes to the profile on show. */
+  const [target, setTarget] = useState('');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const job = state?.job ?? null;
@@ -133,7 +135,7 @@ export function RosterImport({ profile, profiles, heroes, rules, onClose, onAppl
     const refused: string[] = [];
     for (const file of files) {
       try {
-        await api.startRosterImport(file, screen, screen === 'hall' ? profile?.id : undefined);
+        await api.startRosterImport(file, screen, screen === 'hall' ? profile?.id : screen === 'info' && target !== '' ? Number(target) : undefined);
       } catch (e) {
         refused.push(`${file.name}: ${(e as Error).message}`);
       }
@@ -183,6 +185,17 @@ export function RosterImport({ profile, profiles, heroes, rules, onClose, onAppl
               </label>
             ))}
           </fieldset>
+          {screen === 'info' && (
+            <label className="field">
+              Heroes go to
+              <select value={target} onChange={(e) => setTarget(e.target.value)}>
+                <option value="">The profile the player name matches</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={String(p.id)}>{p.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="field">
             Screenshots (one or several of the same screen)
             <input type="file" multiple accept="image/png,image/jpeg,image/webp" onChange={(e) => setFiles([...(e.target.files ?? [])])} />
@@ -197,7 +210,9 @@ export function RosterImport({ profile, profiles, heroes, rules, onClose, onAppl
           {state.canRead
             ? screen === 'hall'
               ? `The heroes will go to ${profile?.name ?? 'the default profile'}: a hero missing from the picture is left alone.`
-              : 'The pictures are read one after another, about a minute each, and you review each when it is done. The player name on a picture finds the profile, or makes a new one. A hero missing from a picture is left alone.'
+              : screen === 'info' && target !== ''
+                ? `The heroes will go to ${profiles.find((p) => String(p.id) === target)?.name ?? 'the chosen profile'}: a hero missing from the picture is left alone.`
+                : 'The pictures are read one after another, about a minute each, and you review each when it is done. The player name on a picture finds the profile, or makes a new one. A hero missing from a picture is left alone.'
             : state.reason}
         </p>
       )}

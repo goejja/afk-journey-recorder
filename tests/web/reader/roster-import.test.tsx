@@ -89,6 +89,16 @@ describe('Roster import', () => {
     expect(start.headers).toMatchObject({ 'x-afk-action': 'app', 'content-type': 'image/png' });
   });
 
+  it('lets a Player Info picture be sent to a chosen profile instead of the one its player name matches', async () => {
+    const user = userEvent.setup();
+    open();
+    await user.upload(await screen.findByLabelText(/Screenshots/), picture());
+    await user.selectOptions(screen.getByLabelText('Heroes go to'), profiles[0]!.name);
+    expect(screen.getByText(new RegExp(`The heroes will go to ${profiles[0]!.name}`))).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Read picture' }));
+    await waitFor(() => expect(requests.find((r) => r.method === 'POST')?.url).toMatch(/^\/api\/roster-import\?screen=info&profile=1&name=/));
+  });
+
   it('ticks new and upgraded heroes, not downgrades, and applies only the ticked rows with the rename', async () => {
     const user = userEvent.setup();
     state.job = { id: 1, state: 'done', screen: 'info', sections: [section()], chosen: {} };

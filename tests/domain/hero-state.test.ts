@@ -71,9 +71,9 @@ describe('validateHeroState', () => {
 describe('rank by tier', () => {
   const ranks = ['Rare', 'Elite', 'Epic', 'Mythic+', 'Apex'];
 
-  it('lets S heroes start at Epic, A heroes at Rare, and R heroes be only Rare', () => {
+  it('lets S heroes start at Epic, A heroes at Elite, and R heroes be only Rare', () => {
     expect(allowedRanks('S', ranks)).toEqual(['Epic', 'Mythic+', 'Apex']);
-    expect(allowedRanks('A', ranks)).toEqual(ranks);
+    expect(allowedRanks('A', ranks)).toEqual(['Elite', 'Epic', 'Mythic+', 'Apex']);
     expect(allowedRanks('R', ranks)).toEqual(['Rare']);
   });
 
@@ -84,7 +84,7 @@ describe('rank by tier', () => {
 
   it('gives the rank a hero starts at', () => {
     expect(minimumRank('S', ranks)).toBe('Epic');
-    expect(minimumRank('A', ranks)).toBe('Rare');
+    expect(minimumRank('A', ranks)).toBe('Elite');
     expect(minimumRank('R', ranks)).toBe('Rare');
     expect(minimumRank(null, ranks)).toBeNull();
   });
@@ -95,7 +95,8 @@ describe('rank by tier', () => {
     expect(validateHeroState({ rank: 'Epic', equipmentLevel: null }, rules2, 'S')).toBeNull();
     expect(validateHeroState({ rank: 'Mythic+', equipmentLevel: null }, rules2, 'R')).toBe('R heroes can only be Rare');
     expect(validateHeroState({ rank: 'Rare', equipmentLevel: null }, rules2, 'R')).toBeNull();
-    expect(validateHeroState({ rank: 'Rare', equipmentLevel: null }, rules2, 'A')).toBeNull();
+    expect(validateHeroState({ rank: 'Rare', equipmentLevel: null }, rules2, 'A')).toBe('A heroes start at Elite, not Rare');
+    expect(validateHeroState({ rank: 'Elite', equipmentLevel: null }, rules2, 'A')).toBeNull();
     expect(validateHeroState({ rank: 'Elite', equipmentLevel: null }, rules2)).toBeNull(); // no tier given: not checked
   });
 });

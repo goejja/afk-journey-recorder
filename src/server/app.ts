@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { Hono, type Context } from 'hono';
 import { findProfile } from '../db/profiles.js';
+import { isStartingHero, STARTING_TIER } from '../db/starting-heroes.js';
 import { minimumRank, validateHeroState, type HeroStateRules } from '../domain/hero-state.js';
 import { arenaRoutes } from './records/arena.js';
 import { battleRoutes } from './records/battles.js';
@@ -167,14 +168,15 @@ export function createApp(db: Database.Database, options: { imagesDir?: string; 
   serve(app, rosterContract.remove, ({ params }, c) => {
     const profile = profileOf(c);
     if (!profile) return fail(404, 'Unknown profile');
+    if (isStartingHero(db, params.name)) return fail(409, `${params.name} is a starting hero and stays on every roster`);
     db.prepare('DELETE FROM roster WHERE profile_id = ? AND hero_name = ?').run(profile.id, params.name);
   });
 
-  // Wipes the roster of one profile (the default unless told otherwise); the UI asks for confirmation before calling this.
+  // Wipes the roster of one profile (the default unless told otherwise) except its starting heroes; the UI asks for confirmation before calling this.
   serve(app, rosterContract.reset, (_, c) => {
     const profile = profileOf(c);
     if (!profile) return fail(404, 'Unknown profile');
-    db.prepare('DELETE FROM roster WHERE profile_id = ?').run(profile.id);
+    db.prepare('DELETE FROM roster WHERE profile_id = ? AND hero_name NOT IN (SELECT name FROM hero WHERE tier = ?)').run(profile.id, STARTING_TIER);
   });
 
   return app;

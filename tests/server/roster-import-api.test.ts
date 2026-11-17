@@ -211,6 +211,16 @@ describe('the proposal', () => {
   });
 });
 
+describe('a profile chosen before reading', () => {
+  it('sends the heroes of a Player Info picture to that profile, whatever the player name is, and refuses an unknown one', async () => {
+    t.reply = () => JSON.stringify({ players: [{ name: 'Nini', crops: { team1: team(tile('Evie', 'Paragon 1')), team2: team(), team3: team() } }] });
+    expect((await upload('info', await infoPicture(), '&profile=Nobody')).status).toBe(404);
+    await upload('info', await infoPicture(), '&profile=1');
+    const job = await finished();
+    expect(job.sections[0]).toMatchObject({ profile: { id: 1, name: 'Brin' }, create: null });
+  });
+});
+
 describe('unknown tiles', () => {
   it('lets the player name one, which adds the hero to the proposal', async () => {
     await upload();

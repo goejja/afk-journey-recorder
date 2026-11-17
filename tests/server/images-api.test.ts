@@ -146,3 +146,25 @@ describe('images of the units of a pair and of summons', () => {
     expect((await names())[4]).toEqual(['Laser Turret', 'custom']);
   });
 });
+
+describe('class and faction icons', () => {
+  it('serves an icon kept in images/icons by its lower-case name', async () => {
+    mkdirSync(join(dir, 'icons', 'class'), { recursive: true });
+    writeFileSync(join(dir, 'icons', 'class', 'mage.png'), PNG);
+    const res = await app.request('/api/icon/class/Mage');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+  });
+
+  it('reads factions from the factions folder', async () => {
+    mkdirSync(join(dir, 'icons', 'factions'), { recursive: true });
+    writeFileSync(join(dir, 'icons', 'factions', 'wilder.png'), PNG);
+    expect((await app.request('/api/icon/faction/Wilder')).status).toBe(200);
+  });
+
+  it('answers 404 for a missing icon, an unknown kind and a name that climbs out of the folder', async () => {
+    expect((await app.request('/api/icon/class/Mage')).status).toBe(404);
+    expect((await app.request('/api/icon/tier/S')).status).toBe(404);
+    expect((await app.request('/api/icon/class/..%2F..%2Fheroes%2FEvie')).status).toBe(404);
+  });
+});

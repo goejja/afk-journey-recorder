@@ -16,10 +16,10 @@ export interface HeroState {
 }
 
 /** The lowest rank a hero of each tier can have; R heroes are also capped there. */
-const MINIMUM_RANK: Record<string, string> = { S: 'Epic', A: 'Rare', R: 'Rare' };
+const MINIMUM_RANK: Record<string, string> = { S: 'Epic', A: 'Elite', R: 'Rare' };
 
 /**
- * The ranks a hero of this tier can have, lowest first: S heroes start at Epic, A heroes at Rare, and R heroes
+ * The ranks a hero of this tier can have, lowest first: S heroes start at Epic, A heroes at Elite, and R heroes (Chippy and Hammie)
  * can only be Rare. `ranks` is the full rank list, lowest first; an unknown tier allows every rank.
  */
 export function allowedRanks(tier: string | null, ranks: string[]): string[] {

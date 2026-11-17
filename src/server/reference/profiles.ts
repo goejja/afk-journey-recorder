@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
 import { findProfile } from '../../db/profiles.js';
+import { ensureStartingHeroes } from '../../db/starting-heroes.js';
 import { foldName } from '../../domain/name-match.js';
 import { profilesContract, type Profile } from '../../shared/contracts/profiles.js';
 import { fail, serve } from '../contract.js';
@@ -42,6 +43,7 @@ export function profileRoutes(db: Database.Database): Hono {
     const id = db.transaction(() => {
       const created = Number(db.prepare('INSERT INTO profile (name, player_id) VALUES (?, ?)').run(name.name, playerId.playerId).lastInsertRowid);
       if (source) db.prepare('INSERT INTO roster (profile_id, hero_name, rank, equipment_level) SELECT ?, hero_name, rank, equipment_level FROM roster WHERE profile_id = ?').run(created, source.id);
+      ensureStartingHeroes(db, created); // a copy of a roster without them still starts with them
       return created;
     })();
     return list().find((p) => p.id === id)!;

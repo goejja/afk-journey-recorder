@@ -91,8 +91,45 @@ describe('Roster page', () => {
     await waitFor(() => expect(owned()).toEqual(['Evie']));
     await user.click(screen.getByRole('button', { name: /Friend/ }));
     await waitFor(() => expect(owned()).toEqual(['Fay']));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Rank' }), 'Mythic+');
+    await user.click(screen.getByRole('button', { name: /Edit the rank and equipment/ }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Mythic+' }));
     await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/roster/Fay?profile=2')?.body).toMatchObject({ rank: 'Mythic+', equipmentLevel: 0 }));
+  });
+
+  it('offers in the editor only the ranks the tier allows and the equipment the rank allows, and saves a pick', async () => {
+    const user = userEvent.setup();
+    render(<RosterPage />);
+    await waitFor(() => expect(owned()).toEqual(['Evie']));
+    await user.click(screen.getByRole('button', { name: /Edit the rank and equipment/ })); // Evie's rank and equipment
+    const editor = within(await screen.findByRole('dialog'));
+    expect(editor.getAllByRole('button').map((b) => b.textContent)).toEqual(['Mythic+', 'Epic', 'None', '+10 ★★★', '+0 ★', 'Close']);
+    await user.click(editor.getByRole('button', { name: '+10 ★★★' }));
+    await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/roster/Evie?profile=1')?.body).toMatchObject({ rank: 'Mythic+', equipmentLevel: 10 }));
+    expect(screen.getByRole('dialog')).toBeTruthy(); // stays open to change the other value
+    await user.click(editor.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('asks before removing a hero whose rank would be lost, and keeps it when the answer is no', async () => {
+    const user = userEvent.setup();
+    render(<RosterPage />);
+    await waitFor(() => expect(owned()).toEqual(['Evie'])); // Evie is Mythic+
+    await user.click(screen.getByTitle('Remove from roster'));
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.getByText('Its rank will be lost.')).toBeTruthy();
+    await user.click(dialog.getByRole('button', { name: 'Cancel' }));
+    expect(requests.some((r) => r.method === 'DELETE' && r.url.startsWith('/api/roster/'))).toBe(false);
+    expect(owned()).toEqual(['Evie']);
+    await user.click(screen.getByTitle('Remove from roster'));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(requests.find((r) => r.method === 'DELETE' && r.url === '/api/roster/Evie?profile=1')).toBeTruthy());
+  });
+
+  it('shows no rank or equipment on a hero that is not owned', async () => {
+    render(<RosterPage />);
+    await waitFor(() => expect(owned()).toEqual(['Evie']));
+    const fay = screen.getAllByRole('article').find((a) => a.querySelector('.name')?.textContent === 'Fay')!;
+    expect(within(fay).queryByRole('button', { name: /Edit the rank and equipment/ })).toBeNull();
   });
 
   it('creates a profile, optionally copying the heroes of another, and shows it', async () => {

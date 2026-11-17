@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { Hono } from 'hono';
 import sharp from 'sharp';
 import { findProfile } from '../../db/profiles.js';
+import { ensureStartingHeroes } from '../../db/starting-heroes.js';
 import { agentImportCommand, agentReply, canReadImages, validateAgentSettings } from '../../domain/agent.js';
 import { validateHeroState, type HeroStateRules } from '../../domain/hero-state.js';
 import {
@@ -209,8 +210,10 @@ export function rosterImportRoutes(
     if (jobs.length >= MAX_JOBS) return fail(409, `At most ${MAX_JOBS} pictures can wait: review or discard some first`);
     const mode = c.req.query('mode') as ArenaMode | undefined;
     if (screen === 'report' && (!mode || !ARENA_MODES.includes(mode))) return fail(400, `Say which mode the report is from: ${ARENA_MODES.join(', ')}`);
-    const hallProfile = screen === 'hall' ? findProfile(db, c.req.query('profile')) : undefined;
-    if (screen === 'hall' && !hallProfile) return fail(404, 'Unknown profile');
+    // Resonating Hall is always for one profile; Player Info (one player) may name one instead of being matched by the player's name.
+    const asked = c.req.query('profile');
+    const hallProfile = screen === 'hall' || (screen === 'info' && asked) ? findProfile(db, asked) : undefined;
+    if ((screen === 'hall' || (screen === 'info' && asked)) && !hallProfile) return fail(404, 'Unknown profile');
     const bytes = Buffer.from(await c.req.arrayBuffer());
     if (bytes.length === 0) return fail(400, 'The file is empty');
     if (bytes.length > MAX_PICTURE_BYTES) return fail(413, 'The picture can be at most 12 MB');
@@ -613,8 +616,10 @@ export function rosterImportRoutes(
       for (const item of plan) {
         let profileId = item.profileId;
         const created = profileId === null;
-        if (profileId === null) profileId = Number(db.prepare('INSERT INTO profile (name, player_id) VALUES (?, NULL)').run(item.create).lastInsertRowid);
-        else if (item.rename !== null) db.prepare('UPDATE profile SET name = ? WHERE id = ?').run(item.rename, profileId);
+        if (profileId === null) {
+          profileId = Number(db.prepare('INSERT INTO profile (name, player_id) VALUES (?, NULL)').run(item.create).lastInsertRowid);
+          ensureStartingHeroes(db, profileId);
+        } else if (item.rename !== null) db.prepare('UPDATE profile SET name = ? WHERE id = ?').run(item.rename, profileId);
         for (const change of item.changes) {
           db.prepare(
             `INSERT INTO roster (profile_id, hero_name, rank, equipment_level) VALUES (?, ?, ?, ?)

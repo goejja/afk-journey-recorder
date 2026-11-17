@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WeaponStars, weaponOptionText } from '../WeaponStars.js';
+import { weaponLabel } from '../../src/domain/exclusive-weapon.js';
+import { HeroIcons } from '../HeroIcons.js';
+import { RankText } from '../RankText.js';
+import { Dialog } from '../ui/Dialog.js';
 import { allowedEquipmentLevels, allowedRanks, equipmentForRank } from '../../src/domain/hero-state.js';
 import { api, type Hero, type Profile, type Rules } from '../backend.js';
 import { distinct, heroMatches, TIER_ORDER } from '../heroFilter.js';
@@ -8,8 +12,6 @@ import { Portrait } from '../Portrait.js';
 import { RosterImport } from './RosterImport.js';
 import { useCrud } from '../useCrud.js';
 import { MasterDetail } from '../ui/MasterDetail.js';
-
-const ANY = '';
 
 export function RosterPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -53,6 +55,15 @@ export function RosterPage() {
       await action();
       await reload();
     });
+
+  // Removing a hero deletes its rank and equipment, so a hero that has either is asked about first; adding, and removing a bare hero, are one click.
+  const toggleHero = async (profileId: number, hero: Hero) => {
+    if (hero.owned) {
+      const lost = [hero.rank !== null && 'rank', hero.equipmentLevel !== null && 'equipment level'].filter(Boolean).join(' and ');
+      if (lost && !(await confirm({ title: `Remove ${hero.name} from the roster?`, message: `Its ${lost} will be lost.`, confirmLabel: 'Remove', danger: true }))) return;
+    }
+    await changeHero(profileId, hero.name, async () => (hero.owned ? (await api.removeHero(hero.name, profileId), null) : api.saveHero(hero.name, null, null, profileId)));
+  };
 
   /** A change to one hero of the profile on show: the answer says its new state, so the page patches that hero and the profile's count instead of reading everything again. */
   const changeHero = (profileId: number, name: string, action: () => Promise<{ rank: string | null; equipmentLevel: number | null } | null>) =>
@@ -231,7 +242,7 @@ export function RosterPage() {
                         key={hero.name}
                         hero={hero}
                         rules={rules}
-                        onToggle={() => changeHero(selected.id, hero.name, async () => (hero.owned ? (await api.removeHero(hero.name, selected.id), null) : api.saveHero(hero.name, null, null, selected.id)))}
+                        onToggle={() => toggleHero(selected.id, hero)}
                         onChange={(rank, level) => changeHero(selected.id, hero.name, () => api.saveHero(hero.name, rank, level, selected.id))}
                       />
                     ))}
@@ -304,57 +315,86 @@ function HeroCard(props: {
   onChange: (rank: string | null, level: number | null) => void;
 }) {
   const { hero, rules } = props;
+  const [editing, setEditing] = useState(false);
+  const starting = hero.tier === 'R'; // the starting heroes are on every roster, at Rare
   const levels = allowedEquipmentLevels(hero.rank, rules);
   // Only the ranks the hero's tier allows, highest first so the strongest options are at the top of the list.
   const ranks = [...allowedRanks(hero.tier, rules.ranks)].reverse();
 
-  function changeRank(value: string) {
-    const rank = value === ANY ? null : value;
+  function changeRank(rank: string) {
     props.onChange(rank, equipmentForRank(hero.equipmentLevel, rank, rules));
   }
 
   return (
     <article className={hero.owned ? 'card owned' : 'card'}>
-      <button className="card-main" onClick={props.onToggle} aria-pressed={hero.owned} title={hero.owned ? 'Remove from roster' : 'Add to roster'}>
-        <Portrait kind="hero" name={hero.name} size={72} />
-        <span className="name">{hero.name}</span>
-        <span className="meta">
-          {hero.tier} · {hero.class} · {hero.faction}
-        </span>
-      </button>
-      {hero.owned && (
-        <div className="state">
-          <label>
-            Rank
-            <select value={hero.rank ?? ANY} onChange={(e) => changeRank(e.target.value)}>
-              {hero.rank === null && <option value={ANY}>Not set</option>}
-              {ranks.map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Equipment
-            <select
-              disabled={levels.length === 0}
-              title={levels.length === 0 ? 'Equipment starts at Mythic+' : undefined}
-              value={hero.equipmentLevel ?? ANY}
-              onChange={(e) => props.onChange(hero.rank, e.target.value === ANY ? null : Number(e.target.value))}
-            >
-              <option value={ANY}>None</option>
-              {[...levels].reverse().map((l) => (
-                <option key={l} value={l}>
-                  {weaponOptionText(l)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {hero.equipmentLevel !== null && (
-            <div className="weapon-row">
-              <WeaponStars level={hero.equipmentLevel} />
-            </div>
-          )}
+      <div className="card-top">
+        <HeroIcons tier={hero.tier} heroClass={hero.class} faction={hero.faction} />
+        <button className="card-main" onClick={props.onToggle} aria-pressed={hero.owned} disabled={starting} title={starting ? 'Starting hero: always on the roster' : hero.owned ? 'Remove from roster' : 'Add to roster'}>
+          <Portrait kind="hero" name={hero.name} size={72} />
+          <span className="name">{hero.name}</span>
+        </button>
+      </div>
+      {hero.owned && starting && (
+        <div className="state state-fixed">
+          <RankText rank={hero.rank} />
         </div>
+      )}
+      {hero.owned && !starting && (
+        <button type="button" className="state" onClick={() => setEditing(true)} aria-label={`Edit the rank and equipment of ${hero.name}`} title="Edit the rank and equipment">
+          <RankText rank={hero.rank} />
+          {levels.length > 0 && (
+            <span className="weapon-line">
+              {hero.equipmentLevel === null ? <span className="muted">No equipment</span> : <><WeaponStars level={hero.equipmentLevel} /> <span>{weaponLabel(hero.equipmentLevel)}</span></>}
+            </span>
+          )}
+          <span className="edit-hint" aria-hidden="true">✎</span>
+        </button>
+      )}
+      {editing && (
+        <Dialog
+          title={hero.name}
+          onCancel={() => setEditing(false)}
+          closeOnBackdrop
+          initialFocus="cancel"
+          actions={
+            <div className="overlay-actions">
+              <button data-cancel onClick={() => setEditing(false)}>
+                Close
+              </button>
+            </div>
+          }
+        >
+          <div className="state-editor">
+            <span className="field">Rank</span>
+            <div className="choice-chips">
+              {hero.rank === null && (
+                <button type="button" className="chip-choice" aria-pressed disabled>
+                  Not set
+                </button>
+              )}
+              {ranks.map((r) => (
+                <button key={r} type="button" className="chip-choice" aria-pressed={r === hero.rank} onClick={() => changeRank(r)}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <span className="field">Equipment</span>
+            {levels.length === 0 ? (
+              <p className="muted">Equipment starts at Mythic+.</p>
+            ) : (
+              <div className="choice-chips">
+                <button type="button" className="chip-choice" aria-pressed={hero.equipmentLevel === null} onClick={() => props.onChange(hero.rank, null)}>
+                  None
+                </button>
+                {[...levels].reverse().map((l) => (
+                  <button key={l} type="button" className="chip-choice" aria-pressed={l === hero.equipmentLevel} onClick={() => props.onChange(hero.rank, l)}>
+                    {weaponOptionText(l)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </Dialog>
       )}
     </article>
   );

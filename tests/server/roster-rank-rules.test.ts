@@ -27,7 +27,7 @@ const rankOf = async (name: string) => ((await (await app.request('/api/heroes')
 
 describe('roster ranks by tier', () => {
   it('starts a hero added without a rank at the lowest rank its tier allows', async () => {
-    for (const [name, rank] of [['Sam', 'Epic'], ['Ann', 'Rare'], ['Rae', 'Rare']] as const) {
+    for (const [name, rank] of [['Sam', 'Epic'], ['Ann', 'Elite'], ['Rae', 'Rare']] as const) {
       expect((await put(name, { rank: null, equipmentLevel: null })).status).toBe(200);
       expect(await rankOf(name)).toBe(rank);
     }
@@ -39,10 +39,13 @@ describe('roster ranks by tier', () => {
     expect((await put('Ann', { rank: 'Elite', equipmentLevel: null })).status).toBe(200);
   });
 
-  it('refuses a rank below an S hero’s Epic, and anything but Rare for an R hero', async () => {
+  it('refuses a rank below an S hero’s Epic or an A hero’s Elite, and anything but Rare for an R hero', async () => {
     const sRefusal = await put('Sam', { rank: 'Elite', equipmentLevel: null });
     expect(sRefusal.status).toBe(400);
     expect(((await sRefusal.json()) as any).error).toBe('S heroes start at Epic, not Elite');
+    const aRefusal = await put('Ann', { rank: 'Rare', equipmentLevel: null });
+    expect(aRefusal.status).toBe(400);
+    expect(((await aRefusal.json()) as any).error).toBe('A heroes start at Elite, not Rare');
     const rRefusal = await put('Rae', { rank: 'Epic', equipmentLevel: null });
     expect(rRefusal.status).toBe(400);
     expect(((await rRefusal.json()) as any).error).toBe('R heroes can only be Rare');

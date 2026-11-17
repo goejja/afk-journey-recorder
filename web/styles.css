@@ -46,12 +46,29 @@
   --star-purple: #b36cff;
   --star-yellow: #f2c230;
   --star-red: #ff4d4d;
+  /* Rank colours as the game paints them; the "+" of a "+" rank is the next colour. Paragon 4 is a rainbow like the R4 weapon. */
+  --rank-rare: #1d4f9c;
+  --rank-elite: #5b2a9e;
+  --rank-epic: #dc8a30;
+  --rank-legendary: #a3201c;
+  --rank-mythic: #d9d9d9;
+  --rank-supreme: #9a5b34;
+  --rank-paragon-1: #7a35c9;
+  --rank-paragon-2: #e0a91c;
+  --rank-paragon-3: #d3322c;
+  --rank-paragon-4: linear-gradient(90deg, var(--star-red), #ffb347, #f7e34a, #5bd96b, #4da6ff, var(--star-purple));
+  --tier-s: #ff9d3a;
+  --tier-a: #c58bff;
+  --tier-r: #6cb8ff;
+  --icon-size: 22px;
   /* Spacing, a 4px scale */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
   --sp-4: 16px;
   --sp-5: 24px;
+  /* Room kept at the right edge of every scrolling box, so its scrollbar (also the overlay kind that floats over the content) never covers what is inside */
+  --scroll-room: var(--sp-4);
   /* Corners: controls, cards and panels, pills */
   --r-control: 6px;
   --r-card: 10px;
@@ -97,7 +114,7 @@ textarea { padding: var(--sp-2) var(--sp-3); }
 input[type='checkbox'], input[type='radio'] { flex: none; width: var(--check-size); height: var(--check-size); min-height: 0; margin: 0; padding: 0; accent-color: var(--accent); }
 .small { white-space: nowrap; }
 .filters .upload { min-height: var(--control-h); padding: 0 var(--sp-3); }
-.small, .state select, .profile, .enemy-chip, .upload { min-height: var(--control-h-compact); padding: 0 var(--sp-2); }
+.small, .profile, .enemy-chip, .upload { min-height: var(--control-h-compact); padding: 0 var(--sp-2); }
 /* Buttons that are only an icon or a link inside something else are not controls of their own. */
 .hex, .hex-slot, .tag-remove, button.link, .chip button, .placed li button { min-height: 0; }
 button { cursor: pointer; }
@@ -111,14 +128,43 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3); }
 .card { background: var(--panel); border: 2px solid var(--border); border-radius: var(--r-card); overflow: hidden; opacity: 0.6; }
 .card.owned { opacity: 1; border-color: var(--accent); }
-.card-main { display: flex; flex-direction: column; align-items: center; width: 100%; border: 0; border-radius: 0; background: transparent; padding: var(--sp-3) var(--sp-2) var(--sp-2); gap: var(--sp-1); }
+/* The icon strip sits left of the portrait; an empty third column keeps the portrait centred. */
+.card-top { display: grid; grid-template-columns: var(--icon-size) minmax(0, 1fr) var(--icon-size); align-items: start; gap: var(--sp-1); padding: var(--sp-2) var(--sp-1) 0; }
+.card-main { grid-column: 2; display: flex; flex-direction: column; align-items: center; width: 100%; border: 0; border-radius: 0; background: transparent; padding: var(--sp-1) 0 var(--sp-2); gap: var(--sp-1); }
 .card-main img, .no-image { width: 72px; height: 72px; object-fit: contain; }
 .name { font-weight: 600; text-align: center; }
 .meta { color: var(--muted); font-size: var(--font-sm); text-align: center; }
-/* The labels share one column and the selects the other, so the boxes line up whatever their options say. */
-.state { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-2); padding: var(--sp-2) var(--sp-2) var(--sp-2); border-top: 1px solid var(--border); }
-.state label { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; gap: var(--sp-2); }
-.state select { min-width: 0; }
+.hero-icons { grid-column: 1; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding-top: var(--sp-1); }
+.game-icon { width: var(--icon-size); height: var(--icon-size); border-radius: 50%; object-fit: cover; }
+.game-icon-letter { display: grid; place-items: center; background: var(--panel-hi); border: 1px solid var(--border); color: var(--muted); font-size: var(--font-xs); font-weight: 700; }
+.tier-letter { font-weight: 800; font-size: var(--font-base); line-height: var(--icon-size); }
+.tier-S { color: var(--tier-s); }
+.tier-A { color: var(--tier-a); }
+.tier-R { color: var(--tier-r); }
+.state { position: relative; display: grid; justify-items: center; gap: var(--sp-1); width: calc(100% - 2 * var(--sp-2)); min-height: 0; margin: 0 var(--sp-2) var(--sp-2); padding: var(--sp-1) var(--sp-4); border: 1px solid transparent; border-radius: var(--r-control); background: transparent; }
+.state-fixed { padding: var(--sp-1) 0; }
+.state-fixed:hover { background: transparent; border-color: transparent; }
+.card-main:disabled { opacity: 1; cursor: default; }
+.state:hover { background: var(--panel-hi); border-color: var(--border); }
+.edit-hint { position: absolute; right: var(--sp-2); top: 50%; transform: translateY(-50%); color: var(--muted); font-size: var(--font-md); }
+.state:hover .edit-hint { color: var(--accent); }
+.rank-text { font-size: var(--font-sm); font-weight: 700; color: var(--muted); }
+/* The game's colour of a rank as the text colour, lightened toward the text colour so the darker ranks read on a dark Card. */
+.rank-colour-rare { color: color-mix(in srgb, var(--rank-rare) 70%, var(--text)); }
+.rank-colour-elite { color: color-mix(in srgb, var(--rank-elite) 70%, var(--text)); }
+.rank-colour-epic { color: color-mix(in srgb, var(--rank-epic) 70%, var(--text)); }
+.rank-colour-legendary { color: color-mix(in srgb, var(--rank-legendary) 70%, var(--text)); }
+.rank-colour-mythic { color: color-mix(in srgb, var(--rank-mythic) 70%, var(--text)); }
+.rank-colour-supreme { color: color-mix(in srgb, var(--rank-supreme) 70%, var(--text)); }
+.rank-colour-paragon-1 { color: color-mix(in srgb, var(--rank-paragon-1) 70%, var(--text)); }
+.rank-colour-paragon-2 { color: color-mix(in srgb, var(--rank-paragon-2) 70%, var(--text)); }
+.rank-colour-paragon-3 { color: color-mix(in srgb, var(--rank-paragon-3) 70%, var(--text)); }
+.rank-colour-paragon-4 { background: var(--rank-paragon-4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+span.weapon-line { display: inline-flex; gap: var(--sp-1); align-items: baseline; font-size: var(--font-sm); font-weight: 600; color: var(--muted); }
+.state-editor { display: grid; gap: var(--sp-2); }
+.choice-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.chip-choice { min-height: var(--control-h-compact); padding: 0 var(--sp-2); border-radius: var(--r-control); }
+.chip-choice[aria-pressed="true"] { border-color: var(--accent); background: var(--side-a-tile); }
 
 a { text-decoration: none; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-color); font-weight: 600; }
@@ -132,7 +178,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .master-detail-sidebar-head .filters { margin-bottom: 0; }
 .master-detail-main-head { border-bottom: 1px solid var(--border); }
 .master-detail-main-head h2, .master-detail-main-head h3 { margin: 0; }
-.master-detail-sidebar-scroll, .master-detail-main-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.master-detail-sidebar-scroll, .master-detail-main-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .master-detail-main-scroll { padding-bottom: var(--sp-4); }
 .master-detail-list { list-style: none; display: flex; flex-direction: column; gap: var(--sp-1); margin: 0; padding: 0; }
 .map-item { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 0; text-align: left; }
@@ -176,12 +222,12 @@ h4 { font-size: var(--font-md); margin: var(--sp-3) 0 var(--sp-2); color: var(--
 .two-col { display: grid; grid-template-columns: minmax(0, 420px) minmax(260px, 796px); gap: var(--sp-4); align-items: start; }
 /* The map column is as wide as the map, so long text below it cannot push the picker away. */
 /* The picker follows the page while the map is being filled, so it stays within reach. */
-.two-col > .picker { position: sticky; top: var(--sp-2); max-height: calc(100vh - var(--sp-4)); overflow-y: auto; padding-right: var(--sp-4); scrollbar-gutter: stable; }
+.two-col > .picker { position: sticky; top: var(--sp-2); max-height: calc(100vh - var(--sp-4)); overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 /* The search box and filters of a unit selector stay at the top while its icons scroll under them. */
 .picker-controls { position: sticky; top: 0; z-index: var(--z-control); padding-bottom: var(--sp-2); background: var(--bg); }
 .panel .picker-controls { background: var(--panel); }
 /* One label style: small and muted, above its control (.field) or beside it in a card (the others). */
-.field, .state label, .choice-label, .placed-label { color: var(--muted); font-size: var(--font-sm); }
+.field, .choice-label, .placed-label { color: var(--muted); font-size: var(--font-sm); }
 /* A group of radio buttons has no frame: its legend is the label and the choices sit in a row. */
 fieldset.field { flex-direction: row; flex-wrap: wrap; column-gap: var(--sp-4); margin: 0; padding: 0; border: 0; min-width: 0; }
 fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--muted); font-size: var(--font-sm); }
@@ -306,7 +352,7 @@ button.link { background: none; border: 0; color: inherit; font: inherit; font-w
 
 /* Rows of a portrait, a name and selects have no labels above the controls, so center them. */
 .attempts .filters { align-items: center; margin-bottom: var(--sp-1); }
-.hero-grid { list-style: none; margin: var(--sp-2) 0 0; padding: 0; max-height: 360px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: var(--sp-1); }
+.hero-grid { list-style: none; margin: var(--sp-2) 0 0; padding: 0; max-height: 360px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: var(--sp-1); scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .hero-group { grid-column: 1 / -1; margin-top: var(--sp-2); font-size: var(--font-sm); font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); }
 .hero-group:first-child { margin-top: 0; }
 .hero-icon { width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-1) var(--sp-1); font-size: var(--font-xs); line-height: 1.1; }
@@ -327,7 +373,7 @@ button.link { background: none; border: 0; color: inherit; font: inherit; font-w
 .enemy-chip { font-size: var(--font-sm); border-radius: var(--r-pill); }
 .enemy-chip.active { border-color: var(--accent); background: var(--panel-hi); }
 .enemy-picker h4 { margin: var(--sp-2) 0 var(--sp-1); font-size: var(--font-sm); color: var(--muted); }
-.chip-groups { max-height: 320px; overflow-y: auto; }
+.chip-groups { max-height: 320px; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .crop-editor { display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; margin: var(--sp-3) 0; }
 .crop-canvas { width: 270px; height: auto; aspect-ratio: 360 / 398; cursor: grab; touch-action: none; border-radius: var(--r-control); background: repeating-conic-gradient(#8883 0% 25%, transparent 0% 50%) 50% / 16px 16px; }
 .crop-canvas:active { cursor: grabbing; }
@@ -382,12 +428,12 @@ a.button:hover { background: var(--panel-hi); }
 .workspace-body { flex: 1; min-height: 0; }
 .workspace-body > div { height: 100%; }
 .workspace-body .two-col { height: 100%; }
-.workspace-body .two-col > div { min-height: 0; height: 100%; overflow-y: auto; }
+.workspace-body .two-col > div { min-height: 0; height: 100%; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .workspace-body .two-col > .picker { position: static; max-height: none; overflow: hidden; display: flex; flex-direction: column; padding-right: 0; }
 /* The profiles, side tabs and search stay in place; the units below them scroll. */
 .picker-fixed { flex: none; }
 /* The room for the scrollbar is inside the scrolling box, so the bar sits at the edge and not over the portraits. */
-.workspace-body .picker-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--sp-4); }
+.workspace-body .picker-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .details-panel { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-2); }
 .details-panel summary { cursor: pointer; color: var(--muted); font-size: var(--font-md); }
 
@@ -398,7 +444,7 @@ a.button:hover { background: var(--panel-hi); }
 .hex-slot-empty .hex-slot-inner { background: var(--bg); color: var(--muted); font-size: var(--font-xl); font-weight: 700; }
 .hex-slot:hover .hex-slot-inner { filter: brightness(1.25); }
 .overlay { position: fixed; inset: 0; z-index: var(--z-overlay); display: grid; place-items: center; background: var(--scrim); }
-.overlay-box { width: min(560px, 92vw); max-height: 86vh; overflow: auto; display: grid; gap: var(--sp-3); padding: var(--sp-3); border-color: var(--accent); }
+.overlay-box { width: min(560px, 92vw); max-height: 86vh; overflow: auto; display: grid; gap: var(--sp-3); padding: var(--sp-3); border-color: var(--accent); scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .overlay-box > h3:first-child { margin-top: 0; }
 .artifact-badge { position: relative; display: inline-flex; border-radius: var(--r-card); background: var(--panel-hi); padding: var(--sp-1); }
 .artifact-badge-a { box-shadow: 0 0 0 2px var(--side-a); }
@@ -412,7 +458,6 @@ a.button:hover { background: var(--panel-hi); }
 .weapon-stars-yellow { color: var(--star-yellow); }
 .weapon-stars-red { color: var(--star-red); }
 .weapon-stars-rainbow { background: linear-gradient(90deg, var(--star-red), #ffb347, #f7e34a, #5bd96b, #4da6ff, var(--star-purple)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.weapon-row { grid-column: 1 / -1; text-align: right; margin-top: -2px; }
 
 /* Long lists: weeks and collapsed battles */
 .week { margin-bottom: var(--sp-3); }
@@ -487,7 +532,7 @@ a.button:hover { background: var(--panel-hi); }
 
 /* A filter with several choices: a button opening a list of checkboxes */
 .multi-select { position: relative; display: inline-block; }
-.multi-select-list { position: absolute; z-index: var(--z-popover); top: 100%; left: 0; min-width: 100%; max-height: 18rem; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-2); margin-top: var(--sp-1); background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-control); white-space: nowrap; }
+.multi-select-list { position: absolute; z-index: var(--z-popover); top: 100%; left: 0; min-width: 100%; max-height: 18rem; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-2); margin-top: var(--sp-1); background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-control); white-space: nowrap; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 
 /* The weekly default: one card per team or fight, with the map drawn small */
 .weekly-slots { list-style: none; margin: var(--sp-3) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: stretch; }
@@ -498,7 +543,7 @@ a.button:hover { background: var(--panel-hi); }
 .map-picker-name { max-width: 100%; text-align: center; line-height: 1.2; overflow-wrap: anywhere; } /* the whole name, on as many lines as it needs */
 .map-thumb { display: block; }
 .map-thumb-none { display: grid; place-items: center; width: 72px; height: 66px; border: 1px dashed var(--border); border-radius: var(--r-control); color: var(--muted); font-size: var(--font-xl); }
-.map-picker-list { position: absolute; z-index: var(--z-popover); top: 100%; left: 0; width: 330px; max-height: 24rem; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); padding: var(--sp-2); margin-top: var(--sp-1); background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-control); }
+.map-picker-list { position: absolute; z-index: var(--z-popover); top: 100%; left: 0; width: 330px; max-height: 24rem; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); padding: var(--sp-2); margin-top: var(--sp-1); background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-control); scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .map-choice { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); min-width: 0; padding: var(--sp-1); font-size: var(--font-sm); line-height: 1.2; }
 .map-choice span:last-child { max-width: 100%; text-align: center; overflow-wrap: anywhere; }
  .map-choice.active { border-color: var(--accent); background: var(--panel-hi); }
@@ -509,7 +554,7 @@ a.button:hover { background: var(--panel-hi); }
   .master-detail-header { position: sticky; top: 0; z-index: var(--z-control); padding: var(--sp-2) 0; background: var(--bg); border-bottom: 1px solid var(--border); }
   .master-detail-columns { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
   .master-detail-sidebar, .master-detail-main { overflow: visible; }
-  .master-detail-sidebar-scroll, .master-detail-main-scroll { flex: 0 0 auto; overflow: visible; scrollbar-gutter: auto; }
+  .master-detail-sidebar-scroll, .master-detail-main-scroll { flex: 0 0 auto; overflow: visible; scrollbar-gutter: auto; padding-right: 0; }
 }
 
 /* The Formation ID of a formation: the code field, what is known about it and the stored codes of the same units */

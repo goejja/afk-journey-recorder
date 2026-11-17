@@ -20,6 +20,9 @@ function decodeEntities(text: string): string {
   );
 }
 
+/** Names the site writes short: Yaphalla lists Galahad as "Gala", which is not another hero. */
+const SITE_NAMES: Record<string, string> = { Gala: 'Galahad' };
+
 const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 
 /** Parses the hero or boss list page. Names come from the link, which is URL-encoded and entity-free. */
@@ -31,9 +34,10 @@ export function parseCards(html: string): Card[] {
     const portrait = decodeEntities(rawPortrait);
     const icons: Record<string, string> = {};
     for (const [, kind, value] of body!.matchAll(ICON)) icons[kind!] = value!;
+    const name = decodeURIComponent(decodeEntities(slug!));
     const tier = icons['tier']?.toUpperCase();
     cards.push({
-      name: decodeURIComponent(decodeEntities(slug!)),
+      name: SITE_NAMES[name] ?? name,
       imagePath: portrait,
       tier: tier === 'R' || tier === 'A' || tier === 'S' ? tier : null,
       class: icons['class'] ? capitalize(icons['class']) : null,

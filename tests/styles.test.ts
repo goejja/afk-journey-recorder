@@ -23,4 +23,14 @@ describe('stylesheet', () => {
     expect(css.match(/^\.chips\s*\{/gm)).toHaveLength(1);
     expect(css.match(/^\.chip\s*\{/gm)).toHaveLength(1);
   });
+
+  it('keeps room at the right edge of every box that scrolls, so a scrollbar never covers what is inside', () => {
+    // An overlay scrollbar (the macOS default) floats over the content and `scrollbar-gutter` alone reserves nothing for it.
+    const missing: string[] = [];
+    for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!/overflow(-y)?:\s*(auto|scroll)\b/.test(body!)) continue;
+      if (!/scrollbar-gutter:\s*stable/.test(body!) || !/padding-right:\s*var\(--scroll-room\)/.test(body!)) missing.push(selector!.trim().replace(/\s+/g, ' '));
+    }
+    expect(missing).toEqual([]);
+  });
 });

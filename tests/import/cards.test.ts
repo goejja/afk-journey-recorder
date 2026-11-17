@@ -10,7 +10,13 @@ const bossCard = `<a href="/bosses/King%20Croaker"><div><img alt="" src="/assets
 const apostropheBoss = `<a href="/bosses/Azkarion&#x27;Sol"><img src="/assets/images/hexes/boss/Azkarion&#x27;Sol.png"/>
 <img src="/assets/images/class/tank.png"/><img src="/assets/images/damage/physical.png"/></a>`;
 
+const galaCard = `<a href="/heroes/Gala"><img src="/assets/images/hexes/unit/Gala.png"/><img src="/assets/images/tier/s.png"/><img src="/assets/images/class/mage.png"/></a>`;
+
 describe('parseCards', () => {
+  it('names Yaphalla\'s "Gala" Galahad but keeps the site\'s image path to download', () => {
+    expect(parseCards(galaCard)[0]).toMatchObject({ name: 'Galahad', imagePath: '/assets/images/hexes/unit/Gala.png' });
+  });
+
   it('decodes numeric HTML entities in names and image paths', () => {
     expect(parseCards(apostropheBoss)[0]).toMatchObject({
       name: "Azkarion'Sol",
