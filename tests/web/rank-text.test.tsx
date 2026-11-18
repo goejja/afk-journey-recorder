@@ -18,6 +18,12 @@ describe('RankText', () => {
     expect(container.querySelector('.rank-colour-mythic')?.textContent).toBe('+');
   });
 
+  it('writes the two-letter name in the rank colour, with the "+" in the next colour, when short', () => {
+    const { container } = render(<RankText rank="Mythic+" short />);
+    expect(container.querySelector('.rank-colour-mythic')?.textContent).toBe('My');
+    expect(container.querySelector('.rank-colour-supreme')?.textContent).toBe('+');
+  });
+
   it('shows Not set without a colour when the rank is missing', () => {
     const { container } = render(<RankText rank={null} />);
     expect(container.textContent).toBe('Not set');

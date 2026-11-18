@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { RECORD_MAP_WIDTH } from '../web/map-size.js';
 
 const css = readFileSync('web/styles.css', 'utf8');
 
@@ -11,6 +12,25 @@ describe('stylesheet', () => {
 
   it('gives the map column a fixed width so text below the map cannot push the picker away', () => {
     expect(css).toMatch(/\.two-col\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*\d+px\)/);
+  });
+
+  it('makes the map column as wide as the record map, with no room to spare on its right', () => {
+    expect(css.match(/\.two-col\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*(\d+)px\)/)?.[1]).toBe(String(RECORD_MAP_WIDTH));
+    expect(css).not.toMatch(/\.side-banner\s*\{[^}]*\bwidth:/); // the banner takes the width of the map column
+  });
+
+  it('draws a Popover above a Dialog and below a toast, so it can open from inside one', () => {
+    const z = (name: string) => Number(css.match(new RegExp(`--z-${name}:\\s*(\\d+)`))?.[1]);
+    expect(z('overlay-popover')).toBeGreaterThan(z('overlay'));
+    expect(z('overlay-popover')).toBeLessThan(z('toast'));
+    expect(css).toMatch(/\.popover\s*\{[^}]*z-index:\s*var\(--z-overlay-popover\)/);
+  });
+
+  it('draws the rank tag of a tile above the artifact slots and below a Popover, at the smallest type size', () => {
+    const z = (name: string) => Number(css.match(new RegExp(`--z-${name}:\\s*(\\d+)`))?.[1]);
+    expect(z('tag')).toBeGreaterThan(z('control')); // the artifact slots are controls
+    expect(z('tag')).toBeLessThan(z('popover'));
+    expect(css).toMatch(/\.tile-tag\s*\{[^}]*z-index:\s*var\(--z-tag\)[^}]*font-size:\s*var\(--font-2xs\)/);
   });
 
   it('does not restyle the Stages list’s .unit with the map rings', () => {

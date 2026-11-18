@@ -12,6 +12,9 @@ export const MAP_TAGS = ['Arena', 'Stage'] as const;
 /** Left offset of each row in tiles, taken from the editor's layout; it gives the hex stagger. */
 export const ROW_OFFSETS = [3, 1.5, 1, 0.5, 0, 0.5, 0, 0.5, 2];
 
+/** How many tile widths wide a map drawn from these rows is: the right edge of its furthest row (the widest row, shifted by its offset). */
+export const mapColumns = (rowLengths: number[]): number => Math.max(0, ...rowLengths.map((length, row) => (ROW_OFFSETS[row] ?? 0) + length));
+
 export const TILE_LABELS: Record<TileType, string> = {
   [TILE.OPEN]: 'Open',
   [TILE.PLAYER]: 'Player deployment',

@@ -61,7 +61,7 @@ describe('queries', () => {
 
   it('shows a stage with its attempts, and ranks Dream Hunt compositions', async () => {
     const stage = await (await post('/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 5, mapName: 'Open' })).json();
-    await post('/api/attempts', { stageId: stage.id, outcome: 'Win', formation: { heroes: side(['A']), phantimal: null, assistHero: null, artifact: null} });
+    await post('/api/attempts', { stageId: stage.id, formation: { heroes: side(['A']), phantimal: null, assistHero: null, artifact: null} });
     const history = stageHistory(db, { season: 8, kind: 'Normal', number: 5 });
     expect(history.attempts).toHaveLength(1);
     expect((history.attempts[0] as any).heroes[0].name).toBe('A');

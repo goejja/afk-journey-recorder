@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { rosterChanges, type RecordedHero, type RosterChange } from '../../src/domain/roster-sync.js';
 import { isSummon } from '../../src/domain/units.js';
 import { api, type FormationInput, type Hero, type Rules } from '../backend.js';
-import { HeroStateFields } from '../admin/HeroStateFields.js';
+import { HeroStateButtons } from '../ui/HeroStateButtons.js';
 import { Dialog } from '../ui/Dialog.js';
 import { Portrait } from '../Portrait.js';
 import { heroStateText, toggled } from '../format.js';
@@ -141,13 +141,14 @@ function RosterSyncDialog({ pending, onClose }: { pending: Pending; onClose: () 
               </label>
               {ticked.has(c.hero) && (
                 <div className="sync-edit">
-                  <HeroStateFields
-                    rank={edited.get(c.hero)!.rank}
-                    equipment={edited.get(c.hero)!.equipment}
-                    rules={pending.rules}
-                    label={c.hero}
+                  <HeroStateButtons
+                    name={c.hero}
                     tier={pending.tiers.get(c.hero) ?? null}
-                    onChange={(rank, equipment) => setEdited((old) => new Map(old).set(c.hero, { rank, equipment }))}
+                    rank={edited.get(c.hero)!.rank || null}
+                    level={edited.get(c.hero)!.equipment === '' ? null : Number(edited.get(c.hero)!.equipment)}
+                    rules={pending.rules}
+                    unknown="Rank unknown"
+                    onChange={(rank, level) => setEdited((old) => new Map(old).set(c.hero, { rank: rank ?? '', equipment: level === null ? '' : String(level) }))}
                   />
                 </div>
               )}

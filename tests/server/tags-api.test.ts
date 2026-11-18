@@ -41,7 +41,7 @@ describe('tags on records', () => {
     await send('POST', '/api/pvp/battles', battle(['Other']));
     await send('POST', '/api/dream-hunt/attempts', fight(['mine']));
     const stage = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 1, mapName: 'Open' }));
-    await send('POST', '/api/attempts', { stageId: stage.id, outcome: 'Win', formation: team(['A']), tags: ['mine'] });
+    await send('POST', '/api/attempts', { stageId: stage.id, formation: team(['A']), tags: ['mine'] });
 
     expect(await json(send('GET', '/api/pvp/battles?tag=luna'))).toHaveLength(1);
     expect(await json(send('GET', '/api/dream-hunt/attempts?tag=mine'))).toHaveLength(1);

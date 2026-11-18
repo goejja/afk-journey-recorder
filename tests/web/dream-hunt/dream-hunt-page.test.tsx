@@ -413,11 +413,11 @@ describe('Dream Hunt page', () => {
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(document.querySelector('.map-slot .hex-slot')?.getAttribute('title')).toMatch(/Bladestorm/);
 
-    expect(screen.queryByRole('group', { name: 'Selected hero Evie' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Rank of Evie' })).toBeNull();
     await user.click(within(screen.getByRole('group', { name: 'Your formation map' })).getAllByRole('button', { name: /Player deployment|Evie/ })[0]!);
-    const panel = within(screen.getByRole('group', { name: 'Selected hero Evie' }));
-    expect((panel.getByLabelText('Evie rank') as HTMLSelectElement).value).toBe('Mythic+'); // from the roster
-    await user.selectOptions(panel.getByLabelText('Evie rank'), 'Elite');
+    expect(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Mythic+' }).getAttribute('aria-pressed')).toBe('true'); // from the roster
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Elite' }));
+    expect(document.querySelector('.tile-tag')).toBeNull(); // Dream Hunt draws no rank tags; the Stages form does
     await user.type(screen.getByLabelText('Clear time'), '1:10');
     await user.click(screen.getByRole('button', { name: 'Save fights' }));
     await waitFor(() => expect(posts()).toHaveLength(1));
@@ -450,7 +450,7 @@ describe('Dream Hunt page', () => {
       await placeHero(user, /^Evie/);
       await user.type(screen.getByLabelText('Clear time'), '9.69');
       await user.click(within(screen.getByRole('group', { name: 'Your formation map' })).getAllByRole('button', { name: /Player deployment|Evie/ })[0]!);
-      await user.selectOptions(within(screen.getByRole('group', { name: 'Selected hero Evie' })).getByLabelText('Evie rank'), rank);
+      await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: rank }));
       await user.click(screen.getByRole('button', { name: 'Save fights' }));
     };
 

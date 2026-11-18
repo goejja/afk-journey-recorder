@@ -38,6 +38,13 @@ function Harness({ release, outside }: { release: (hero: string) => void; outsid
   );
 }
 
+describe('the battle editor', () => {
+  it('has no assist hero for either side: a battle on this map has a phantimal instead', () => {
+    render(<Harness release={() => undefined} outside={{ current: null }} />);
+    expect(screen.queryByRole('button', { name: /assist hero/i })).toBeNull();
+  });
+});
+
 describe('placing a hero another team holds', () => {
   it('asks first, then takes the hero and places it', async () => {
     const release = vi.fn();

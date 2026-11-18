@@ -156,7 +156,7 @@ describe('a roster per profile', () => {
     await send('PUT', `/api/roster/B?profile=${friend.id}`, { rank: 'Mythic', equipmentLevel: null });
     await send('PUT', '/api/roster/A', { rank: 'Mythic', equipmentLevel: null });
     const stage = await json(send('POST', '/api/stages', { season: 8, kind: 'Normal', number: 1, mapName: 'Open' }));
-    const body = (hero: string) => ({ stageId: stage.id, outcome: 'Win', formation: { heroes: [{ tile: 38, hero }], phantimal: null, assistHero: null, artifact: null} });
+    const body = (hero: string) => ({ stageId: stage.id, formation: { heroes: [{ tile: 38, hero }], phantimal: null, assistHero: null, artifact: null} });
     expect((await send('POST', '/api/attempts', body('A'))).status).toBe(201);
     expect((await send('POST', '/api/attempts', body('B'))).status).toBe(400); // B is only in Friend's roster
   });

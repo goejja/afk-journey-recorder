@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextTile, ROW_LENGTHS, TILE, TILE_COUNT, validateMap, zoneEdges } from '../../src/domain/map.js';
+import { mapColumns, nextTile, ROW_LENGTHS, TILE, TILE_COUNT, validateMap, zoneEdges } from '../../src/domain/map.js';
 
 const cells = Array(TILE_COUNT).fill(TILE.OPEN);
 
@@ -74,5 +74,17 @@ describe('zoneEdges', () => {
 
   it('is empty when there is no such zone', () => {
     expect(zoneEdges(ROW_LENGTHS, cells, TILE.PLAYER)).toEqual({ outer: [], inner: [] });
+  });
+});
+
+describe('mapColumns', () => {
+  it('is the right edge of the furthest row of the standard map, 7 tiles, not the 8 it was drawn with', () => {
+    expect(mapColumns(ROW_LENGTHS)).toBe(7);
+  });
+
+  it('counts a row by its offset and its length', () => {
+    expect(mapColumns([2])).toBe(5); // the first row starts 3 tiles in
+    expect(mapColumns([2, 5])).toBe(6.5);
+    expect(mapColumns([])).toBe(0);
   });
 });

@@ -1,7 +1,4 @@
-import type { ArenaBattle, Hero, OpponentInput, Rules } from '../backend.js';
-import { HeroGrid } from '../HeroGrid.js';
-import { HeroStateFields } from '../admin/HeroStateFields.js';
-import { IconChoice } from '../IconChoice.js';
+import type { ArenaBattle, Hero, OpponentInput } from '../backend.js';
 import { isSummon } from '../../src/domain/units.js';
 import { addHeroUnits, addUnit, resolveUnit, type PlacedRow } from '../units.js';
 
@@ -83,58 +80,4 @@ export function placeWholeOpponent(value: OpponentState, hero: string, tile: num
     value: { ...value, placed: result.placed, assist: value.assist.hero === hero ? { hero: '', rank: '', equipment: '' } : value.assist },
     message: null,
   };
-}
-
-interface Props {
-  /** Every hero, not just the ones in your roster. */
-  heroes: Hero[];
-  rules: Rules;
-  /** Hide the assist hero and artifact, for planning where only the heroes matter. */
-  heroesOnly?: boolean;
-  /** Offer an assist hero; Arena battles have a phantimal instead. */
-  withAssist?: boolean;
-  value: OpponentState;
-  onChange: (value: OpponentState) => void;
-}
-
-/** What goes with Side B's placed heroes, from the after-battle summary: ranks and equipment, the assist hero and the artifact. */
-export function OpponentDetails({ heroes, rules, value, onChange, heroesOnly = false, withAssist = true }: Props) {
-  const placedNames = new Set(value.placed.map((p) => p.hero));
-
-  return (
-    <div>
-      {!heroesOnly && (
-        <div className="filters">
-          {withAssist && (
-          <IconChoice
-            label="Assist hero"
-            kind="hero"
-            value={value.assist.hero}
-            none="None"
-            onClear={() => onChange({ ...value, assist: { hero: '', rank: '', equipment: '' } })}
-          >
-            {(close) => (
-              <HeroGrid
-                heroes={heroes.filter((h) => !placedNames.has(h.name))}
-                selected={value.assist.hero || null}
-                onPick={(name) => (onChange({ ...value, assist: { hero: name, rank: '', equipment: '' } }), close())}
-                label="Assist heroes"
-              />
-            )}
-          </IconChoice>
-          )}
-          {withAssist && value.assist.hero && (
-            <HeroStateFields
-              rank={value.assist.rank}
-              equipment={value.assist.equipment}
-              rules={rules}
-              label="Assist"
-              tier={heroes.find((h) => h.name === value.assist.hero)?.tier}
-              onChange={(rank, equipment) => onChange({ ...value, assist: { ...value.assist, rank, equipment } })}
-            />
-          )}
-        </div>
-      )}
-    </div>
-  );
 }

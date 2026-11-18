@@ -17,6 +17,14 @@ const BY_NAME: Record<string, RankColour> = {
   'Paragon 4': 'paragon-4',
 };
 
+/** The short name of each rank for a small label: two letters, so Elite and Epic differ, or P1 to P4 for the Paragon ranks. */
+const ABBREVIATION: Record<string, string> = {
+  Rare: 'Ra', Elite: 'El', Epic: 'Ep', Legendary: 'Lg', Mythic: 'My', Supreme: 'Su', 'Paragon 1': 'P1', 'Paragon 2': 'P2', 'Paragon 3': 'P3', 'Paragon 4': 'P4',
+};
+
+/** The short name of a rank without its "+"; a name the game does not have is returned as it is. */
+export const rankAbbreviation = (name: string): string => ABBREVIATION[name] ?? name;
+
 export interface RankLook {
   fill: RankColour;
   /** The colour of the two small corners (bottom left, top right) of a "+" rank; null for the others. */

@@ -36,7 +36,7 @@ const group = (extra: object = {}, mode = 'Super League', hero = 'A') => send('P
 const dream = () => send('POST', '/api/dream-hunt/attempts', { boss: 'King Croaker', mapName: 'Open', outcome: 'Win', timeSeconds: 90, formation: team() });
 const stageAttempt = async () => {
   const stage = await json(send('POST', '/api/stages', { season: 7, phase: 0, kind: 'Normal', number: 100, mapName: 'Open' }));
-  return json(send('POST', '/api/attempts', { stageId: stage.id, outcome: 'Win', formation: { ...team(), assistHero: 'B' } }));
+  return json(send('POST', '/api/attempts', { stageId: stage.id, formation: { ...team(), assistHero: 'B' } }));
 };
 
 describe('the season a record was played in (ADR 0038)', () => {

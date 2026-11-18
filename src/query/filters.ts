@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { ARENA_MODES } from '../domain/arena.js';
 
 export interface Filters {
   /** Stage, Dream Hunt, Arena, Supreme Arena, Super League, Guild Duel or Treasure Rush. */
@@ -28,6 +29,20 @@ export const seasonsOf = (value: StatFilters['playedIn']): number[] => [value ??
 export const placeholders = (values: string[]) => values.map(() => '?').join(', ');
 
 export const MAX_ROWS = 500;
+
+/**
+ * The query CLI commands that say how well a hero, a layout or a formation does. With no --mode they read the PvP modes only: Dream Hunt
+ * asks the player to field the same formations all week and a Stage is a fixed puzzle, so neither says how strong a hero is (#68).
+ */
+export const PVP_BY_DEFAULT = new Set([
+  'hero-stats', 'pair-stats', 'trio-stats', 'partner-stats', 'hero-rows', 'hero-distribution', 'layout-report',
+  'formation-stats', 'formation-groups', 'formation-report', 'formation-profile', 'artifact-stats', 'map-stats', 'rule-stats',
+]);
+
+/** The modes a CLI statistic reads: the ones given, else the PvP modes for the commands of `PVP_BY_DEFAULT`, else every mode (undefined). */
+export function modesFor(command: string, given: string[] | undefined): string[] | undefined {
+  return given ?? (PVP_BY_DEFAULT.has(command) ? [...ARENA_MODES] : undefined);
+}
 
 /** One row per hero per record from that hero's side, with whether that side won. Arena Side B counts too, with the result flipped. */
 export const APPEARANCES = `

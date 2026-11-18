@@ -1,4 +1,5 @@
 import type { EquipmentCap } from './hero-state.js';
+import type { RankColour } from './rank-colour.js';
 
 /**
  * The levels of a hero's exclusive weapon that matter when recording a battle, as the game shows them
@@ -25,6 +26,10 @@ export const OLD_RESONANCE_LEVELS: Record<number, number> = { 30: 26, 35: 27, 40
 
 /** How a level is written: +10, or R1 to R4 for the Resonance levels. */
 export const weaponLabel = (level: number): string => (level >= FIRST_RESONANCE ? `R${level - FIRST_RESONANCE + 1}` : `+${level}`);
+
+/** The colour of a Resonance level: R1 to R4 go with the ranks Paragon 1 to 4 and are painted like them. Null below R1. */
+export const resonanceColour = (level: number): RankColour | null =>
+  level >= FIRST_RESONANCE ? (['paragon-1', 'paragon-2', 'paragon-3', 'paragon-4'] as const)[Math.min(level - FIRST_RESONANCE, 3)]! : null;
 
 export type StarColor = 'grey' | 'purple' | 'yellow' | 'red' | 'rainbow';
 

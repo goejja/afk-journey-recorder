@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rankLook } from '../../src/domain/rank-colour.js';
+import { rankAbbreviation, rankLook } from '../../src/domain/rank-colour.js';
 
 describe('rankLook', () => {
   it('paints a plain rank in its own colour with no corners', () => {
@@ -20,5 +20,18 @@ describe('rankLook', () => {
     expect(rankLook('Godlike')).toBeNull();
     expect(rankLook('Paragon 4+')).toBeNull();
     expect(rankLook('')).toBeNull();
+  });
+});
+
+describe('rankAbbreviation', () => {
+  it('gives every rank a name of its own, so Elite and Epic differ', () => {
+    const names = ['Rare', 'Elite', 'Epic', 'Legendary', 'Mythic', 'Supreme', 'Paragon 1', 'Paragon 2', 'Paragon 3', 'Paragon 4'];
+    const short = names.map(rankAbbreviation);
+    expect(short).toEqual(['Ra', 'El', 'Ep', 'Lg', 'My', 'Su', 'P1', 'P2', 'P3', 'P4']);
+    expect(new Set(short).size).toBe(names.length);
+  });
+
+  it('returns a name the game does not have as it is', () => {
+    expect(rankAbbreviation('Godlike')).toBe('Godlike');
   });
 });

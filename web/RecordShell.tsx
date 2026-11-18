@@ -56,6 +56,8 @@ interface Props {
   onNote: (note: string) => void;
   tags: string[];
   onTags: (tags: string[]) => void;
+  /** Tags the record carries that cannot be removed here, with why. */
+  lockedTags?: { tag: string; title: string }[];
   /** What only this mode has and always needs in view, on a line of its own under the common one: the profile of each side, the Round, the Union Levels, a stage's range and enemies. */
   fields?: ReactNode;
   /** A line under the result (the Round Deployment of a Super League battle), kept to one row so that it takes little height. */
@@ -103,7 +105,7 @@ function useFillWindow() {
  * line, then the result, note, tags and Formation IDs (the same line in every mode, all in view), then a line for what only the mode
  * has, then the team tabs, and the board in the rest of the window (ADR 0034).
  */
-export function RecordShell({ title, identity, result, note, onNote, tags, onTags, fields, deployment, formationIds, teams, onSetDefault, error, status, saveLabel, onSave, onSaveAnother, saveDisabled, onCancel, cancelLabel, children }: Props) {
+export function RecordShell({ title, identity, result, note, onNote, tags, onTags, lockedTags, fields, deployment, formationIds, teams, onSetDefault, error, status, saveLabel, onSave, onSaveAnother, saveDisabled, onCancel, cancelLabel, children }: Props) {
   const fill = useFillWindow();
   return (
     <section className="workspace" ref={fill.ref} style={fill.style}>
@@ -134,7 +136,7 @@ export function RecordShell({ title, identity, result, note, onNote, tags, onTag
             <span className="field-caption">Note</span>
             <input value={note} placeholder="Note" onChange={(e) => onNote(e.target.value)} />
           </label>
-          <TagInput value={tags} onChange={onTags} />
+          <TagInput value={tags} onChange={onTags} locked={lockedTags} />
           {formationIds}
         </div>
         {fields && <div className="workspace-row">{fields}</div>}

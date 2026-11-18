@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
 import { validateFormation } from '../../domain/formation.js';
 import type { HeroStateRules } from '../../domain/hero-state.js';
-import { normalizeTags } from '../../domain/tags.js';
+import { AFK_RANGE_TAG, normalizeTags } from '../../domain/tags.js';
 import { allowsPhantimal, isApex, validateStageEnemies, validateStageKey, type StageKind } from '../../domain/stage.js';
 import { dropEmptyBattles } from './battles.js';
 import { anyOf, limitParam, listParam } from '../params.js';
@@ -23,9 +23,15 @@ interface StageRow {
   map_name: string;
 }
 
-const OUTCOMES = ['Win', 'Loss'];
 /** The most stages one range of auto-battle clears may span. */
 const MOST_STAGES_IN_RANGE = 50;
+
+/** The tags of one attempt of a range: those given, without `AFK range`, and `AFK range` on every stage but the first. */
+function rangeTags(given: unknown, first: boolean): unknown {
+  if (given !== undefined && !Array.isArray(given)) return given; // check() refuses it
+  const own = ((given ?? []) as unknown[]).filter((t) => typeof t !== 'string' || t.trim().replace(/\s+/g, ' ').toLowerCase() !== AFK_RANGE_TAG.toLowerCase());
+  return first ? own : [...own, AFK_RANGE_TAG];
+}
 const DEFAULT_ATTEMPT_LIMIT = 200;
 
 /** Routes for stages, their Stage Enemies, attempts and the lists the attempt form needs. */
@@ -65,6 +71,21 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
   );
 
   // ---- stages -------------------------------------------------------------------------------
+
+  // A stage row with no attempt (its map and enemies saved, nothing cleared) is not a record, so it is not a box.
+  serve(app, stagesContract.grid, () => {
+    const season = currentSeason(db);
+    const rows = db
+      .prepare(
+        `SELECT s.kind, s.phase, s.number, MAX(s.season) AS newestSeason, MAX(s.season = ?) AS thisSeason
+         FROM stage s
+         WHERE EXISTS (SELECT 1 FROM stage_attempt sa WHERE sa.stage_id = s.id)
+         GROUP BY s.kind, s.phase, s.number
+         ORDER BY s.kind, s.phase, s.number`,
+      )
+      .all(season) as { kind: StageKind; phase: number; number: number; newestSeason: number; thisSeason: number }[];
+    return { season, boxes: rows.map((r) => ({ kind: r.kind, phase: r.phase, number: r.number, state: r.thisSeason ? ('cleared' as const) : ('older' as const), newestSeason: r.newestSeason })) };
+  });
 
   serve(app, stagesContract.list, (_, c) => {
     const filters: string[] = [];
@@ -183,7 +204,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
   function check(body: any, editing?: number): { error: string; status: 400 | 404 } | { stage: StageRow; buffLevel: number | null; note: string | null; tags: string[] | undefined } {
     const stage = findStage(Number(body?.stageId));
     if (!stage) return { error: 'Unknown stage', status: 404 as const };
-    if (!OUTCOMES.includes(body?.outcome)) return { error: 'The outcome must be Win or Loss', status: 400 as const };
+    if (body?.outcome !== undefined) return { error: 'A stage record is a clear and has no outcome', status: 400 as const };
     const apex = isApex(stage.kind);
     const buffLevel = apex ? (body.buffLevel ?? 0) : null;
     if (apex && (!Number.isInteger(buffLevel) || buffLevel < 0)) {
@@ -214,7 +235,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
 
   /** Inserts one checked attempt. Call inside a transaction. */
   function insertAttempt(body: any, checked: Exclude<ReturnType<typeof check>, { error: string }>): number {
-    const attemptId = Number(db.prepare("INSERT INTO attempt (mode, outcome, note, season) VALUES ('Stage', ?, ?, ?)").run(body.outcome, checked.note, currentSeason(db)).lastInsertRowid);
+    const attemptId = Number(db.prepare("INSERT INTO attempt (mode, outcome, note, season) VALUES ('Stage', 'Win', ?, ?)").run(checked.note, currentSeason(db)).lastInsertRowid);
     db.prepare('INSERT INTO stage_attempt (attempt_id, stage_id, buff_level) VALUES (?, ?, ?)').run(attemptId, checked.stage.id, checked.buffLevel);
     insertFormation(db, attemptId, body.formation, loadRoster(db), checked.stage.map_name);
     saveTags(db, attemptId, checked.tags);
@@ -230,10 +251,13 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
   });
 
   // The same formation cleared the stages `from` to `to` in auto-battle: one attempt per stage, saved together or not at all.
-  // Every stage is a win, except the last when `lastLost`. A stage that is not stored yet is created on `mapName` with no
+  // The first stage is the record the formation was set on and is saved as any record; each stage after it is a copy and carries
+  // `AFK range`.
+  // Every stage is a win. A stage that is not stored yet is created on `mapName` with no
   // enemies; one that is keeps its own map and enemies, and the formation must fit that map.
   serve(app, stagesContract.createRange, ({ body: given }) => {
     const body = given as any;
+    if (body?.lastLost !== undefined) return fail(400, 'A range records only stages that were cleared');
     const key = (number: unknown) => ({ season: body?.season, phase: body?.phase ?? 0, kind: body?.kind, number });
     const keyError = validateStageKey(key(body?.from)) ?? validateStageKey(key(body?.to));
     if (keyError) return fail(400, keyError);
@@ -248,7 +272,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
         const k = key(number);
         const existing = db.prepare('SELECT * FROM stage WHERE season = ? AND phase = ? AND kind = ? AND number = ?').get(k.season, k.phase, k.kind, number) as StageRow | undefined;
         const stageId = existing?.id ?? Number(db.prepare('INSERT INTO stage (season, phase, kind, number, map_name) VALUES (?, ?, ?, ?, ?)').run(k.season, k.phase, k.kind, number, body.mapName).lastInsertRowid);
-        const attempt = { stageId, outcome: body.lastLost && number === to ? 'Loss' : 'Win', buffLevel: body.buffLevel, note: body.note, tags: body.tags, formation: body.formation };
+        const attempt = { stageId, buffLevel: body.buffLevel, note: body.note, tags: rangeTags(body.tags, number === from), formation: body.formation };
         const checked = check(attempt);
         if ('error' in checked) return stop({ message: `Stage ${number}: ${checked.error}`, status: checked.status === 404 ? 404 : 400 }); // rolls back, stages created included
         saved.push(insertAttempt(attempt, checked));
@@ -266,7 +290,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
     const checked = check(body, id);
     if ('error' in checked) return fail(checked.status, checked.error);
     db.transaction(() => {
-      db.prepare('UPDATE attempt SET outcome = ?, note = ? WHERE id = ?').run(body.outcome, checked.note, id);
+      db.prepare("UPDATE attempt SET outcome = 'Win', note = ? WHERE id = ?").run(checked.note, id);
       db.prepare('UPDATE stage_attempt SET stage_id = ?, buff_level = ? WHERE attempt_id = ?').run(checked.stage.id, checked.buffLevel, id);
       replaceFormation(db, id, body.formation, loadRoster(db), checked.stage.map_name);
       saveTags(db, id, checked.tags);
@@ -279,8 +303,8 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
     stageId?: number;
     season?: number;
     phase?: number;
+    number?: number;
     kind?: string[];
-    outcome?: string[];
     tag?: string[];
     limit?: number;
   }
@@ -298,9 +322,9 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
     add('s.id = ?', filters.stageId);
     add('s.season = ?', filters.season);
     add('s.phase = ?', filters.phase);
-    for (const [column, values] of [['s.kind', filters.kind], ['a.outcome', filters.outcome]] as const) {
-      if (!values) continue;
-      const chosen = anyOf(column, values);
+    add('s.number = ?', filters.number);
+    if (filters.kind) {
+      const chosen = anyOf('s.kind', filters.kind);
       where.push(chosen.clause), params.push(...chosen.params);
     }
     if (filters.tag) {
@@ -310,7 +334,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
 
     const rows = db
       .prepare(
-        `SELECT a.id, a.outcome, a.note, a.created_at AS createdAt, a.season AS playedIn, sa.buff_level AS buffLevel,
+        `SELECT a.id, a.note, a.created_at AS createdAt, a.season AS playedIn, sa.buff_level AS buffLevel,
                 s.id AS stageId, s.season, s.phase, s.kind, s.number, s.map_name AS mapName
          FROM attempt a
          JOIN stage_attempt sa ON sa.attempt_id = a.id
@@ -324,7 +348,6 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
       id: r.id,
       createdAt: r.createdAt,
       season: r.playedIn,
-      outcome: r.outcome,
       note: r.note,
       buffLevel: r.buffLevel,
       stage: { id: r.stageId, season: r.season, phase: r.phase, kind: r.kind, number: r.number, mapName: r.mapName },
@@ -340,8 +363,8 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
         stageId: num('stageId'),
         season: num('season'),
         phase: num('phase'),
+        number: num('number'),
         kind: listParam(c, 'kind'),
-        outcome: listParam(c, 'outcome'),
         tag: listParam(c, 'tag'),
         limit: limitParam(c),
       })

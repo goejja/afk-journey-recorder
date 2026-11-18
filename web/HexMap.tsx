@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { nextTile, ROW_OFFSETS, TILE, TILE_CYCLE, TILE_LABELS, zoneEdges, type TileType } from '../src/domain/map.js';
+import { mapColumns, nextTile, ROW_OFFSETS, TILE, TILE_CYCLE, TILE_LABELS, zoneEdges, type TileType } from '../src/domain/map.js';
 
 const DEFAULT_TILE_WIDTH = 52;
 
@@ -24,9 +24,11 @@ interface HexMapProps {
   /** When set, clicking a tile asks for the next tile type at that index (map editing). */
   onChange?: (index: number, tile: TileType) => void;
   /** When set, clicking a clickable tile reports its index instead (placing units). */
-  onTileClick?: (index: number) => void;
+  onTileClick?: (index: number, button: HTMLButtonElement) => void;
   /** With onTileClick: which tiles accept clicks. Defaults to all. */
   isClickable?: (index: number, tile: number) => boolean;
+  /** A small label drawn under a tile, outside its hexagon so it is not clipped; null for none. */
+  tileTag?: (index: number, tile: number) => ReactNode;
   /** Content drawn on a tile instead of its default letter, for example a portrait. */
   renderTile?: (index: number, tile: number) => ReactNode;
   /** Tooltip for a tile, for example the name of the unit standing on it. */
@@ -45,7 +47,7 @@ interface HexMapProps {
   slotB?: ReactNode;
   /** Accessible name of the whole map, needed when a page shows more than one. */
   label?: string;
-  /** Width of a tile in pixels, to draw a small map; defaults to 52. */
+  /** Width of a tile in pixels, to draw a small or a large map; defaults to 52. The map is as wide as its furthest row. */
   tileWidth?: number;
 }
 
@@ -66,7 +68,7 @@ function ZoneOutlines({ rowLengths, cells, size }: { rowLengths: number[]; cells
   const lines = (segments: [[number, number], [number, number]][], className: string) =>
     segments.map(([a, b], i) => <line key={`${className}${i}`} className={className} x1={a[0] * sx} y1={a[1] * sy} x2={b[0] * sx} y2={b[1] * sy} />);
   return (
-    <svg className="zone-outlines" aria-hidden="true" width={size.width * 8} height={size.height + (rowLengths.length - 1) * (size.height - size.overlap)}>
+    <svg className="zone-outlines" aria-hidden="true" width={size.width * mapColumns(rowLengths)} height={size.height + (rowLengths.length - 1) * (size.height - size.overlap)}>
       {zones.map((z) => lines(z.inner, `zone-inner zone-${z.name}`))}
       {zones.map((z) => lines(z.outer, `zone-outer zone-${z.name}`))}
     </svg>
@@ -77,11 +79,11 @@ function ZoneOutlines({ rowLengths, cells, size }: { rowLengths: number[]; cells
 const slotStyle = (size: Dimensions, row: number, offset: number) => ({ left: offset * size.width, top: 8 + row * (size.height - size.overlap), width: size.width, height: size.height });
 
 /** Draws a map as staggered hex rows; clicking a tile steps it through the tile types. */
-export function HexMap({ rowLengths, cells, onChange, onTileClick, isClickable, renderTile, tileClassName, tileTitle, canDrop, onTileDrop, canDrag, onTileDragStart, onTileDragEnd, slotA, slotB, label, tileWidth }: HexMapProps) {
+export function HexMap({ rowLengths, cells, onChange, onTileClick, isClickable, renderTile, tileTag, tileClassName, tileTitle, canDrop, onTileDrop, canDrag, onTileDragStart, onTileDragEnd, slotA, slotB, label, tileWidth }: HexMapProps) {
   const size = dimensions(tileWidth ?? DEFAULT_TILE_WIDTH);
   let index = 0;
   return (
-    <div className="hexmap" role="group" aria-label={label ?? 'Map'} style={{ width: size.width * 8 }}>
+    <div className="hexmap" role="group" aria-label={label ?? 'Map'} style={{ width: size.width * mapColumns(rowLengths) }}>
       {rowLengths.map((length, row) => {
         const start = index;
         index += length;
@@ -126,10 +128,11 @@ export function HexMap({ rowLengths, cells, onChange, onTileClick, isClickable, 
                       onTileDragStart?.(tileIndex);
                     }}
                     onDragEnd={() => onTileDragEnd?.()}
-                    onClick={() => (onTileClick ? onTileClick(tileIndex) : onChange?.(tileIndex, nextTile(tile)))}
+                    onClick={(e) => (onTileClick ? onTileClick(tileIndex, e.currentTarget) : onChange?.(tileIndex, nextTile(tile)))}
                   >
                     {content ?? style.glyph}
                   </button>
+                  {tileTag?.(tileIndex, tile)}
                   {tip && (
                     <span className="tile-tip" role="tooltip">
                       {tip}

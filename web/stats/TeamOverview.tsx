@@ -2,7 +2,7 @@ import { weaponLabel } from '../../src/domain/exclusive-weapon.js';
 import { MAX_STANDARD_HEROES } from '../../src/domain/formation.js';
 import { isSummon, PAIR_PHANTIMALS } from '../../src/domain/units.js';
 import { Portrait } from '../Portrait.js';
-import { ArtifactBadge } from '../SelectedHero.js';
+import { ArtifactBadge } from '../ArtifactSlot.js';
 
 interface Props {
   heroes: { name: string; part?: string; rank: string | null; equipmentLevel: number | null }[];

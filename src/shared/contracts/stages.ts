@@ -31,12 +31,23 @@ export const Enemy = z.object({
 });
 export type Enemy = z.infer<typeof Enemy>;
 
+/** A stage of the Stages grid: the stage rows of one kind, phase and number across seasons, as `stagesContract.grid` lists it. */
+export const StageGridBox = z.object({
+  kind: StageKind,
+  /** 0 for Normal and Phantisomal, whose numbers run on across the phases. */
+  phase: z.number(),
+  number: z.number(),
+  /** `cleared`: a stage of the current season has an attempt; `older`: only an earlier season's has. */
+  state: z.enum(['cleared', 'older']),
+  newestSeason: z.number(),
+});
+export type StageGridBox = z.infer<typeof StageGridBox>;
+
 export const Attempt = z.object({
   id: z.number(),
   createdAt: z.string(),
   /** The season the record was played in (ADR 0038), set when it was saved; the stage's own season is `stage.season`. */
   season: z.number(),
-  outcome: z.enum(['Win', 'Loss']),
   note: z.string().nullable(),
   tags: z.array(z.string()),
   buffLevel: z.number().nullable(),
@@ -59,6 +70,8 @@ export const stagesContract = {
   enemies: endpoint({ method: 'GET', path: '/api/enemies', response: z.array(Enemy) }),
   /** The stages with this identity (any filter left out matches all). */
   list: endpoint({ method: 'GET', path: '/api/stages', query: z.object({ season: text, phase: text, kind: text, number: text }), response: z.array(StageSummary) }),
+  /** Every stage with at least one attempt, once per kind, phase and number across seasons, and the current season. */
+  grid: endpoint({ method: 'GET', path: '/api/stage-grid', response: z.object({ season: z.number(), boxes: z.array(StageGridBox) }) }),
   get: endpoint({ method: 'GET', path: '/api/stages/:id', response: Stage }),
   /** Finds the stage with this identity, or creates it on the given map. */
   findOrCreate: endpoint({ method: 'POST', path: '/api/stages', body: StageBody, response: Stage }),
@@ -69,7 +82,7 @@ export const stagesContract = {
   attempts: endpoint({
     method: 'GET',
     path: '/api/attempts',
-    query: z.object({ stageId: text, season: text, phase: text, kind: texts, outcome: texts, tag: texts, limit: text }),
+    query: z.object({ stageId: text, season: text, phase: text, kind: texts, number: text, tag: texts, limit: text }),
     response: z.array(Attempt),
   }),
   createAttempt: endpoint({ method: 'POST', path: '/api/attempts', body: AttemptBody, response: Attempt, status: 201 }),

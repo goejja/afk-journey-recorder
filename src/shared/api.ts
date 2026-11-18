@@ -92,7 +92,6 @@ export interface Advice {
 
 export interface StageAttemptInput {
   stageId: number;
-  outcome: 'Win' | 'Loss';
   buffLevel: number | null;
   note: string;
   tags?: string[];
@@ -104,8 +103,6 @@ export interface StageRangeInput extends Omit<StageKey, 'number'> {
   to: number;
   /** The map of the stages in the range that are not stored yet. */
   mapName: string;
-  /** The last stage of the range was lost (the others were won). */
-  lastLost: boolean;
   buffLevel: number | null;
   note: string;
   tags?: string[];

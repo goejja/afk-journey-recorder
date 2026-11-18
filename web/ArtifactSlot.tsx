@@ -6,6 +6,15 @@ import { Portrait } from './Portrait.js';
 import { UnitGrid } from './UnitGrid.js';
 import { Dialog, useConfirm } from './ui/Dialog.js';
 
+/** The chosen artifact drawn in a corner of the map, so the formation reads at a glance. */
+export function ArtifactBadge({ name, side, size = 40 }: { name: string; side: 'a' | 'b'; size?: number }) {
+  return (
+    <span className={`artifact-badge artifact-badge-${side}`} title={name}>
+      <Portrait kind="artifact" name={name} size={size} />
+    </span>
+  );
+}
+
 interface Props {
   /** Which side's slot this is: it sets the colour of the outline. */
   side: 'a' | 'b';
@@ -18,6 +27,8 @@ interface Props {
   onChange: (artifact: string) => void;
   /** Called when the overlay opens, for example to show this side in the selector. */
   onOpen?: () => void;
+  /** The size in pixels of the artifact drawn in the hexagon, to match the tile of the map it sits on; defaults to 36, for the 52px tile. */
+  size?: number;
   /** Only shows the artifact, with no overlay to change it (a preview of a saved record). */
   readOnly?: boolean;
   /** Lets an artifact another team holds be taken from it, once the player agrees. */
@@ -25,7 +36,7 @@ interface Props {
 }
 
 /** The artifact slot of a map: a hex tile that shows the chosen artifact, and opens an overlay to choose or clear it. */
-export function ArtifactSlot({ side, label, artifacts, value, currentSeason, onChange, onOpen, readOnly = false, borrow }: Props) {
+export function ArtifactSlot({ side, label, artifacts, value, currentSeason, onChange, onOpen, size = 36, readOnly = false, borrow }: Props) {
   const [open, setOpen] = useState(false);
   const { confirm, dialog } = useConfirm();
 
@@ -62,7 +73,7 @@ export function ArtifactSlot({ side, label, artifacts, value, currentSeason, onC
     return (
       <span className={`hex-slot hex-slot-${side}${value ? '' : ' hex-slot-empty'}`} title={value || undefined}>
         <span className="hex-slot-inner">
-          {value && <Portrait kind="artifact" name={value} size={36} />}
+          {value && <Portrait kind="artifact" name={value} size={size} />}
         </span>
       </span>
     );
@@ -78,7 +89,7 @@ export function ArtifactSlot({ side, label, artifacts, value, currentSeason, onC
         onClick={() => (setOpen(true), onOpen?.())}
       >
         <span className="hex-slot-inner">
-          {value ? <Portrait kind="artifact" name={value} size={36} /> : '+'}
+          {value ? <Portrait kind="artifact" name={value} size={size} /> : '+'}
         </span>
       </button>
       {open && (

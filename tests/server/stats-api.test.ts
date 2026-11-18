@@ -26,8 +26,12 @@ describe('stats', () => {
   it('gives win rate per stage with filters and a minimum', async () => {
     const a = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 10, mapName: 'Open' }));
     const b = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Phantisomal', number: 3, mapName: 'Open' }));
-    for (const outcome of ['Loss', 'Loss', 'Win']) await send('POST', '/api/attempts', { stageId: a.id, outcome, formation: team(['A']), tags: ['mine'] });
-    await send('POST', '/api/attempts', { stageId: b.id, outcome: 'Win', formation: team(['A']) });
+    // The API only records clears; a Loss can still be in an old database, so two are written straight to the table.
+    for (const outcome of ['Loss', 'Loss', 'Win']) {
+      const saved = await json(send('POST', '/api/attempts', { stageId: a.id, formation: team(['A']), tags: ['mine'] }));
+      db.prepare('UPDATE attempt SET outcome = ? WHERE id = ?').run(outcome, saved.id);
+    }
+    await send('POST', '/api/attempts', { stageId: b.id, formation: team(['A']) });
 
     const all = await json(send('GET', '/api/stats/stages'));
     expect(all.map((s: any) => [s.kind, s.number, s.games, s.wins, s.winRate])).toEqual([

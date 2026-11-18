@@ -43,7 +43,7 @@ const formation = (extra: object = {}) => ({
   ...extra,
 });
 const attempt = (stageId: number, extra: object = {}) =>
-  send('POST', '/api/attempts', { stageId, outcome: 'Win', formation: formation(), ...extra });
+  send('POST', '/api/attempts', { stageId, formation: formation(), ...extra });
 
 describe('stages', () => {
   it('creates a stage once and finds it again by identity', async () => {
@@ -102,7 +102,6 @@ describe('attempts', () => {
     const stage = await json(createStage());
     const created = await json(attempt(stage.id, { note: ' first try ' }));
     expect(created).toMatchObject({
-      outcome: 'Win',
       note: 'first try',
       buffLevel: null,
       formation: {
@@ -142,20 +141,22 @@ describe('attempts', () => {
     expect((await attempt(phanti.id, { formation: wrongSeason })).status).toBe(400);
   });
 
-  it('rejects heroes outside the roster, bad outcomes and unknown stages', async () => {
+  it('rejects heroes outside the roster, an outcome and unknown stages', async () => {
     const stage = await json(createStage());
     expect((await attempt(stage.id, { formation: formation({ heroes: [{ tile: 38, hero: 'D' }] }) })).status).toBe(400);
-    expect((await attempt(stage.id, { outcome: 'Draw' })).status).toBe(400);
+    expect((await attempt(stage.id, { outcome: 'Loss' })).status).toBe(400);
+    expect((await attempt(stage.id, { outcome: 'Win' })).status).toBe(400);
     expect((await attempt(9999)).status).toBe(404);
   });
 
   it('filters, lists newest first, and deletes with the formation', async () => {
     const stage = await json(createStage());
-    await attempt(stage.id, { outcome: 'Loss' });
-    await attempt(stage.id, { outcome: 'Win' });
+    await attempt(stage.id, { note: 'first' });
+    await attempt(stage.id, { note: 'second' });
     const all = await json(send('GET', '/api/attempts'));
-    expect(all.map((a: any) => a.outcome)).toEqual(['Win', 'Loss']);
-    expect(await json(send('GET', '/api/attempts?outcome=Loss'))).toHaveLength(1);
+    expect(all.map((a: any) => a.note)).toEqual(['second', 'first']);
+    expect(all[0]).not.toHaveProperty('outcome');
+    expect(db.prepare("SELECT DISTINCT outcome FROM attempt").pluck().all()).toEqual(['Win']);
     expect(await json(send('GET', '/api/attempts?kind=Phantisomal'))).toHaveLength(0);
 
     expect((await send('DELETE', `/api/attempts/${all[0].id}`)).status).toBe(204);
@@ -180,21 +181,34 @@ describe('attempts', () => {
 
 describe('a range of stages cleared by one formation', () => {
   const range = (extra: object = {}) =>
-    send('POST', '/api/attempts/range', { season: 8, phase: 0, kind: 'Normal', from: 100, to: 103, mapName: 'Open', formation: formation(), tags: ['AFK range'], ...extra });
+    send('POST', '/api/attempts/range', { season: 8, phase: 0, kind: 'Normal', from: 100, to: 103, mapName: 'Open', formation: formation(), ...extra });
 
-  it('saves one win per stage, with the same formation, creating the stages it lacks', async () => {
+  it('saves one clear per stage, with the same formation, creating the stages it lacks', async () => {
     await createStage({ number: 101 });
     const res = await range();
     expect(res.status).toBe(201);
     const { attempts } = await res.json();
-    expect(attempts.map((a: any) => [a.stage.number, a.outcome])).toEqual([[100, 'Win'], [101, 'Win'], [102, 'Win'], [103, 'Win']]);
-    expect(attempts.every((a: any) => a.formation.heroes.map((h: any) => h.name).join() === 'A,B' && a.tags.join() === 'AFK range')).toBe(true);
+    expect(attempts.map((a: any) => a.stage.number)).toEqual([100, 101, 102, 103]);
+    expect(db.prepare("SELECT DISTINCT outcome FROM attempt").pluck().all()).toEqual(['Win']);
+    expect(attempts.every((a: any) => a.formation.heroes.map((h: any) => h.name).join() === 'A,B')).toBe(true);
+    // the first stage is the record the formation was set on; each stage after it is a copy
+    expect(attempts.map((a: any) => a.tags)).toEqual([[], ['AFK range'], ['AFK range'], ['AFK range']]);
     expect(db.prepare('SELECT count(*) FROM stage').pluck().get()).toBe(4); // 101 was found, not duplicated
   });
 
-  it('records the last stage as lost when asked', async () => {
-    const { attempts } = await json(range({ lastLost: true }));
-    expect(attempts.map((a: any) => a.outcome)).toEqual(['Win', 'Win', 'Win', 'Loss']);
+  it('keeps the other tags on every stage, and does not let the first stage carry AFK range', async () => {
+    const { attempts } = await json(range({ tags: ['mine', 'afk  RANGE'] }));
+    expect(attempts.map((a: any) => [...a.tags].sort())).toEqual([['mine'], ['AFK range', 'mine'], ['AFK range', 'mine'], ['AFK range', 'mine']]);
+  });
+
+  it('saves a range of one stage untagged', async () => {
+    const { attempts } = await json(range({ from: 100, to: 100 }));
+    expect(attempts.map((a: any) => a.tags)).toEqual([[]]);
+  });
+
+  it('refuses a range that says its last stage was lost', async () => {
+    expect((await range({ lastLost: true })).status).toBe(400);
+    expect(db.prepare('SELECT count(*) FROM attempt').pluck().get()).toBe(0);
   });
 
   it('keeps the buff level of an Apex range on every stage', async () => {
@@ -280,5 +294,39 @@ describe('changing the kind of recorded stages', () => {
     expect((await change({ newKind: 'Apex Normal', phase: 0 })).status).toBe(400);
     expect((await change({ newKind: 'Normal' })).status).toBe(400);
     expect((await change({ from: 5, to: 1 })).status).toBe(400);
+  });
+});
+
+describe('the Stages grid', () => {
+  it('lists each kind, phase and number once across seasons, cleared when the current season has an attempt', async () => {
+    const [now, before, shell] = [
+      await json(createStage({ number: 5 })),
+      await json(createStage({ number: 5, season: 7 })), // the same box, an earlier season
+      await json(createStage({ number: 6 })), // saved with no attempt: not a record
+    ];
+    const old = await json(createStage({ number: 7, season: 7 }));
+    const apex = await json(createStage({ kind: 'Apex Normal', phase: 2, number: 5 }));
+    for (const stage of [now, before, old]) await attempt(stage.id);
+    await attempt(apex.id, { buffLevel: 3 });
+    expect(shell.id).toBeGreaterThan(0);
+
+    const { season, boxes } = await json(send('GET', '/api/stage-grid'));
+    expect(season).toBe(8);
+    expect(boxes).toEqual([
+      { kind: 'Apex Normal', phase: 2, number: 5, state: 'cleared', newestSeason: 8 },
+      { kind: 'Normal', phase: 0, number: 5, state: 'cleared', newestSeason: 8 },
+      { kind: 'Normal', phase: 0, number: 7, state: 'older', newestSeason: 7 },
+    ]);
+  });
+
+  it('reads the attempts of one box across seasons, newest first', async () => {
+    const seven = await json(createStage({ number: 5, season: 7 }));
+    const eight = await json(createStage({ number: 5 }));
+    const other = await json(createStage({ number: 6 }));
+    await attempt(seven.id, { note: 'old' });
+    await attempt(eight.id, { note: 'new' });
+    await attempt(other.id, { note: 'elsewhere' });
+    const found = await json(send('GET', '/api/attempts?kind=Normal&number=5'));
+    expect(found.map((a: any) => [a.note, a.stage.season])).toEqual([['new', 8], ['old', 7]]);
   });
 });

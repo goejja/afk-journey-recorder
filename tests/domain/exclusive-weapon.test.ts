@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { weaponLabel, weaponStars, WEAPON_CAPS, WEAPON_LEVELS } from '../../src/domain/exclusive-weapon.js';
+import { resonanceColour, weaponLabel, weaponStars, WEAPON_CAPS, WEAPON_LEVELS } from '../../src/domain/exclusive-weapon.js';
 import { allowedEquipmentLevels } from '../../src/domain/hero-state.js';
 
 describe('exclusive weapon levels', () => {
@@ -24,5 +24,12 @@ describe('exclusive weapon levels', () => {
     expect(allowedEquipmentLevels('Paragon 1', rules)).toEqual([0, 5, 10, 15, 20, 25, 26]);
     expect(allowedEquipmentLevels('Paragon 4', rules).at(-1)).toBe(29);
     expect(allowedEquipmentLevels('Legendary+', rules)).toEqual([]);
+  });
+});
+
+describe('resonanceColour', () => {
+  it('paints R1 to R4 like the ranks Paragon 1 to 4, and no other level', () => {
+    expect([26, 27, 28, 29].map(resonanceColour)).toEqual(['paragon-1', 'paragon-2', 'paragon-3', 'paragon-4']);
+    expect([0, 5, 25].map(resonanceColour)).toEqual([null, null, null]);
   });
 });

@@ -1,15 +1,15 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { isSummon, PARTNER_PHANTIMALS } from '../src/domain/units.js';
 import { selectableArtifacts } from '../src/domain/stage.js';
 import { useCurrentSeason } from './seasons.js';
 import { TILE } from '../src/domain/map.js';
 import type { Artifact, Attempt, FormationInput, GameMap, Hero, Phantimal, Rules } from './backend.js';
-import { HeroStateFields } from './admin/HeroStateFields.js';
 import { HeroGrid } from './HeroGrid.js';
 import { IconChoice } from './IconChoice.js';
 import { HexMap } from './HexMap.js';
+import { RECORD_ARTIFACT_SIZE, RECORD_PORTRAIT_SIZE, RECORD_TILE_WIDTH } from './map-size.js';
 import { PlacedUnits } from './PlacedUnits.js';
-import { SelectedHero, stateText } from './SelectedHero.js';
+import { HeroStatePopover, StateTag, stateText } from './HeroStatePopover.js';
 import { Portrait } from './Portrait.js';
 import { ArtifactSlot } from './ArtifactSlot.js';
 import { heldIcons, type Borrow } from './arena/borrow.js';
@@ -18,6 +18,7 @@ import { addHeroUnits, addUnit, firstFreeTile, phantimalAt, phantimalTileOf, mis
 import { derivePhantimal, type PhantimalOption } from './phantimal.js';
 import { PhantimalField } from './PhantimalField.js';
 import { useConfirm } from './ui/Dialog.js';
+import { HeroStateButtons } from './ui/HeroStateButtons.js';
 
 export interface FormationState {
   placed: PlacedRow[];
@@ -110,6 +111,8 @@ interface Props {
   heroSource?: 'roster' | 'all';
   /** Hide the assist hero and artifact, for planning where only the heroes matter. */
   heroesOnly?: boolean;
+  /** Draw each placed hero's rank and equipment under its tile; Dream Hunt turns it off. */
+  stateTags?: boolean;
   /** Accessible name of the map; Arena calls its sides A and B. */
   mapLabel?: string;
   /** When given (editing a saved record, or always for Arena), each hero's stored rank and equipment can be corrected. */
@@ -121,12 +124,14 @@ interface Props {
 }
 
 /** Placing your heroes on the map's player tiles, plus the assist hero and artifact. */
-export function FormationEditor({ map, heroes, artifacts, phantimals, season, value, onChange, unavailable, rules, heroSource = 'roster', mapLabel = 'Your formation map', heroesOnly = false, withAssist = true, borrow }: Props) {
+export function FormationEditor({ map, heroes, artifacts, phantimals, season, value, onChange, unavailable, rules, heroSource = 'roster', mapLabel = 'Your formation map', heroesOnly = false, stateTags = true, withAssist = true, borrow }: Props) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Picked | null>(null);
   const [moving, setMoving] = useState<number | null>(null); // the tile of a placed unit being dragged to another tile
   const [selected, setSelected] = useState<string | null>(null);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null); // the tile of the selected hero, which its Popover hangs under
+  const closeState = useCallback(() => setSelected(null), []);
   const { confirm, dialog } = useConfirm();
   const latestValue = useRef(value);
   latestValue.current = value;
@@ -153,10 +158,14 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
   const disabledIcons = unitsUnavailable(value.placed, stuck);
   const heroIcons = selectorHeroes(owned);
 
-  function clickTile(index: number) {
-    // Clicking a placed hero selects it for editing its rank and equipment (clicking it again lets go); the list below has the remove buttons.
+  function clickTile(index: number, button: HTMLElement) {
+    // Clicking a placed hero opens its rank and equipment (clicking it again closes them); the list below has the remove buttons.
     const placedHero = value.placed.find((p) => p.tile === index);
-    if (placedHero) return isSummon(placedHero) ? undefined : setSelected((old) => (old === placedHero.hero ? null : placedHero.hero)); // a summon has no rank or equipment
+    if (placedHero) {
+      if (isSummon(placedHero)) return; // a summon has no rank or equipment
+      setAnchor(button);
+      return setSelected((old) => (old === placedHero.hero ? null : placedHero.hero));
+    }
     if (phantimalAt(value.phantimal, index) !== undefined) return;
     if (picked) place(picked, index);
   }
@@ -219,6 +228,7 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
               rowLengths={map.rowLengths}
               cells={map.cells}
               label={mapLabel}
+              tileWidth={RECORD_TILE_WIDTH}
               onTileClick={clickTile}
               isClickable={(index, tile) => tile === TILE.PLAYER || value.placed.some((p) => p.tile === index)}
               tileTitle={(index) => {
@@ -231,19 +241,26 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
               }}
               tileClassName={(index) => [(dragging || moving !== null) && canDropOn(index) ? 'tile-droppable' : '', isSelectedTile(index) ? 'tile-selected' : ''].filter(Boolean).join(' ') || undefined}
               slotA={heroesOnly ? undefined : (
-                <ArtifactSlot side="a" label="artifact" artifacts={usableArtifacts} value={value.artifact} currentSeason={season === undefined ? currentSeason : undefined}
+                <ArtifactSlot side="a" label="artifact" size={RECORD_ARTIFACT_SIZE} artifacts={usableArtifacts} value={value.artifact} currentSeason={season === undefined ? currentSeason : undefined}
                   onChange={(artifact) => change({ ...value, artifact })} borrow={borrow} />
               )}
               canDrop={(index) => canDropOn(index)}
               onTileDrop={dropOnTile}
               canDrag={(index) => value.placed.some((p) => p.tile === index) || phantimalAt(value.phantimal, index) !== undefined}
-              onTileDragStart={setMoving}
+              onTileDragStart={(tile) => (setSelected(null), setMoving(tile))}
               onTileDragEnd={() => setMoving(null)}
+              tileTag={(index) => {
+                if (!stateTags) return null;
+                const hero = value.placed.find((p) => p.tile === index);
+                if (!hero || isSummon(hero)) return null;
+                const state = heroState(value, heroes, hero.hero, everyone);
+                return <StateTag rank={state.rank || null} equipment={state.equipment === '' ? null : Number(state.equipment)} />;
+              }}
               renderTile={(index) => {
                 const hero = value.placed.find((p) => p.tile === index);
-                if (hero) return <span className={`map-unit map-unit-a${isSelectedTile(index) ? ' map-unit-selected' : ''}`}><Portrait kind="hero" name={rowName(hero)} size={30} /></span>;
+                if (hero) return <span className={`map-unit map-unit-a${isSelectedTile(index) ? ' map-unit-selected' : ''}`}><Portrait kind="hero" name={rowName(hero)} size={RECORD_PORTRAIT_SIZE} /></span>;
                 const part = phantimalAt(value.phantimal, index);
-                if (part) return <span className="map-unit map-unit-a"><Portrait kind="phantimal" name={part} size={30} /></span>;
+                if (part) return <span className="map-unit map-unit-a"><Portrait kind="phantimal" name={part} size={RECORD_PORTRAIT_SIZE} /></span>;
                 return undefined;
               }}
             />
@@ -264,15 +281,16 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
                 ...(value.phantimal ? [{ key: 'phantimal', name: value.phantimal.name, kind: 'phantimal' as const, onRemove: () => change({ ...value, phantimal: null, phantimalChoice: '' }) }] : []),
               ]}
             />
-            {rules && selected && selectedTile !== undefined && (
-              <SelectedHero
+            {rules && selected && selectedTile !== undefined && anchor && (
+              <HeroStatePopover
+                anchor={anchor}
                 name={selected}
                 tier={heroes.find((h) => h.name === selected)?.tier}
                 rank={selectedState.rank}
                 equipment={selectedState.equipment}
                 rules={rules}
                 onChange={(rank, equipment) => change(withHeroState(value, selected, rank, equipment))}
-                onClose={() => setSelected(null)}
+                onClose={closeState}
               />
             )}
             </div>
@@ -404,6 +422,7 @@ interface DetailsProps {
 /** What goes with the placed heroes besides the map: the assist hero (the artifact has its own slot on the map). */
 export function FormationDetails({ value, onChange, heroes, owned, unavailable, rules, everyone, heroesOnly, withAssist = true }: DetailsProps) {
   const placedNames = new Set(value.placed.map((p) => p.hero));
+  const assistState = heroState(value, heroes, value.assist, everyone);
   return (
     <>
       {!heroesOnly && (
@@ -420,13 +439,14 @@ export function FormationDetails({ value, onChange, heroes, owned, unavailable, 
             )}
           </IconChoice>}
           {withAssist && value.assist && rules && (
-            <HeroStateFields
-              rank={heroState(value, heroes, value.assist, everyone).rank}
-              equipment={heroState(value, heroes, value.assist, everyone).equipment}
+            <HeroStateButtons
+              name={value.assist}
+              tier={heroes.find((h) => h.name === value.assist)?.tier ?? null}
+              rank={assistState.rank || null}
+              level={assistState.equipment === '' ? null : Number(assistState.equipment)}
               rules={rules}
-              label="Assist"
-              tier={heroes.find((h) => h.name === value.assist)?.tier}
-              onChange={(rank, equipment) => onChange(withHeroState(value, value.assist, rank, equipment))}
+              unknown="Rank unknown"
+              onChange={(rank, level) => onChange(withHeroState(value, value.assist, rank ?? '', level === null ? '' : String(level)))}
             />
           )}
         </div>

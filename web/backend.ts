@@ -150,6 +150,8 @@ export const api = {
   enemies: () => call(stagesContract.enemies),
   /** The stages with this identity, without creating one; none while the stage has not been recorded. */
   findStages: (key: StageKey) => call(stagesContract.list, { query: { season: String(key.season), phase: String(key.phase ?? 0), kind: key.kind, number: String(key.number) } }),
+  /** Every stage with a record, once per kind, phase and number across seasons, and the current season. */
+  stageGrid: () => call(stagesContract.grid),
   stage: (id: number) => call(stagesContract.get, { params: { id: String(id) } }),
   findOrCreateStage: (key: StageKey & { mapName: string }) => call(stagesContract.findOrCreate, { body: key }),
   saveStage: (id: number, mapName: string, enemies: Stage['enemies']) =>

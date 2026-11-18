@@ -18,7 +18,11 @@ const PAGES = {
 };
 type PageKey = keyof typeof PAGES;
 
-const fromHash = (): PageKey => (Object.hasOwn(PAGES, window.location.hash.slice(1)) ? (window.location.hash.slice(1) as PageKey) : 'roster');
+/** The page the address names; what follows a `?` belongs to the page (the Stages grid keeps its state there). */
+const fromHash = (): PageKey => {
+  const name = window.location.hash.slice(1).split('?')[0]!;
+  return Object.hasOwn(PAGES, name) ? (name as PageKey) : 'roster';
+};
 
 export function App() {
   const [page, setPage] = useState<PageKey>(fromHash());

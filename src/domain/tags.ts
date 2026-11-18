@@ -1,3 +1,6 @@
+/** The tag of an attempt that copies the formation set on the first stage of an AFK range. */
+export const AFK_RANGE_TAG = 'AFK range';
+
 const MAX_TAGS = 20;
 const MAX_TAG_LENGTH = 40;
 

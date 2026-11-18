@@ -6,7 +6,7 @@ import { problemWith } from '../src/domain/schema.js';
 import { formationProfile, formationReport } from '../src/query/formation-profile.js';
 import { factionMismatches } from '../src/query/faction-mismatches.js';
 import { reviewRun } from '../src/query/review-run.js';
-import { dreamHuntBest, formationIds, parseDeployment, profiles, heroInfo, heroStats, pairStats, partnerStats, positionalPartners, artifactStats, formationGroups, formationStats, groupCounterReport, counterSummary, counterRule, heroDistribution, heroRowStats, mapStats, ruleStats, playerIds, playerStats, roster, trioStats, runSelect, scenario, scenarios, stageHistory, stageStats, summary } from '../src/query/index.js';
+import { dreamHuntBest, formationIds, parseDeployment, profiles, heroInfo, heroStats, pairStats, partnerStats, positionalPartners, artifactStats, formationGroups, formationStats, groupCounterReport, counterSummary, counterRule, heroDistribution, heroRowStats, mapStats, ruleStats, playerIds, modesFor, playerStats, roster, trioStats, runSelect, scenario, scenarios, stageHistory, stageStats, summary } from '../src/query/index.js';
 import { cliCommands, cliUsage } from '../src/advisor/index.js';
 
 const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run query -- <command> [options]
@@ -49,7 +49,7 @@ ${cliUsage}
 
 The statistics (hero-stats, pair-stats, trio-stats, formation-stats, formation-groups, artifact-stats, map-stats, rule-stats, hero-rows, hero-distribution) also take --player ID_OR_PROFILE_NAME, repeated: only the sides of those Players. They and player-stats also take --exclude-default: leave out the sides of the default profile's Player ID.
 
-Modes: Stage, Dream Hunt, Arena, Supreme Arena, Super League, Guild Duel, Treasure Rush. Database: data/afk.db, or --db PATH or AFK_DB.`;
+Modes: Stage, Dream Hunt, Arena, Supreme Arena, Super League, Guild Duel, Treasure Rush. With no --mode, hero-stats, pair-stats, trio-stats, partner-stats, hero-rows, hero-distribution, layout-report, the formation-* commands, artifact-stats, map-stats and rule-stats read the PvP modes only (Arena, Supreme Arena, Super League, Guild Duel, Treasure Rush): Dream Hunt reuses the same formations all week and a Stage is a fixed puzzle, so neither says how strong a hero is. Give --mode (a comma-separated list) to read others. Database: data/afk.db, or --db PATH or AFK_DB.`;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -80,7 +80,8 @@ const db = openReadonly(dbPath);
 try {
   // Commands that compare one enemy or team take one mode and tag; the statistics take several (modes comma-separated, --tag repeated).
   const filters = { mode: values.mode, tag: values.tag?.at(-1) };
-  const statFilters = { mode: values.mode?.split(',').map((m) => m.trim()), tag: values.tag, player: values.player && playerIds(db, values.player), playedIn: values['played-in']?.split(',').map((s) => s.trim()), excludeDefault: values['exclude-default'] };
+  const statFilters = { mode: modesFor(command, values.mode?.split(',').map((m) => m.trim())), tag: values.tag, player: values.player && playerIds(db, values.player), playedIn: values['played-in']?.split(',').map((s) => s.trim()), excludeDefault: values['exclude-default'] };
+  if (values.mode === undefined && statFilters.mode) console.error('Reading the PvP modes only (Dream Hunt and Stage are left out of hero and formation statistics); pass --mode to choose others.');
   const result = (() => {
     switch (command) {
       case 'summary': return summary(db);

@@ -69,11 +69,15 @@
   --sp-5: 24px;
   /* Room kept at the right edge of every scrolling box, so its scrollbar (also the overlay kind that floats over the content) never covers what is inside */
   --scroll-room: var(--sp-4);
+  --stage-box: 44px;
+  --stage-cleared: color-mix(in srgb, var(--win) 40%, var(--panel));
+  --stage-older: color-mix(in srgb, var(--warn) 40%, var(--panel));
   /* Corners: controls, cards and panels, pills */
   --r-control: 6px;
   --r-card: 10px;
   --r-pill: 999px;
   /* Type: one scale for every text on the page */
+  --font-2xs: 10px;
   --font-xs: 11px;
   --font-sm: 12px;
   --font-md: 13px;
@@ -82,8 +86,10 @@
   --font-xl: 22px;
   /* Layers: a sticky control, popovers, the overlay, toasts */
   --z-control: 3;
+  --z-tag: 4; /* the rank tag of a map tile: above the artifact slots, which are controls */
   --z-popover: 20;
   --z-overlay: 50;
+  --z-overlay-popover: 55; /* a Popover opened from inside a Dialog */
   --z-toast: 60;
   /* Controls: every input, select and button is one height, compact ones in repeated rows another */
   --control-h: 32px;
@@ -146,10 +152,16 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 .state-value { display: inline-flex; gap: var(--sp-1); align-items: baseline; min-height: 0; padding: var(--sp-1) var(--sp-2); border: 1px solid transparent; border-radius: var(--r-control); background: transparent; }
 .state-value:hover, .state-value[aria-expanded="true"] { background: var(--panel-hi); border-color: var(--border); }
 /* A short list under the control that opened it; its place is set in code. A list taller than the room left scrolls. */
-.popover { position: fixed; z-index: var(--z-popover); display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); background: var(--panel); border: 1px solid var(--accent); border-radius: var(--r-control); }
+.popover { position: fixed; z-index: var(--z-overlay-popover); display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); background: var(--panel); border: 1px solid var(--accent); border-radius: var(--r-control); }
 .popover button { display: flex; justify-content: center; gap: var(--sp-1); min-height: var(--control-h-compact); border: 0; border-radius: 0; background: transparent; white-space: nowrap; }
 .popover button:hover:not(:disabled) { background: var(--panel-hi); }
 .popover button[aria-pressed="true"] { background: var(--side-a-tile); box-shadow: inset 3px 0 0 var(--accent); }
+/* A Popover of two lists side by side, each under its own heading: the rank and the equipment of a hero in a record. */
+.popover-columns { display: flex; align-items: flex-start; }
+.popover-column { display: flex; flex-direction: column; }
+.popover-column + .popover-column { border-left: 1px solid var(--border); }
+.popover-head { padding: var(--sp-1) var(--sp-3); font-size: var(--font-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.filters .state-value { align-self: center; }
 .state-fixed { padding: var(--sp-1) 0; }
 .card-main:disabled { opacity: 1; cursor: default; }
 .rank-text { font-size: var(--font-sm); font-weight: 700; color: var(--muted); }
@@ -219,7 +231,8 @@ h3 { font-size: var(--font-base); margin: var(--sp-4) 0 var(--sp-2); }
 .chip button { border: 0; background: transparent; padding: 0 var(--sp-2); color: var(--muted); }
 
 h4 { font-size: var(--font-md); margin: var(--sp-3) 0 var(--sp-2); color: var(--muted); }
-.two-col { display: grid; grid-template-columns: minmax(0, 420px) minmax(260px, 796px); gap: var(--sp-4); align-items: start; }
+/* The map column is 448px: the 7 tile widths of the record map at 64px (RECORD_MAP_WIDTH in web/map-size.ts). */
+.two-col { display: grid; grid-template-columns: minmax(0, 448px) minmax(260px, 796px); gap: var(--sp-4); align-items: start; }
 /* The map column is as wide as the map, so long text below it cannot push the picker away. */
 /* The picker follows the page while the map is being filled, so it stays within reach. */
 .two-col > .picker { position: sticky; top: var(--sp-2); max-height: calc(100vh - var(--sp-4)); overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
@@ -261,12 +274,38 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .attempt-top:has(> .battle-info) { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'info actions' 'teams teams'; row-gap: var(--sp-2); }
 .attempt-top:has(> .battle-info) > .attempt-info { grid-area: info; }
 .attempt-top:has(> .battle-info) > .attempt-actions { grid-area: actions; }
-/* A stage attempt on one line: the result, the stage, the formation, the tags, the buttons. */
-.stage-row { display: grid; grid-template-columns: 3.5rem 12rem 4.5rem 9.5rem 2.5rem 26rem minmax(0, 1fr) auto; column-gap: var(--sp-3); align-items: center; }
-.stage-row .team { margin-top: 0; }
-.stage-row > .badge { justify-self: start; }
+/* A record of a stage in the panel of its box: the season, the date, the buff level, the tags, the buttons. */
+.stage-record { display: grid; grid-template-columns: 3rem 9.5rem 4.5rem minmax(0, 1fr) auto; column-gap: var(--sp-3); align-items: center; }
+.stage-record > .badge { justify-self: start; }
+.record-map { margin-top: var(--sp-2); }
 .stage-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stage-row .tags-cell { flex-wrap: nowrap; min-width: 0; }
+.stage-record .tags-cell { flex-wrap: nowrap; min-width: 0; }
+
+/* The Stages grid: a lane of boxes, one per stage number, in three states. */
+.stage-toolbar .tabs { margin-bottom: 0; }
+.stage-jump { display: flex; gap: var(--sp-2); } /* not .actions, whose bottom margin would lift these controls above the tabs and buttons */
+.stage-key { list-style: none; display: flex; flex-wrap: wrap; gap: var(--sp-4); margin: 0 0 var(--sp-4); padding: 0; font-size: var(--font-sm); }
+.stage-key li { display: flex; align-items: center; gap: var(--sp-2); }
+.stage-swatch { width: var(--sp-3); height: var(--sp-3); border-radius: 50%; border: 1px solid var(--border); background: var(--panel); }
+.stage-swatch.cleared { background: var(--win); border-color: var(--win); }
+.stage-swatch.older { background: var(--warn); border-color: var(--warn); }
+.stage-lane { margin-bottom: var(--sp-4); }
+.stage-lane-head { display: flex; width: 100%; align-items: center; gap: var(--sp-3); text-align: left; }
+.stage-lane-head .muted { margin-left: auto; }
+.chevron { flex: none; }
+.chevron.open { transform: rotate(90deg); }
+.stage-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--stage-box)); gap: var(--sp-2); margin-top: var(--sp-3); }
+.stage-box { width: var(--stage-box); height: var(--stage-box); min-height: 0; padding: 0; border-radius: var(--r-control); background: var(--panel); color: var(--muted); font-size: var(--font-md); }
+.stage-box.cleared { background: var(--stage-cleared); border-color: var(--win); color: var(--text); }
+.stage-box.older { background: var(--stage-older); border-color: var(--warn); color: var(--text); }
+.stage-box.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stage-box.flash { animation: stage-flash 0.5s ease-in-out 3; }
+@keyframes stage-flash { 50% { background: var(--accent); color: var(--on-color); } }
+@media (prefers-reduced-motion: reduce) { .stage-box.flash { animation: none; outline: 2px solid var(--accent); } }
+.stage-panel { grid-column: 1 / -1; }
+.stage-panel-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.stage-panel-head h3 { margin: 0; }
+.stage-panel-head .attempt-actions { margin-left: auto; }
 .battle-teams { grid-area: teams; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); min-width: 0; }
 .battle-fights { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: grid; gap: var(--sp-2); }
 .battle-note { margin-bottom: 0; } /* the card's own padding is the space below the last line */
@@ -281,9 +320,9 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .tabs { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-4); }
 .tabs button.active { background: var(--accent); border-color: var(--accent); color: var(--on-color); font-weight: 600; }
 /* One card: the panels of a page, a record in a list, a weekly slot, the selected hero, a dialog. Compact ones are for cards inside a grid or a row; nested ones sit inside a card, one step darker. */
-.panel, .attempt, .weekly-slot, .selected-hero, .overlay-box, .crop-editor { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-3); }
+.panel, .attempt, .weekly-slot, .overlay-box, .crop-editor { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-3); }
 .panel { margin-bottom: var(--sp-4); }
-.weekly-slot, .selected-hero { padding: var(--sp-2); }
+.weekly-slot { padding: var(--sp-2); }
 .battle-fight, .estimate, .team-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-control); padding: var(--sp-2); }
 .team-box { border-width: 2px; }
 .team-won { border-color: var(--win-soft); }
@@ -377,6 +416,8 @@ button.link { background: none; border: 0; color: inherit; font: inherit; font-w
 .crop-editor { display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; margin: var(--sp-3) 0; }
 .crop-canvas { width: 270px; height: auto; aspect-ratio: 360 / 398; cursor: grab; touch-action: none; border-radius: var(--r-control); background: repeating-conic-gradient(#8883 0% 25%, transparent 0% 50%) 50% / 16px 16px; }
 .crop-canvas:active { cursor: grabbing; }
+/* The rank and equipment of the hero on a tile: next to the tile, not in it, which is clipped to the hexagon. Above the tiles of the next row. */
+.tile-tag { position: absolute; left: 50%; bottom: 0; z-index: var(--z-tag); transform: translateX(-50%); display: inline-flex; gap: 0; align-items: baseline; padding: 0 var(--sp-1); font-size: var(--font-2xs); font-weight: 700; line-height: 1.35; white-space: nowrap; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-pill); pointer-events: none; }
 /* A tile's tooltip is drawn by hand: the browser's own takes a second to appear and is clipped by the hexagon. */
 .hex-cell { position: relative; flex: none; }
 .hex-cell:hover { z-index: var(--z-popover); }
@@ -389,7 +430,7 @@ button.link { background: none; border: 0; color: inherit; font: inherit; font-w
 .placed li { display: inline-flex; align-items: center; gap: var(--sp-1); min-height: var(--control-h-compact); padding: 0 var(--sp-1); border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--panel-hi); font-size: var(--font-sm); }
 .placed li button { border: 0; background: transparent; padding: 0 var(--sp-2); color: var(--muted); }
 
-.side-banner { width: 416px; box-sizing: border-box; padding: var(--sp-1) var(--sp-3); border-radius: var(--r-control); font-size: var(--font-sm); font-weight: 700; color: var(--on-color); opacity: 0.55; }
+.side-banner { box-sizing: border-box; padding: var(--sp-1) var(--sp-3); border-radius: var(--r-control); font-size: var(--font-sm); font-weight: 700; color: var(--on-color); opacity: 0.55; }
 .side-banner.active { opacity: 1; }
 .side-banner-a { background: var(--side-a); }
 .side-banner-b { background: var(--side-b); }
@@ -399,7 +440,6 @@ button.link { background: none; border: 0; color: inherit; font: inherit; font-w
 .hex.tile-droppable { filter: brightness(1.35); }
 .picker .hero-grid { max-height: none; overflow: visible; }
 .hero-icon[draggable='true'] { cursor: grab; }
-.picker-extras { margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
 a.button { display: inline-flex; align-items: center; min-height: var(--control-h); padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-control); background: var(--panel); color: var(--text); text-decoration: none; }
 a.button:hover { background: var(--panel-hi); }
 
@@ -450,7 +490,6 @@ a.button:hover { background: var(--panel-hi); }
 .artifact-badge-a { box-shadow: 0 0 0 2px var(--side-a); }
 .artifact-badge-b { box-shadow: 0 0 0 2px var(--side-b); }
 .map-unit-selected { box-shadow: 0 0 0 3px var(--text), 0 0 8px 3px var(--glow); }
-.selected-hero { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); border-color: var(--accent); }
 
 .weapon-stars { font-size: var(--font-md); letter-spacing: 1px; white-space: nowrap; }
 .weapon-stars-grey { color: var(--star-grey); }

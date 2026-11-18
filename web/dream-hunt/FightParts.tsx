@@ -77,6 +77,7 @@ export function FightBoard({ draft, reference, unavailable, borrow, onChange }: 
       borrow={borrow}
       rules={reference.heroRules}
       withAssist={false}
+      stateTags={false}
     />
   );
 }

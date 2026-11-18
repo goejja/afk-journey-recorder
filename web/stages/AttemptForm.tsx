@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { allowsPhantimal, isApex, PHASES, STAGE_KINDS } from '../../src/domain/stage.js';
+import { AFK_RANGE_TAG } from '../../src/domain/tags.js';
 import {
   api,
   type Artifact,
@@ -33,6 +34,8 @@ export interface AttemptFormProps {
   editing?: Attempt;
   /** An attempt to start a new one from: the same stage, formation, buff level and tags, but not its result or note. */
   cloneFrom?: Attempt;
+  /** The stage a new attempt starts on, from a box of the Stages grid; the season is the current one. */
+  prefill?: { kind: StageKind; phase: number; number: number; mapName?: string };
   rules?: Rules;
   onSaved: () => void;
   /** A record was saved with "Save and record another": the form stays open, the list behind it can refresh. */
@@ -41,23 +44,22 @@ export interface AttemptFormProps {
 }
 
 /** The tag put on the attempts of a range of stages cleared by one formation in auto-battle. */
-const AFK_RANGE_TAG = 'AFK range';
 
-export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, editing, cloneFrom, rules, onSaved, onRecorded, onCancel }: AttemptFormProps) {
+export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, editing, cloneFrom, prefill, rules, onSaved, onRecorded, onCancel }: AttemptFormProps) {
   const stageMaps = maps.filter((m) => m.tags.includes('Stage'));
 
   // ---- which stage -------------------------------------------------------------------------
   const currentSeason = useCurrentSeason();
   const seed = editing ?? cloneFrom;
-  const [chosenSeason, setSeason] = useState<number | null>(seed?.stage.season ?? null);
+  // A clone is a new clear, so it is on the current season's stage; a record being edited keeps its own.
+  const [chosenSeason, setSeason] = useState<number | null>(editing?.stage.season ?? null);
   const season = chosenSeason ?? currentSeason; // until the player picks one, the current season
-  const [kind, setKind] = useState<StageKind>(seed?.stage.kind ?? 'Normal');
-  const [phase, setPhase] = useState(seed && seed.stage.phase > 0 ? seed.stage.phase : 1);
-  const [number, setNumber] = useState(seed ? String(seed.stage.number) : '');
+  const [kind, setKind] = useState<StageKind>(seed?.stage.kind ?? prefill?.kind ?? 'Normal');
+  const [phase, setPhase] = useState(seed && seed.stage.phase > 0 ? seed.stage.phase : prefill && prefill.phase > 0 ? prefill.phase : 1);
+  const [number, setNumber] = useState(seed ? String(seed.stage.number) : prefill ? String(prefill.number) : '');
   // The same formation may have cleared several stages in auto-battle: a new record can then span a range, one attempt per stage.
   const [rangeEnd, setRangeEnd] = useState('');
-  const [lastLost, setLastLost] = useState(false);
-  const [mapName, setMapName] = useState(seed?.stage.mapName ?? stageMaps[0]?.name ?? '');
+  const [mapName, setMapName] = useState(seed?.stage.mapName ?? prefill?.mapName ?? stageMaps[0]?.name ?? '');
   /** The stage with this identity when it has been recorded; a stage that is new is only created when the attempt is saved. */
   const [stage, setStage] = useState<Stage | null>(null);
   const hadStage = useRef(false);
@@ -65,7 +67,6 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
   // ---- Stage Enemies, player formation, result -----------------------------------------------
   const [enemyDraft, setEnemyDraft] = useState<StageEnemy[]>([]);
   const [formation, setFormation] = useState(seed ? formationFromRecord(seed.formation) : emptyFormation());
-  const [outcome, setOutcome] = useState<'Win' | 'Loss'>(editing?.outcome ?? 'Win');
   const [buffLevel, setBuffLevel] = useState(String(seed?.buffLevel ?? 0));
   const [note, setNote] = useState(editing?.note ?? '');
   const [tags, setTags] = useState(seed?.tags ?? []);
@@ -137,14 +138,10 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
     return saved;
   }
 
-  /** Typing the end of a range tags the attempts `AFK range`, which can be removed before saving; clearing it takes the tag off again. */
+  /** Typing the end of a range makes every stage after the first an `AFK range` copy. The server adds the tag, so the form keeps it out of the tags. */
   function changeRangeEnd(value: string) {
-    const was = inRange;
     setRangeEnd(value);
-    const to = Number(value);
-    const now = !editing && value !== '' && Number.isInteger(to) && to > stageNumber;
-    if (now && !was && !tags.includes(AFK_RANGE_TAG)) setTags([...tags, AFK_RANGE_TAG]);
-    if (!now && was) setTags(tags.filter((t) => t !== AFK_RANGE_TAG));
+    if (value !== '') setTags(tags.filter((t) => t.toLowerCase() !== AFK_RANGE_TAG.toLowerCase()));
   }
 
   async function saveRange(another: boolean) {
@@ -156,7 +153,6 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
         from: stageNumber,
         to: rangeTo,
         mapName: activeMapName,
-        lastLost,
         buffLevel: isApex(kind) ? Number(buffLevel) : null,
         note,
         tags,
@@ -180,7 +176,6 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
       const resolved = await resolveStage();
       const attempt = {
         stageId: resolved.id,
-        outcome,
         buffLevel: isApex(resolved.kind) ? Number(buffLevel) : null,
         note,
         tags,
@@ -190,10 +185,9 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
       // A new record may carry upgrades the roster has not heard of yet; an edited one is mostly an older fight, so it does not ask.
       if (!editing && rules) await sync.ask(recordedHeroes(attempt.formation), heroes, rules, undefined, { attemptIds: [saved.id], side: 'A' });
       if (!another) return onSaved();
-      // The formation, note and tags stay, so the same team can be tried again with only the result changed.
-      setOutcome('Win');
+      // The formation, note and tags stay, so the same team can be recorded again on another stage.
       setError(null);
-      setStatus('Saved. Set the result of the next attempt with the same formation, or change it.');
+      setStatus('Saved. Change the stage for the next clear with the same formation, or change the formation.');
       onRecorded?.();
     } catch (e) {
       setStatus(null);
@@ -247,25 +241,6 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
 
   const result = (
     <>
-      {inRange ? (
-        <fieldset className="field">
-          <legend>Result</legend>
-          <span className="muted">Stages {number} to {rangeTo - (lastLost ? 1 : 0)} cleared</span>
-          <label className="check">
-            <input type="checkbox" checked={lastLost} onChange={(e) => setLastLost(e.target.checked)} /> Stage {rangeTo} not cleared
-          </label>
-        </fieldset>
-      ) : (
-        <fieldset className="field">
-          <legend>Result</legend>
-          <label className="check">
-            <input type="radio" name="outcome" checked={outcome === 'Win'} onChange={() => setOutcome('Win')} /> Cleared
-          </label>
-          <label className="check">
-            <input type="radio" name="outcome" checked={outcome === 'Loss'} onChange={() => setOutcome('Loss')} /> Not cleared
-          </label>
-        </fieldset>
-      )}
       {isApex(kind) && (
         <label className="field">
           Buff level
@@ -300,6 +275,7 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
       onNote={setNote}
       tags={tags}
       onTags={setTags}
+      lockedTags={inRange ? [{ tag: AFK_RANGE_TAG, title: `Added to stages ${stageNumber + 1} to ${rangeTo}, which copy the formation set on stage ${stageNumber}` }] : undefined}
       formationIds={<FormationIdField value={formation.formationId} onChange={(formationId) => setFormation({ ...formation, formationId })} teams={[{ placed: formation.placed, phantimal: formation.phantimal, artifact: formation.artifact }]} />}
       error={error}
       status={status}

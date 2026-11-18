@@ -9,8 +9,8 @@ function useKnownTags(): string[] {
   return useMemo(() => data?.map((t) => t.tag) ?? [], [data]);
 }
 
-/** Free-text tags as removable chips; Enter or a comma adds one, and existing tags are suggested. */
-export function TagInput({ value, onChange }: { value: string[]; onChange: (tags: string[]) => void }) {
+/** Free-text tags as removable chips; Enter or a comma adds one, and existing tags are suggested. `locked` tags are shown beside them and cannot be removed. */
+export function TagInput({ value, onChange, locked = [] }: { value: string[]; onChange: (tags: string[]) => void; locked?: { tag: string; title: string }[] }) {
   const [text, setText] = useState('');
   const listId = useId();
   const known = useKnownTags();
@@ -25,6 +25,11 @@ export function TagInput({ value, onChange }: { value: string[]; onChange: (tags
     <div className="field">
       <span className="field-caption">Tags</span>
       <div className="tags">
+        {locked.map(({ tag, title }) => (
+          <span key={tag} className="badge tag" title={title}>
+            {tag}
+          </span>
+        ))}
         {value.map((tag) => (
           <span key={tag} className="badge tag">
             {tag}

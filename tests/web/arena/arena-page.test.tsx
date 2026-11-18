@@ -310,13 +310,12 @@ describe('Arena page', () => {
     await user.click(screen.getByRole('tab', { name: /Side B/ }));
     await user.click(within(screen.getByRole('list', { name: 'Side B heroes' })).getByRole('button', { name: /^Zed/ }));
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Enemy deployment/ })[0]!); // selects the placed hero
-    const zed = within(screen.getByRole('group', { name: 'Selected hero Zed' }));
-    await user.selectOptions(zed.getByLabelText('Zed rank'), 'Mythic+');
-    await user.selectOptions(zed.getByLabelText('Zed equipment'), '10');
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Zed' })).getByRole('button', { name: 'Mythic+' }));
+    await user.click(within(screen.getByRole('group', { name: 'Equipment of Zed' })).getByRole('button', { name: /^\+10/ })); // the Popover stays open after a pick
     // Clicking the A hero switches sides and selects it.
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Evie|Player deployment/ })[0]!);
     expect(screen.getByRole('tab', { name: /Side A/ }).getAttribute('aria-selected')).toBe('true');
-    await user.selectOptions(within(screen.getByRole('group', { name: 'Selected hero Evie' })).getByLabelText('Evie rank'), 'Elite');
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Elite' }));
     await user.click(screen.getByRole('button', { name: 'Save battle' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'POST')).toBe(true));
     const sent = requests.find((r) => r.method === 'POST')!.body;
@@ -358,7 +357,7 @@ describe('Arena page', () => {
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '2');
     await waitFor(() => expect(requests.some((r) => r.url === '/api/heroes?profile=2')).toBe(true));
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Evie|Player deployment/ })[0]!);
-    await user.selectOptions(within(screen.getByRole('group', { name: 'Selected hero Evie' })).getByLabelText('Evie rank'), 'Mythic+'); // set by hand afterwards
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Mythic+' })); // set by hand afterwards
     await user.click(screen.getByRole('button', { name: 'Save battle' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
     const sent = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!.body;
@@ -411,7 +410,7 @@ describe('Arena page', () => {
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '2'); // roster: Evie Elite +0
     await waitFor(() => expect(requests.some((r) => r.url === '/api/heroes?profile=2')).toBe(true));
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Evie|Player deployment/ })[0]!);
-    await user.selectOptions(within(screen.getByRole('group', { name: 'Selected hero Evie' })).getByLabelText('Evie rank'), 'Mythic+'); // an upgrade
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Mythic+' })); // an upgrade
     await user.click(screen.getByRole('button', { name: 'Save battle' }));
     const dialog = await screen.findByRole('dialog', { name: /^Update the roster/ });
     expect((within(dialog).getByLabelText('Update Evie') as HTMLInputElement).checked).toBe(true);
@@ -789,9 +788,7 @@ describe('Arena page', () => {
 
     await placeFirstHero(user, /^Evie/);
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Evie|Player deployment/ })[0]!);
-    const editor = screen.getByRole('group', { name: 'Selected hero Evie' });
-    expect(editor.closest('.picker-fixed')).toBeTruthy();
-    expect(editor.closest('.picker-scroll')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Rank and equipment of Evie' }).parentElement).toBe(document.body); // beside the tile, taking no height from the picker
   });
 
   it('moves a hero from another team once the question is accepted', async () => {

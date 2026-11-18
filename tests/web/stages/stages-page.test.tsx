@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
@@ -26,10 +26,13 @@ const data: Record<string, unknown> = {
 
 let requests: { method: string; url: string; body?: any }[];
 let attempts: unknown[];
+let gridBoxes: unknown[];
 
 beforeEach(() => {
   requests = [];
   attempts = [];
+  gridBoxes = [];
+  window.history.replaceState(null, '', '#stages'); // the page state lives in the address
   vi.stubGlobal('window', Object.assign(window, { confirm: () => true }));
   vi.stubGlobal(
     'fetch',
@@ -38,6 +41,7 @@ beforeEach(() => {
       const method = init?.method ?? 'GET';
       requests.push({ method, url, body });
       if (url === '/api/reference') return Response.json({ ranks: ['Elite', 'Mythic+'], equipmentLevels: [0, 10], caps: [{ rank: 'Mythic+', minLevel: 0, maxLevel: 10 }] });
+      if (url === '/api/stage-grid') return Response.json({ season: 8, boxes: gridBoxes });
       if (url.startsWith('/api/attempts') && method === 'GET') return Response.json(attempts);
       if (url === '/api/attempts' && method === 'POST') return Response.json({ id: 1 }, { status: 201 });
       if (url.startsWith('/api/roster/') && method === 'PUT') return new Response(null, { status: 204 });
@@ -51,6 +55,16 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+
+const box = (kind: string, number: number, state: 'cleared' | 'older' = 'cleared', phase = 0) => ({ kind, phase, number, state, newestSeason: state === 'cleared' ? 8 : 7 });
+const record = (id: number, over: object = {}) => ({
+  id, buffLevel: null, note: '', tags: [], createdAt: `2026-10-${String(10 + id).padStart(2, '0')}`, season: 8,
+  stage: { id: 7, season: 8, phase: 0, kind: 'Normal', number: 12, mapName: 'Open', attemptCount: 1, enemies: [] },
+  formation: { artifact: null, phantimal: null, assist: null, formationId: null, heroes: [{ tile: 38, name: 'Evie', part: '', rank: null, equipmentLevel: null }] },
+  ...over,
+});
+const lane = (name: string) => within(screen.getByRole('region', { name }));
+const laneHead = (name: string) => lane(name).getAllByRole('button')[0]!;
 
 const yourTiles = () =>
   within(screen.getByRole('group', { name: 'Stage map' })).getAllByRole('button', { name: /Player deployment/ });
@@ -94,18 +108,33 @@ describe('StagesPage', () => {
     expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation).toMatchObject({ assistHero: 'Fay', artifact: 'Bladestorm'});
   });
 
-  it('keeps the formation after "Save and record another", resetting only the result', async () => {
+  it('edits the assist hero’s rank and equipment in a Popover under its buttons, from the roster until set', async () => {
+    const user = userEvent.setup();
+    await openForm(user);
+    await user.type(screen.getByLabelText('Stage number'), '100');
+    await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
+    await user.click(screen.getByRole('button', { name: 'Choose assist hero' }));
+    await user.click(within(screen.getByRole('list', { name: 'Assist heroes' })).getByRole('button', { name: 'Fay' }));
+    expect(screen.getByRole('button', { name: 'Rank of Fay: Mythic+' })).toBeTruthy(); // the roster's
+    expect(screen.queryByRole('combobox', { name: /Assist/ })).toBeNull(); // no selects
+    await user.click(screen.getByRole('button', { name: /^Rank of Fay/ }));
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Fay' })).getByRole('button', { name: 'Elite' }));
+    expect(screen.queryByRole('button', { name: /^Equipment of Fay/ })).toBeNull(); // Elite has no equipment
+    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
+    expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation).toMatchObject({ assistHero: 'Fay', assistRank: 'Elite', assistEquipmentLevel: null });
+  });
+
+  it('keeps the formation after "Save and record another", so the same team can be recorded on the next stage', async () => {
     const user = userEvent.setup();
     await openForm(user);
     await user.type(screen.getByLabelText('Stage number'), '100');
     await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
     await user.click(yourTiles()[0]!);
-    await user.click(screen.getByLabelText('Not cleared'));
     await user.click(screen.getByRole('button', { name: 'Save and record another' }));
     await waitFor(() => expect(requests.filter((r) => r.url === '/api/attempts' && r.method === 'POST')).toHaveLength(1));
-    expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.outcome).toBe('Loss');
+    expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body).not.toHaveProperty('outcome');
     expect((await screen.findByRole('status')).textContent).toMatch(/^Saved/);
-    expect((screen.getByLabelText('Cleared') as HTMLInputElement).checked).toBe(true);
     expect(within(screen.getByRole('list', { name: 'Placed on Your formation' })).getByText('Evie')).toBeTruthy();
   });
 
@@ -119,10 +148,42 @@ describe('StagesPage', () => {
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(document.querySelector('.map-slot .hex-slot:not(.hex-slot-empty)')).toBeTruthy();
     await user.click(yourTiles()[0]!);
-    await user.selectOptions(within(screen.getByRole('group', { name: 'Selected hero Evie' })).getByLabelText('Evie rank'), 'Elite');
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Elite' }));
     await user.click(screen.getByRole('button', { name: 'Save attempt' }));
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
     expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation.heroes[0]).toMatchObject({ hero: 'Evie', rank: 'Elite' });
+  });
+
+  it('opens the rank and equipment beside the tile, keeps them open after a pick, shows the state on the tile and closes on a press elsewhere', async () => {
+    const user = userEvent.setup();
+    await openForm(user);
+    await user.type(screen.getByLabelText('Stage number'), '100');
+    await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
+    expect(yourTiles()[0]!.closest('.hex-cell')?.querySelector('.tile-tag')?.textContent).toBe('My+★+10'); // from the roster
+    await user.click(yourTiles()[0]!);
+    const popover = within(screen.getByRole('group', { name: 'Rank and equipment of Evie' }));
+    await user.click(popover.getByRole('button', { name: 'Elite' }));
+    expect(screen.getByRole('group', { name: 'Rank and equipment of Evie' })).toBeTruthy(); // still open
+    expect(yourTiles()[0]!.closest('.hex-cell')?.querySelector('.tile-tag')?.textContent).toBe('El'); // Elite has no equipment
+    await user.click(popover.getByRole('button', { name: 'Mythic+' }));
+    await user.click(popover.getByRole('button', { name: /^\+0/ }));
+    expect(yourTiles()[0]!.closest('.hex-cell')?.querySelector('.tile-tag')?.textContent).toBe('My+★+0');
+    await user.click(document.body);
+    expect(screen.queryByRole('group', { name: 'Rank and equipment of Evie' })).toBeNull();
+  });
+
+  it('closes the rank and equipment when the hero is dragged, and does not open them for the drag', async () => {
+    const user = userEvent.setup();
+    await openForm(user);
+    await user.type(screen.getByLabelText('Stage number'), '100');
+    await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
+    fireEvent.dragStart(yourTiles()[0]!, { dataTransfer: { setData: () => {}, effectAllowed: '' } });
+    expect(screen.queryByRole('group', { name: 'Rank and equipment of Evie' })).toBeNull();
+    fireEvent.dragEnd(yourTiles()[0]!);
+    await user.click(yourTiles()[0]!);
+    expect(screen.getByRole('group', { name: 'Rank and equipment of Evie' })).toBeTruthy();
+    fireEvent.dragStart(yourTiles()[0]!, { dataTransfer: { setData: () => {}, effectAllowed: '' } });
+    expect(screen.queryByRole('group', { name: 'Rank and equipment of Evie' })).toBeNull();
   });
 
   it('offers to update the roster when the attempt was recorded at a higher rank, and the form waits for the answer', async () => {
@@ -133,7 +194,7 @@ describe('StagesPage', () => {
     await user.type(screen.getByLabelText('Stage number'), '100');
     await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
     await user.click(yourTiles()[0]!);
-    await user.selectOptions(within(screen.getByRole('group', { name: 'Selected hero Evie' })).getByLabelText('Evie rank'), 'Mythic+');
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Mythic+' }));
     await user.click(screen.getByRole('button', { name: 'Save and record another' }));
     const dialog = within(await screen.findByRole('dialog', { name: 'Update the roster?' }));
     expect((dialog.getByLabelText('Update Evie') as HTMLInputElement).checked).toBe(true);
@@ -143,66 +204,231 @@ describe('StagesPage', () => {
     expect(await screen.findByText(/Saved\./)).toBeTruthy();
   });
 
-  it('puts New attempt beside the tag filter', async () => {
-    render(<StagesPage />);
-    const button = await screen.findByRole('button', { name: 'New attempt' });
-    expect(within(button.parentElement!).getByRole('button', { name: /^Kind:/ })).toBeTruthy();
+  it('corrects the rank the reader misread in the roster question with the Popover buttons, and the roster takes it', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/heroes' ? Response.json([{ ...hero('Evie', true), rank: 'Elite', equipmentLevel: null }]) : base(url, init))));
+    const user = userEvent.setup();
+    await openForm(user);
+    await user.type(screen.getByLabelText('Stage number'), '100');
+    await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
+    await user.click(yourTiles()[0]!);
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Mythic+' }));
+    await user.click(screen.getByRole('button', { name: 'Save and record another' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Update the roster?' }));
+    expect(dialog.queryByRole('combobox')).toBeNull(); // no selects
+    await user.click(dialog.getByRole('button', { name: 'Rank of Evie: Mythic+' }));
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Elite' }));
+    expect(dialog.getByRole('button', { name: 'Rank of Evie: Elite' })).toBeTruthy();
+    await user.click(dialog.getByRole('button', { name: 'Update roster' }));
+    await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/roster/Evie')?.body).toMatchObject({ rank: 'Elite' }));
   });
 
-  it('clones an attempt into a new one on the same stage, with the formation, buff level and tags but not the result or note', async () => {
+  it('clones an attempt into a new one on the current season’s stage, with the formation, buff level and tags but not the note', async () => {
     const user = userEvent.setup();
     attempts = [{
-      id: 3, outcome: 'Loss', buffLevel: 12, note: 'too slow', tags: ['Luna'], createdAt: '2026-10-29',
+      id: 3, buffLevel: 12, note: 'too slow', tags: ['Luna'], createdAt: '2026-10-29',
       stage: { id: 7, season: 8, phase: 1, kind: 'Apex Normal', number: 100, mapName: 'Open', attemptCount: 1, enemies: [] },
       formation: { artifact: null, phantimal: null, assist: null, heroes: [{ tile: 38, name: 'Evie', rank: 'Mythic+', equipmentLevel: 10 }] },
     }];
+    gridBoxes = [box('Apex Normal', 100, 'cleared', 1)];
     render(<StagesPage />);
+    await user.click(await screen.findByRole('button', { name: 'Apex Normal stage 100, cleared this season' }));
     await user.click(await screen.findByRole('button', { name: 'Clone' }));
     expect(screen.getByText('New attempt', { selector: 'h2' })).toBeTruthy();
     expect((screen.getByLabelText('Stage number') as HTMLInputElement).value).toBe('100');
+    await waitFor(() => expect(requests.some((r) => r.url.startsWith('/api/stages?') && r.url.includes('season=8'))).toBe(true)); // the stage of this season, not the cloned record's
     expect(await screen.findByLabelText(/Buff level/)).toBeTruthy();
     expect((screen.getByLabelText(/Buff level/) as HTMLInputElement).value).toBe('12');
     expect(within(await screen.findByRole('list', { name: 'Placed on Your formation' })).getByText('Evie')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Save attempt' }));
     await waitFor(() => expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')).toBeTruthy());
     expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body).toMatchObject({
-      stageId: 7, outcome: 'Win', buffLevel: 12, note: '', tags: ['Luna'], formation: { heroes: [{ tile: 38, hero: 'Evie' }] },
+      stageId: 7, buffLevel: 12, note: '', tags: ['Luna'], formation: { heroes: [{ tile: 38, hero: 'Evie' }] },
     });
   });
 
-  it('says when there are older attempts than the list shows, asking for one more than it shows', async () => {
-    const one = (id: number) => ({
-      id, outcome: 'Win', buffLevel: null, note: '', tags: [], createdAt: '2026-10-29',
-      stage: { id: 7, season: 8, phase: 0, kind: 'Normal', number: id, mapName: 'Open', attemptCount: 1, enemies: [] },
-      formation: { artifact: null, phantimal: null, assist: null, heroes: [] },
-    });
-    attempts = Array.from({ length: 201 }, (_, i) => one(i + 1));
+  it('draws the Phase tabs, the four lanes and the three states of a box', async () => {
+    gridBoxes = [box('Normal', 1), box('Normal', 2, 'older'), box('Phantisomal', 3)];
     render(<StagesPage />);
-    expect(await screen.findByText(/Showing the latest 200 attempts/)).toBeTruthy();
-    expect(within(screen.getByRole('list', { name: 'Attempts' })).getAllByRole('listitem').filter((li) => li.className === 'attempt')).toHaveLength(200);
-    expect(requests.find((r) => r.url.startsWith('/api/attempts?'))!.url).toContain('limit=201');
+    expect((await screen.findByRole('tab', { name: 'Phase 1' })).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Phase 1', 'Phase 2', 'Phase 3']);
+    expect(await screen.findByRole('button', { name: 'Normal stage 1, cleared this season' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Normal stage 2, cleared in an older season' })).toBeTruthy(); // an older season's record only
+    expect(screen.getByRole('button', { name: 'Normal stage 3, no record' })).toBeTruthy();
+    expect(lane('Normal').getAllByRole('button')).toHaveLength(1 + 300);
+    expect(laneHead('Phantisomal').textContent).toContain('1 cleared');
+    expect(laneHead('Apex Normal').getAttribute('aria-expanded')).toBe('false'); // no Apex record, standard lanes not cleared
+    expect(laneHead('Apex Normal').textContent).toContain('Apex Normal · 1–333 · Collapsed');
+    expect(laneHead('Apex Phantisomal').textContent).toContain('Apex Phantisomal · 1–667 · Collapsed');
+  });
+
+  it('opens on the highest phase with a record of this season, and shows that phase’s numbers', async () => {
+    gridBoxes = [box('Normal', 1), box('Phantisomal', 700), box('Phantisomal', 1300, 'older')];
+    render(<StagesPage />);
+    expect((await screen.findByRole('tab', { name: 'Phase 2' })).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Phantisomal stage 700, cleared this season' })).toBeTruthy();
+    expect(laneHead('Normal').textContent).toContain('Normal · 301–600');
+  });
+
+  it('collapses a standard lane once its last box is cleared, however empty it is before, and opens Apex once both are', async () => {
+    gridBoxes = [box('Normal', 300), box('Phantisomal', 600)];
+    render(<StagesPage />);
+    await screen.findByRole('tab', { name: 'Phase 1' });
+    expect(laneHead('Normal').getAttribute('aria-expanded')).toBe('false');
+    expect(laneHead('Normal').textContent).toContain('Cleared · Season 8');
+    expect(laneHead('Phantisomal').getAttribute('aria-expanded')).toBe('false');
+    expect(laneHead('Apex Normal').getAttribute('aria-expanded')).toBe('true'); // unlocked, not recorded yet
+    expect(lane('Apex Normal').getAllByRole('button')).toHaveLength(1 + 333);
+    expect(laneHead('Apex Phantisomal').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('opens an Apex lane for a record of its own, and Normal and Phantisomal stay apart', async () => {
+    gridBoxes = [box('Apex Phantisomal', 5, 'cleared', 1)];
+    render(<StagesPage />);
+    await screen.findByRole('tab', { name: 'Phase 1' });
+    expect(laneHead('Apex Phantisomal').getAttribute('aria-expanded')).toBe('true');
+    expect(laneHead('Apex Normal').getAttribute('aria-expanded')).toBe('false');
+    expect(lane('Apex Phantisomal').getByRole('button', { name: 'Apex Phantisomal stage 5, cleared this season' })).toBeTruthy();
+  });
+
+  it('keeps a lane opened by hand in the page address, and forgets it when the page is left', async () => {
+    const user = userEvent.setup();
+    render(<StagesPage />);
+    await screen.findByRole('tab', { name: 'Phase 1' });
+    await user.click(laneHead('Apex Normal'));
+    expect(laneHead('Apex Normal').getAttribute('aria-expanded')).toBe('true');
+    expect(decodeURIComponent(window.location.hash)).toBe('#stages?open=1:apex-normal');
+    await user.click(screen.getByRole('tab', { name: 'Phase 3' }));
+    expect(decodeURIComponent(window.location.hash)).toBe('#stages?phase=3&open=1:apex-normal');
     cleanup();
-    attempts = [one(1)];
+    render(<StagesPage />); // a reload of the same address
+    expect((await screen.findByRole('tab', { name: 'Phase 3' })).getAttribute('aria-selected')).toBe('true');
+    await user.click(screen.getByRole('tab', { name: 'Phase 1' }));
+    expect(laneHead('Apex Normal').getAttribute('aria-expanded')).toBe('true');
+    cleanup();
+    window.history.replaceState(null, '', '#stages'); // left and come back
     render(<StagesPage />);
-    await screen.findByRole('list', { name: 'Attempts' });
-    expect(screen.queryByText(/Showing the latest/)).toBeNull();
+    await screen.findByRole('tab', { name: 'Phase 1' });
+    expect(laneHead('Apex Normal').getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('gives every cell of a record its own grid column, so the buttons stay at the right of the first line', async () => {
-    attempts = [{
-      id: 3, outcome: 'Win', buffLevel: null, note: 'n', tags: ['Luna'], createdAt: '2026-10-29', season: 8,
-      stage: { id: 7, season: 8, phase: 0, kind: 'Normal', number: 100, mapName: 'Open', attemptCount: 1, enemies: [] },
-      formation: { artifact: null, phantimal: null, assist: null, heroes: [] },
-    }];
+  it('moves between the Phase tabs with the arrow keys', async () => {
+    const user = userEvent.setup();
     render(<StagesPage />);
-    const row = (await screen.findByRole('list', { name: 'Attempts' })).querySelector('.stage-row')!;
-    expect(row.children).toHaveLength(columnsOf('.stage-row'));
+    (await screen.findByRole('tab', { name: 'Phase 1' })).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Phase 2' }).getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Phase 2' }));
+  });
+
+  it('opens the panel of a box right under it, lists the five newest records and reveals the rest, and Escape closes it', async () => {
+    const user = userEvent.setup();
+    gridBoxes = [box('Normal', 12)];
+    attempts = [7, 6, 5, 4, 3, 2, 1].map((id) => record(id, { note: `note ${id}` }));
+    render(<StagesPage />);
+    const button = await screen.findByRole('button', { name: 'Normal stage 12, cleared this season' });
+    await user.click(button);
+    const panel = await screen.findByRole('region', { name: 'Normal · stage 12' });
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.nextElementSibling).toBe(panel); // one column wide in the test, so the box's row ends at the box
+    expect(within(panel).getByText('Cleared this season')).toBeTruthy();
+    expect(requests.find((r) => r.url.startsWith('/api/attempts?'))!.url).toContain('number=12');
+    const records = () => within(panel).getAllByRole('listitem').filter((li) => li.className === 'attempt');
+    expect(records()).toHaveLength(5);
+    expect(within(panel).getByText('note 7')).toBeTruthy();
+    expect(within(panel).queryByText('note 2')).toBeNull();
+    await user.click(within(panel).getByRole('button', { name: 'Show 2 older records' }));
+    expect(records()).toHaveLength(7);
+    expect(within(panel).queryByRole('button', { name: /Show .* older records/ })).toBeNull();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('region', { name: 'Normal · stage 12' })).toBeNull();
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('gives every cell of a record in the panel its own grid column, so the buttons stay at the right of the first line', async () => {
+    const user = userEvent.setup();
+    gridBoxes = [box('Normal', 12)];
+    attempts = [record(3, { note: 'n', tags: ['Luna'] })];
+    render(<StagesPage />);
+    await user.click(await screen.findByRole('button', { name: 'Normal stage 12, cleared this season' }));
+    const row = (await screen.findByRole('list', { name: 'Records of Normal · stage 12' })).querySelector('.stage-record')!;
+    expect(row.children).toHaveLength(columnsOf('.stage-record'));
     expect(row.lastElementChild!.className).toBe('attempt-actions');
+    expect(screen.queryByText('Win')).toBeNull(); // a stage record is a clear: no win/loss badge
   });
 
-  it('shows an empty state', async () => {
+  it('says Record a clear on an empty box and opens the form on that stage', async () => {
+    const user = userEvent.setup();
     render(<StagesPage />);
-    expect(await screen.findByText('No attempts recorded yet.')).toBeTruthy();
+    await user.click(await screen.findByRole('button', { name: 'Normal stage 12, no record' }));
+    expect(await screen.findByText('Nothing recorded for this stage yet.')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Record a clear' }));
+    expect((screen.getByLabelText('Stage number') as HTMLInputElement).value).toBe('12');
+    expect(screen.getByText('New attempt', { selector: 'h2' })).toBeTruthy();
+  });
+
+  it('adds a clear to an older box on the map of its newest record', async () => {
+    const user = userEvent.setup();
+    gridBoxes = [box('Normal', 12, 'older')];
+    attempts = [record(1, { stage: { id: 5, season: 7, phase: 0, kind: 'Normal', number: 12, mapName: 'Open', attemptCount: 1, enemies: [] } })];
+    const maps = data['/api/maps'] as { name: string }[];
+    data['/api/maps'] = [{ ...maps[0]!, name: 'Walls' }, ...maps]; // the form would otherwise start on the first map
+    render(<StagesPage />);
+    await user.click(await screen.findByRole('button', { name: 'Normal stage 12, cleared in an older season' }));
+    const panel = await screen.findByRole('region', { name: 'Normal · stage 12' });
+    expect(within(panel).getByText('Cleared in season 7')).toBeTruthy();
+    expect(within(panel).getByText('S7')).toBeTruthy();
+    await user.click(await within(panel).findByRole('button', { name: 'Add a clear' }));
+    expect((screen.getByLabelText('Stage number') as HTMLInputElement).value).toBe('12');
+    expect(screen.getByDisplayValue('Open')).toBeTruthy(); // the map of the newest record, not the first map
+    data['/api/maps'] = maps;
+  });
+
+  it('draws a record on its stage’s map, and an AFK range copy on the map Open since its map is unknown', async () => {
+    const user = userEvent.setup();
+    gridBoxes = [box('Normal', 12)];
+    const elsewhere = { id: 7, season: 8, phase: 0, kind: 'Normal', number: 12, mapName: 'Elsewhere', attemptCount: 1, enemies: [] };
+    attempts = [record(2, { tags: ['AFK range'], stage: elsewhere }), record(1, { stage: elsewhere })];
+    render(<StagesPage />);
+    await user.click(await screen.findByRole('button', { name: 'Normal stage 12, cleared this season' }));
+    const panel = await screen.findByRole('region', { name: 'Normal · stage 12' });
+    await within(panel).findAllByRole('listitem');
+    expect(within(panel).getAllByRole('group', { name: 'Formation on Open' })).toHaveLength(1);
+  });
+
+  it('jumps to a stage number in a lane, switching the phase for a standard number and flashing the box', async () => {
+    const user = userEvent.setup();
+    render(<StagesPage />);
+    await screen.findByRole('tab', { name: 'Phase 1' });
+    await user.selectOptions(screen.getByLabelText('Lane to jump to'), 'Phantisomal');
+    await user.type(screen.getByLabelText('Stage number to jump to'), '700');
+    await user.click(screen.getByRole('button', { name: 'Jump' }));
+    expect(screen.getByRole('tab', { name: 'Phase 2' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Phantisomal stage 700, no record' }).className).toContain('flash');
+    await user.clear(screen.getByLabelText('Stage number to jump to'));
+    await user.selectOptions(screen.getByLabelText('Lane to jump to'), 'Apex Normal');
+    await user.type(screen.getByLabelText('Stage number to jump to'), '500');
+    await user.click(screen.getByRole('button', { name: 'Jump' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Apex Normal has no stage 500/);
+  });
+
+  it('opens a collapsed lane when a jump goes to it', async () => {
+    const user = userEvent.setup();
+    render(<StagesPage />);
+    await screen.findByRole('tab', { name: 'Phase 1' });
+    await user.selectOptions(screen.getByLabelText('Lane to jump to'), 'Apex Normal');
+    await user.type(screen.getByLabelText('Stage number to jump to'), '40');
+    await user.click(screen.getByRole('button', { name: 'Jump' }));
+    expect(laneHead('Apex Normal').getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Apex Normal stage 40, no record' }).className).toContain('flash');
+  });
+
+  it('has no Only cleared filter and no list of attempts', async () => {
+    render(<StagesPage />);
+    await screen.findByRole('tab', { name: 'Phase 1' });
+    expect(screen.queryByRole('button', { name: /Only cleared/ })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Attempts' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Kind:/ })).toBeNull();
   });
 
   it('records a Normal stage attempt with heroes from the roster', async () => {
@@ -225,7 +451,6 @@ describe('StagesPage', () => {
     const saved = requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!;
     expect(saved.body).toMatchObject({
       stageId: 7,
-      outcome: 'Win',
       buffLevel: null,
       formation: { heroes: [{ tile: 38, hero: 'Evie' }], phantimal: null, assistHero: null, artifact: null },
     });
@@ -242,20 +467,21 @@ describe('StagesPage', () => {
     await user.click(yourTiles()[0]!);
 
     await user.type(screen.getByLabelText('Up to stage (optional)'), '102');
-    expect(screen.getByText('AFK range')).toBeTruthy(); // tagged on its own, and the tag can be removed
-    expect(screen.queryByRole('radio', { name: 'Not cleared' })).toBeNull(); // every stage but the last is a win
-    await user.click(screen.getByLabelText('Stage 102 not cleared'));
+    const locked = screen.getByText('AFK range'); // shown for the stages after the first, without a button to remove it
+    expect(locked.querySelector('button')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove tag AFK range' })).toBeNull();
+    expect(screen.queryByText('Result')).toBeNull(); // a range is only cleared stages
     await user.click(screen.getByRole('button', { name: 'Save attempt' }));
 
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts/range')).toBe(true));
     expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(false);
     expect(requests.find((r) => r.url === '/api/attempts/range')!.body).toMatchObject({
-      season: 8, phase: 0, kind: 'Normal', from: 100, to: 102, mapName: 'Open', lastLost: true, tags: ['AFK range'],
+      season: 8, phase: 0, kind: 'Normal', from: 100, to: 102, mapName: 'Open', tags: [],
       formation: { heroes: [{ tile: 38, hero: 'Evie' }] },
     });
   });
 
-  it('takes the tag off again when the range is cleared', async () => {
+  it('shows the tag only while the form is a range', async () => {
     const user = userEvent.setup();
     await openForm(user);
     await user.type(screen.getByLabelText('Stage number'), '100');

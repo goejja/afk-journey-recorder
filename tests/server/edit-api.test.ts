@@ -33,19 +33,18 @@ const team = (names: string[], extra: object = {}) => ({
 });
 
 describe('editing a stage attempt', () => {
-  it('changes the result and heroes, keeping a stored rank the roster has outgrown', async () => {
+  it('changes the heroes and note, keeping a stored rank the roster has outgrown', async () => {
     const stage = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 10, mapName: 'Open' }));
-    const created = await json(send('POST', '/api/attempts', { stageId: stage.id, outcome: 'Win', formation: team(['A', 'B']) }));
+    const created = await json(send('POST', '/api/attempts', { stageId: stage.id, formation: team(['A', 'B']) }));
     db.prepare("UPDATE roster SET rank = 'Mythic+'").run();
     const edited = await json(
       send('PUT', `/api/attempts/${created.id}`, {
         stageId: stage.id,
-        outcome: 'Loss',
         note: 'typo',
         formation: { ...team(['A', 'C']), heroes: [{ tile: 38, hero: 'A', rank: 'Mythic' }, { tile: 39, hero: 'C' }] },
       }),
     );
-    expect(edited).toMatchObject({ id: created.id, outcome: 'Loss', note: 'typo' });
+    expect(edited).toMatchObject({ id: created.id, note: 'typo' });
     expect(edited.formation.heroes.map((h: any) => [h.name, h.rank])).toEqual([['A', 'Mythic'], ['C', 'Mythic+']]);
     expect(await json(send('GET', '/api/attempts'))).toHaveLength(1);
   });
@@ -53,11 +52,20 @@ describe('editing a stage attempt', () => {
   it('can move the attempt to another stage and rejects bad edits', async () => {
     const first = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 10, mapName: 'Open' }));
     const second = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 11, mapName: 'Open' }));
-    const created = await json(send('POST', '/api/attempts', { stageId: first.id, outcome: 'Win', formation: team(['A']) }));
-    const moved = await json(send('PUT', `/api/attempts/${created.id}`, { stageId: second.id, outcome: 'Win', formation: team(['A']) }));
+    const created = await json(send('POST', '/api/attempts', { stageId: first.id, formation: team(['A']) }));
+    const moved = await json(send('PUT', `/api/attempts/${created.id}`, { stageId: second.id, formation: team(['A']) }));
     expect(moved.stage.number).toBe(11);
-    expect((await send('PUT', '/api/attempts/999', { stageId: first.id, outcome: 'Win', formation: team(['A']) })).status).toBe(404);
-    expect((await send('PUT', `/api/attempts/${created.id}`, { stageId: first.id, outcome: 'Maybe', formation: team(['A']) })).status).toBe(400);
+    expect((await send('PUT', '/api/attempts/999', { stageId: first.id, formation: team(['A']) })).status).toBe(404);
+    expect((await send('PUT', `/api/attempts/${created.id}`, { stageId: first.id, outcome: 'Loss', formation: team(['A']) })).status).toBe(400);
+  });
+
+  it('saves an old Loss attempt as a clear', async () => {
+    const stage = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 10, mapName: 'Open' }));
+    const created = await json(send('POST', '/api/attempts', { stageId: stage.id, formation: team(['A']) }));
+    db.prepare("UPDATE attempt SET outcome = 'Loss' WHERE id = ?").run(created.id);
+    expect(await json(send('GET', '/api/attempts'))).toHaveLength(1);
+    expect((await send('PUT', `/api/attempts/${created.id}`, { stageId: stage.id, note: 'again', formation: team(['A']) })).status).toBe(200);
+    expect(db.prepare('SELECT outcome FROM attempt WHERE id = ?').pluck().get(created.id)).toBe('Win');
   });
 });
 

@@ -75,7 +75,6 @@ export function Board({ draft, mode, reference, unavailable, borrow, sideRosters
       borrow={borrow}
       editSideAStates
       phantimals={modeAllowsPhantimal(mode) ? reference.phantimals : undefined}
-      withAssist={false}
       sideRosters={sideRosters}
     />
   );

@@ -1,18 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MAX_STANDARD_HEROES } from '../../src/domain/formation.js';
 import { heroCount, isSummon } from '../../src/domain/units.js';
 import { playerOnTop, TILE } from '../../src/domain/map.js';
 import { useCurrentSeason } from '../seasons.js';
 import type { Artifact, GameMap, Hero, Phantimal, Profile, Rules } from '../backend.js';
-import { FormationDetails, heroState, placeOnFormation, whenPlaced, withHeroState, withRosterStates, type FormationState } from '../FormationEditor.js';
+import { heroState, placeOnFormation, whenPlaced, withHeroState, withRosterStates, type FormationState } from '../FormationEditor.js';
 import { heldIcons, type Borrow } from './borrow.js';
 import { canDropOnTile, placePhantimalPart } from '../placement.js';
 import { HeroGrid } from '../HeroGrid.js';
 import { HexMap } from '../HexMap.js';
-import { OpponentDetails, placeWholeOpponent, withRosterOpponent, type OpponentState } from './OpponentEditor.js';
+import { RECORD_ARTIFACT_SIZE, RECORD_PORTRAIT_SIZE, RECORD_TILE_WIDTH } from '../map-size.js';
+import { placeWholeOpponent, withRosterOpponent, type OpponentState } from './OpponentEditor.js';
 import { PlacedUnits } from '../PlacedUnits.js';
 import { Portrait } from '../Portrait.js';
-import { SelectedHero, stateText } from '../SelectedHero.js';
+import { HeroStatePopover, StateTag, stateText } from '../HeroStatePopover.js';
 import { ArtifactSlot } from '../ArtifactSlot.js';
 import { derivePhantimal, type PhantimalOption } from '../phantimal.js';
 import { PhantimalField } from '../PhantimalField.js';
@@ -43,12 +44,10 @@ interface Props {
   sideAHeroes?: 'roster' | 'all';
   /** Let each Side A hero's stored rank and equipment be corrected. */
   editSideAStates?: boolean;
-  /** Hide the assist hero and artifact, for planning where only the heroes matter. */
+  /** Hide the artifacts, for planning where only the heroes matter. */
   heroesOnly?: boolean;
   /** Every phantimal, to offer one per side, newest season first. Omit where a battle has none. */
   phantimals?: Phantimal[];
-  /** Offer an assist hero beside the artifact; Arena battles have a phantimal instead. */
-  withAssist?: boolean;
   labels?: { a: string; b: string };
   /** Edit one side only: the other side's tab and placed units are hidden. */
   onlySide?: Side;
@@ -133,7 +132,7 @@ export function SideProfileBar({ profiles, sideProfiles, onSideProfile, onNewPro
 }
 
 /** Both sides on one map, with a Side A / Side B switch beside it choosing whose heroes the icons place. */
-export function BattleEditor({ map, heroes, artifacts, rules, formation, onFormation, opponent, onOpponent, onBoth, unavailable, borrow, sideAHeroes = 'all', editSideAStates = false, heroesOnly = false, phantimals, withAssist = true, labels = { a: 'Side A', b: 'Side B' }, onlySide, sideRosters }: Props) {
+export function BattleEditor({ map, heroes, artifacts, rules, formation, onFormation, opponent, onOpponent, onBoth, unavailable, borrow, sideAHeroes = 'all', editSideAStates = false, heroesOnly = false, phantimals, labels = { a: 'Side A', b: 'Side B' }, onlySide, sideRosters }: Props) {
   const [side, setSide] = useState<Side>(onlySide ?? 'A');
   const [picked, setPicked] = useState<Picked | null>(null);
   const currentSeason = useCurrentSeason();
@@ -142,6 +141,8 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
   const [dragging, setDragging] = useState<Picked | null>(null);
   const [moving, setMoving] = useState<number | null>(null); // the tile of a placed unit being dragged to another tile
   const [selected, setSelected] = useState<{ side: Side; name: string } | null>(null);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null); // the tile of the selected hero, which its Popover hangs under
+  const closeState = useCallback(() => setSelected(null), []);
   const { confirm, dialog } = useConfirm();
 
   const everyone = sideAHeroes === 'all';
@@ -242,6 +243,7 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
 
   /** Picking up a placed unit shows the side it belongs to in the selector. */
   function startMoving(tile: number) {
+    setSelected(null);
     setMoving(tile);
     const owner = sideOfTile(tile);
     if (owner && owner !== side) chooseSide(owner);
@@ -260,15 +262,18 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
     place(unit, index, zone);
   }
 
-  function clickTile(index: number) {
+  function clickTile(index: number, button: HTMLElement) {
     // Clicking a placed hero never removes it (it may still need its rank set): it only switches to that hero's side.
     const occupied = formation.placed.some((p) => p.tile === index) || phantimalAt(formation.phantimal, index) !== undefined ? 'A' : opponent.placed.some((p) => p.tile === index) || phantimalAt(opponent.phantimal, index) !== undefined ? 'B' : null;
     if (occupied) {
-      // Clicking a placed hero selects it for editing its rank and equipment; clicking it again lets go.
+      // Clicking a placed hero opens its rank and equipment; clicking it again closes them.
       const row = (occupied === 'A' ? formation.placed : opponent.placed).find((p) => p.tile === index);
       const name = row && !isSummon(row) ? row.hero : undefined; // a summon has no rank or equipment
       if (occupied !== side) chooseSide(occupied);
-      if (name) setSelected((old) => (old?.side === occupied && old.name === name ? null : { side: occupied, name }));
+      if (name) {
+        setAnchor(button);
+        setSelected((old) => (old?.side === occupied && old.name === name ? null : { side: occupied, name }));
+      }
       return;
     }
     const zone = zoneOf(index);
@@ -317,6 +322,7 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
             rowLengths={map.rowLengths}
             cells={map.cells}
             label="Battle map"
+            tileWidth={RECORD_TILE_WIDTH}
             onTileClick={clickTile}
             isClickable={(index, tile) => tile === TILE.PLAYER || tile === TILE.ENEMY || occupiedTile(index)}
             tileTitle={(index) => {
@@ -340,22 +346,30 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
             onTileDragEnd={() => setMoving(null)}
             onTileDrop={dropOnTile}
             slotA={heroesOnly ? undefined : (
-              <ArtifactSlot side="a" label={`${labels.a} artifact`} artifacts={artifacts} value={formation.artifact} currentSeason={currentSeason} onOpen={() => chooseSide('A')}
+              <ArtifactSlot side="a" size={RECORD_ARTIFACT_SIZE} label={`${labels.a} artifact`} artifacts={artifacts} value={formation.artifact} currentSeason={currentSeason} onOpen={() => chooseSide('A')}
                 onChange={(artifact) => changeFormation({ ...formation, artifact })} borrow={borrow} />
             )}
             slotB={heroesOnly ? undefined : (
-              <ArtifactSlot side="b" label={`${labels.b} artifact`} artifacts={artifacts} value={opponent.artifact} currentSeason={currentSeason} onOpen={() => chooseSide('B')}
+              <ArtifactSlot side="b" size={RECORD_ARTIFACT_SIZE} label={`${labels.b} artifact`} artifacts={artifacts} value={opponent.artifact} currentSeason={currentSeason} onOpen={() => chooseSide('B')}
                 onChange={(artifact) => changeOpponent({ ...opponent, artifact })} />
             )}
+            tileTag={(index) => {
+              const a = formation.placed.find((p) => p.tile === index);
+              const b = a ? undefined : opponent.placed.find((p) => p.tile === index);
+              const row = a ?? b;
+              if (!row || isSummon(row)) return null;
+              const state = a ? heroState(formation, heroes, a.hero, everyone) : { rank: b?.rank ?? '', equipment: b?.equipment ?? '' };
+              return <StateTag rank={state.rank || null} equipment={state.equipment === '' ? null : Number(state.equipment)} />;
+            }}
             renderTile={(index, tile) => {
               const a = formation.placed.find((p) => p.tile === index);
-              if (a) return <span className={`map-unit map-unit-a${isSelectedTile(index) ? ' map-unit-selected' : ''}`}><Portrait kind="hero" name={rowName(a)} size={30} /></span>;
+              if (a) return <span className={`map-unit map-unit-a${isSelectedTile(index) ? ' map-unit-selected' : ''}`}><Portrait kind="hero" name={rowName(a)} size={RECORD_PORTRAIT_SIZE} /></span>;
               const partA = phantimalAt(formation.phantimal, index);
-              if (partA) return <span className="map-unit map-unit-a"><Portrait kind="phantimal" name={partA} size={30} /></span>;
+              if (partA) return <span className="map-unit map-unit-a"><Portrait kind="phantimal" name={partA} size={RECORD_PORTRAIT_SIZE} /></span>;
               const b = opponent.placed.find((p) => p.tile === index);
-              if (b) return <span className={`map-unit map-unit-b${isSelectedTile(index) ? ' map-unit-selected' : ''}`}><Portrait kind="hero" name={rowName(b)} size={30} /></span>;
+              if (b) return <span className={`map-unit map-unit-b${isSelectedTile(index) ? ' map-unit-selected' : ''}`}><Portrait kind="hero" name={rowName(b)} size={RECORD_PORTRAIT_SIZE} /></span>;
               const partB = phantimalAt(opponent.phantimal, index);
-              if (partB) return <span className="map-unit map-unit-b"><Portrait kind="phantimal" name={partB} size={30} /></span>;
+              if (partB) return <span className="map-unit map-unit-b"><Portrait kind="phantimal" name={partB} size={RECORD_PORTRAIT_SIZE} /></span>;
               return tile === TILE.PLAYER ? 'A' : tile === TILE.ENEMY ? 'B' : undefined;
             }}
           />
@@ -391,8 +405,9 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
               ...(opponent.phantimal ? [{ key: 'phantimal', name: opponent.phantimal.name, kind: 'phantimal' as const, onRemove: () => (chooseSide('B'), changeOpponent({ ...opponent, phantimal: null, phantimalChoice: '' })) }] : []),
             ]}
           />
-          {selectedEditable && selected && (
-            <SelectedHero
+          {selectedEditable && selected && anchor && (
+            <HeroStatePopover
+              anchor={anchor}
               name={selected.name}
               tier={heroes.find((h) => h.name === selected.name)?.tier}
               rank={selectedState.rank}
@@ -403,7 +418,7 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
                   ? changeFormation(withHeroState(formation, selected.name, rank, equipment))
                   : changeOpponent({ ...opponent, placed: opponent.placed.map((p) => (p.hero === selected.name ? { ...p, rank, equipment } : p)) })
               }
-              onClose={() => setSelected(null)}
+              onClose={closeState}
             />
           )}
           </div>
@@ -447,24 +462,6 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
                 }
               />
             </>
-          )}
-          {!heroesOnly && withAssist && (
-            <div className="picker-extras">
-              {side === 'A' ? (
-                <FormationDetails
-                  value={formation}
-                  onChange={onFormation}
-                  heroes={heroes}
-                  owned={ownHeroes}
-                  unavailable={unavailable}
-                  everyone={everyone}
-                  heroesOnly={false}
-                  withAssist={withAssist}
-                />
-              ) : (
-                <OpponentDetails heroes={heroes} rules={rules} value={opponent} onChange={onOpponent} withAssist={withAssist} />
-              )}
-            </div>
           )}
           </div>
         </div>

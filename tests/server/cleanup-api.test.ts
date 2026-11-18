@@ -86,7 +86,7 @@ describe('cleanup', () => {
 
   it('handles Stage and Dream Hunt records too', async () => {
     const stage = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 1, mapName: 'Open' }));
-    const a = await json(send('POST', '/api/attempts', { stageId: stage.id, outcome: 'Win', formation: team }));
+    const a = await json(send('POST', '/api/attempts', { stageId: stage.id, formation: team }));
     const b = await json(send('POST', '/api/dream-hunt/attempts', { boss: 'King Croaker', mapName: 'Open', outcome: 'Win', timeSeconds: 60, formation: team }));
     age(a.id, 100);
     age(b.id, 100);

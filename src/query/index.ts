@@ -4,7 +4,7 @@
  * so each result carries its sample size.
  */
 
-export { type Filters, type StatFilters, APPEARANCES, whereFor, playerIds, runSelect } from './filters.js';
+export { type Filters, type StatFilters, APPEARANCES, whereFor, playerIds, runSelect, modesFor } from './filters.js';
 export { summary, profileIdOf, roster, profiles } from './overview.js';
 export { partnerStats, partnerTags, positionalPartners } from './partners.js';
 export { heroStats, pairStats, heroDistribution, trioStats, artifactStats, mapStats, ruleStats, heroRowStats } from './hero-stats.js';

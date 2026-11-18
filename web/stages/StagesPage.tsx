@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import { STAGE_KINDS, isApex } from '../../src/domain/stage.js';
+import { useEffect, useMemo, useState } from 'react';
+import { buildLane, defaultPhase, GRID_PHASES, laneId, laneKey, openByDefault, standardPhase, type Lane } from '../../src/domain/stage-grid.js';
+import { isApex, STAGE_KINDS, type StageKind } from '../../src/domain/stage.js';
 import { api, type Artifact, type Attempt, type Enemy, type GameMap, type Hero, type Phantimal, type Rules } from '../backend.js';
-import { AttemptForm } from './AttemptForm.js';
-import { ChangeStageKind } from './ChangeStageKind.js';
-import { TeamOverview } from '../stats/TeamOverview.js';
-import { MultiSelect } from '../MultiSelect.js';
-import { FormationIdBadge } from '../FormationIdField.js';
-import { TagBadges, TagFilter } from '../Tags.js';
 import { useConfirm } from '../ui/Dialog.js';
-import { useNewest } from '../useLoad.js';
+import { useLoad } from '../useLoad.js';
+import { AttemptForm, type AttemptFormProps } from './AttemptForm.js';
+import { BoxPanel, type BoxRef } from './BoxPanel.js';
+import { ChangeStageKind } from './ChangeStageKind.js';
+import { usePageState } from './page-state.js';
+import { StageLane } from './StageLane.js';
 
 interface Reference {
   maps: GameMap[];
@@ -19,146 +19,209 @@ interface Reference {
   rules: Rules;
 }
 
-const stageLabel = (s: Attempt['stage']) =>
-  `S${s.season} · ${s.kind}${isApex(s.kind) ? ` (phase ${s.phase})` : ''} · stage ${s.number}`;
+/** How long a box flashes after a jump. */
+const FLASH_MS = 1500;
 
-/** How many attempts the list shows; one more is asked for, to know whether there are older ones. */
-const PAGE = 200;
+const stageLabel = (s: Attempt['stage']) => `S${s.season} · ${s.kind}${isApex(s.kind) ? ` (phase ${s.phase})` : ''} · stage ${s.number}`;
 
+/** The Stages page: a grid of every stage, by phase and lane, and under a clicked box its records. */
 export function StagesPage() {
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [older, setOlder] = useState(false);
-  const [reference, setReference] = useState<Reference | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<Attempt | null>(null);
-  const [cloning, setCloning] = useState<Attempt | null>(null);
+  const grid = useLoad(() => api.stageGrid(), []);
+  const reference = useLoad<Reference>(
+    async () => {
+      const [maps, heroes, artifacts, enemies, phantimals, rules] = await Promise.all([api.maps(), api.heroes(), api.artifacts(), api.enemies(), api.phantimals(), api.rules()]);
+      return { maps, heroes, artifacts, enemies, phantimals, rules };
+    },
+    [],
+  );
+  const { state, choosePhase, setLane } = usePageState();
+  const [selected, setSelected] = useState<{ kind: StageKind; number: number } | null>(null);
+  const [form, setForm] = useState<Pick<AttemptFormProps, 'editing' | 'cloneFrom' | 'prefill'> | null>(null);
+  const [version, setVersion] = useState(0);
   const [fixingKind, setFixingKind] = useState(false);
-  const [kind, setKind] = useState<string[]>([]);
-  const [outcome, setOutcome] = useState<string[]>([]);
-  const [tag, setTag] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [jumpNumber, setJumpNumber] = useState('');
+  const [jumpKind, setJumpKind] = useState<StageKind>('Normal');
+  const [flashed, setFlashed] = useState<{ kind: StageKind; number: number } | null>(null);
   const { confirm, dialog } = useConfirm();
 
-  const newest = useNewest();
-  const reload = useCallback(async () => {
-    const current = newest();
-    try {
-      const query = { kind, outcome, tag };
-      const [loadedAttempts, maps, heroes, artifacts, enemies, phantimals, rules] = await Promise.all([
-        api.attempts({ ...query, limit: String(PAGE + 1) }),
-        api.maps(),
-        api.heroes(),
-        api.artifacts(),
-        api.enemies(),
-        api.phantimals(),
-        api.rules(),
-      ]);
-      if (!current()) return;
-      setAttempts(loadedAttempts.slice(0, PAGE));
-      setOlder(loadedAttempts.length > PAGE);
-      setReference({ maps, heroes, artifacts, enemies, phantimals, rules });
-      setError(null);
-    } catch (e) {
-      if (current()) setError((e as Error).message);
-    }
-  }, [kind, outcome, tag, newest]);
+  const boxes = useMemo(() => grid.data?.boxes ?? [], [grid.data]);
+  const season = grid.data?.season ?? 0;
+  const phase = state.phase ?? defaultPhase(boxes);
+  const lanes = useMemo(() => STAGE_KINDS.map((kind) => buildLane(kind, phase, boxes)), [boxes, phase]);
+  const standard = { normal: lanes[0]!, phantisomal: lanes[1]! };
+  const isOpen = (lane: Lane) => {
+    const key = laneKey(phase, lane.kind);
+    return state.open.includes(key) || (!state.closed.includes(key) && openByDefault(lane, standard));
+  };
 
+  const refresh = () => {
+    setVersion((v) => v + 1);
+    void grid.reload();
+  };
+
+  // Escape closes the panel
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (!selected || form) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSelected(null);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [selected, form]);
+
+  // A jump scrolls to its box and lets it flash
+  useEffect(() => {
+    if (!flashed) return;
+    document.getElementById(`box-${laneId(flashed.kind)}-${flashed.number}`)?.scrollIntoView?.({ block: 'center' });
+    const timer = setTimeout(() => setFlashed(null), FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [flashed]);
+
+  function jump() {
+    const number = Number(jumpNumber);
+    if (!Number.isInteger(number) || number < 1) return;
+    const target = isApex(jumpKind) ? phase : standardPhase(jumpKind, number);
+    const lane = buildLane(jumpKind, target, boxes);
+    if (!lane.boxes.some((b) => b.number === number)) {
+      setError(`${jumpKind} has no stage ${number} in phase ${target}: its stages go from ${lane.first} to ${lane.last}.`);
+      return;
+    }
+    setError(null);
+    if (target !== phase) choosePhase(target);
+    setLane(target, jumpKind, true);
+    setFlashed({ kind: jumpKind, number });
+  }
 
   async function remove(attempt: Attempt) {
-    if (
-      !(await confirm({
-        title: `Delete this attempt on ${stageLabel(attempt.stage)}?`,
-        confirmLabel: 'Delete',
-        danger: true,
-      }))
-    )
-      return;
+    if (!(await confirm({ title: `Delete this attempt on ${stageLabel(attempt.stage)}?`, confirmLabel: 'Delete', danger: true }))) return;
     try {
       await api.deleteAttempt(attempt.id);
-      await reload();
+      refresh();
     } catch (e) {
       setError((e as Error).message);
     }
   }
 
-  if ((adding || editing) && reference) {
+  if (form && reference.data) {
+    const done = () => setForm(null);
     return (
       <AttemptForm
-        key={editing?.id ?? (cloning ? `clone-${cloning.id}` : 'new')}
-        {...reference}
-        editing={editing ?? undefined}
-        cloneFrom={cloning ?? undefined}
-        onCancel={() => (setAdding(false), setEditing(null), setCloning(null))}
+        key={form.editing?.id ?? (form.cloneFrom ? `clone-${form.cloneFrom.id}` : form.prefill ? `box-${form.prefill.kind}-${form.prefill.number}` : 'new')}
+        {...reference.data}
+        {...form}
+        onCancel={done}
         onSaved={() => {
-          setAdding(false);
-          setEditing(null);
-          setCloning(null);
-          void reload();
+          done();
+          refresh();
         }}
-        onRecorded={() => void reload()}
+        onRecorded={refresh}
       />
     );
   }
 
+  const panelFor = (lane: Lane) => {
+    const box = selected && selected.kind === lane.kind ? lane.boxes.find((b) => b.number === selected.number) : undefined;
+    if (!selected || !box) return null;
+    const ref: BoxRef = { kind: lane.kind, phase: isApex(lane.kind) ? phase : 0, number: box.number };
+    return (
+      <BoxPanel
+        key={`${ref.kind}-${ref.number}`}
+        box={ref}
+        state={box.state}
+        newestSeason={box.newestSeason}
+        maps={reference.data?.maps ?? []}
+        version={version}
+        onEdit={(editing) => setForm({ editing })}
+        onClone={(cloneFrom) => setForm({ cloneFrom })}
+        onDelete={(attempt) => void remove(attempt)}
+        onAdd={(mapName) => setForm({ prefill: { kind: ref.kind, phase: ref.phase, number: ref.number, mapName } })}
+        onClose={() => setSelected(null)}
+      />
+    );
+  };
+
+  const moveTab = (e: React.KeyboardEvent, index: number) => {
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
+    const next = GRID_PHASES[(index + step + GRID_PHASES.length) % GRID_PHASES.length]!;
+    choosePhase(next);
+    setSelected(null);
+    document.getElementById(`stage-phase-tab-${next}`)?.focus();
+  };
+
   return (
     <section>
-      {error && (
+      {(error || grid.error || reference.error) && (
         <p className="error" role="alert">
-          {error}
+          {error ?? grid.error ?? reference.error}
         </p>
       )}
-      <div className="filters">
-        <MultiSelect label="Kind" options={[...STAGE_KINDS]} value={kind} onChange={setKind} />
-        <MultiSelect label="Outcome" options={['Win', 'Loss']} value={outcome} onChange={setOutcome} />
-        <TagFilter value={tag} onChange={setTag} />
-        <button className="primary" onClick={() => (setCloning(null), setAdding(true))} disabled={!reference}>
+      <div className="filters stage-toolbar">
+        <div className="tabs" role="tablist" aria-label="Phase">
+          {GRID_PHASES.map((p, i) => (
+            <button
+              key={p}
+              id={`stage-phase-tab-${p}`}
+              role="tab"
+              aria-selected={phase === p}
+              aria-controls="stage-phase-panel"
+              tabIndex={phase === p ? 0 : -1}
+              className={phase === p ? 'active' : undefined}
+              onClick={() => (choosePhase(p), setSelected(null))}
+              onKeyDown={(e) => moveTab(e, i)}
+            >
+              Phase {p}
+            </button>
+          ))}
+        </div>
+        <div className="field" role="group" aria-label="Jump to a stage">
+          <span className="field-caption">Jump to stage</span>
+          <span className="stage-jump">
+            <input type="number" min={1} aria-label="Stage number to jump to" value={jumpNumber} onChange={(e) => setJumpNumber(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && jump()} />
+            <select aria-label="Lane to jump to" value={jumpKind} onChange={(e) => setJumpKind(e.target.value as StageKind)}>
+              {STAGE_KINDS.map((k) => (
+                <option key={k}>{k}</option>
+              ))}
+            </select>
+            <button onClick={jump}>Jump</button>
+          </span>
+        </div>
+        <button className="primary" onClick={() => setForm({})} disabled={!reference.data}>
           New attempt
         </button>
         <button onClick={() => setFixingKind(!fixingKind)} aria-expanded={fixingKind} title="Fix stages recorded as the wrong kind, such as Normal instead of Phantisomal">
           Change stage kind
         </button>
       </div>
-      {fixingKind && <ChangeStageKind onChanged={() => void reload()} onCancel={() => setFixingKind(false)} />}
+      {fixingKind && <ChangeStageKind onChanged={refresh} onCancel={() => setFixingKind(false)} />}
 
-      {attempts.length === 0 && <p className="muted">No attempts recorded yet.</p>}
-      {older && <p className="muted">Showing the latest {PAGE} attempts. Filter by kind, outcome or tag to reach older ones.</p>}
-      <ul className="attempts" aria-label="Attempts">
-        {attempts.map((a) => (
-          <li key={a.id} className="attempt">
-            <div className="stage-row">
-              <span className={a.outcome === 'Win' ? 'badge win' : 'badge loss'}>{a.outcome}</span>
-              <strong>{stageLabel(a.stage)}</strong>
-              {a.buffLevel !== null ? <span className="muted">buff {a.buffLevel}</span> : <span />}
-              <span className="muted">{a.createdAt}</span>
-              <span className="badge" title="The season the record was played in">S{a.season}</span>
-              <TeamOverview heroes={a.formation.heroes} phantimal={a.formation.phantimal} artifact={a.formation.artifact} assist={a.formation.assist ?? null} meta="none" size={32} />
-              <span className="tags-cell">
-                <TagBadges tags={a.tags} />
-                <FormationIdBadge code={a.formation.formationId} />
-                {a.note && (
-                  <span className="muted stage-note" title={a.note}>
-                    {a.note}
-                  </span>
-                )}
-              </span>
-              <div className="attempt-actions">
-                <button className="small" onClick={() => setEditing(a)}>
-                  Edit
-                </button>
-                <button className="small" title="Start a new attempt from this one" onClick={() => (setCloning(a), setAdding(true))}>
-                  Clone
-                </button>
-                <button className="danger small" onClick={() => void remove(a)}>
-                  Delete
-                </button>
-              </div>
-            </div>
-          </li>
-        ))}
+      <ul className="stage-key muted" aria-label="Box colours">
+        <li><span className="stage-swatch cleared" /> cleared this season</li>
+        <li><span className="stage-swatch older" /> older season only</li>
+        <li><span className="stage-swatch none" /> no record</li>
       </ul>
+
+      <div role="tabpanel" id="stage-phase-panel" aria-labelledby={`stage-phase-tab-${phase}`}>
+        {grid.data === undefined ? (
+          !grid.error && <p className="muted">Loading…</p>
+        ) : (
+          lanes.map((lane) => {
+            const open = isOpen(lane);
+            return (
+              <StageLane
+                key={lane.kind}
+                lane={lane}
+                open={open}
+                season={season}
+                selected={selected?.kind === lane.kind ? selected.number : null}
+                flashed={flashed?.kind === lane.kind ? flashed.number : null}
+                onToggle={() => (setLane(phase, lane.kind, !open), selected?.kind === lane.kind && open && setSelected(null))}
+                onSelect={(number) => setSelected(selected?.kind === lane.kind && selected.number === number ? null : { kind: lane.kind, number })}
+                panel={panelFor(lane)}
+              />
+            );
+          })
+        )}
+      </div>
       {dialog}
     </section>
   );
