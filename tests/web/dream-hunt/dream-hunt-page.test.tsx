@@ -192,9 +192,15 @@ describe('Dream Hunt page', () => {
     expect(table.queryAllByRole('group', { name: 'Layout on Open' })).toHaveLength(0); // collapsed
     await user.click(within(rows[0]!).getByRole('button', { name: /Show the days of group 1/ }));
     expect(await table.findAllByRole('group', { name: 'Layout on Open' })).toHaveLength(5); // where the heroes stood on the best day
-    const dayRows = table.getAllByRole('row').filter((r) => r.getAttribute('aria-label') === 'Day of group 1');
-    expect(dayRows.map((r) => r.querySelector('td')!.querySelector('strong')!.textContent)).toEqual(['45.00s', '56.57s', '2:30.00']); // the group's days, the fastest first
-    expect(within(dayRows[0]!).getAllByText('9.00s')).toHaveLength(5);
+    expect(table.queryAllByRole('row').filter((r) => r.getAttribute('aria-label') === 'Day of group 1')).toHaveLength(0); // the other days are not listed
+    // The range of the group's runs: the total first, then each boss. Days 1, 2 and 3 took 56.57, 45 and 150 in all.
+    const range = within(table.getByRole('row', { name: 'Range of the group' }));
+    const bars = range.getAllByRole('img');
+    expect(bars).toHaveLength(6);
+    expect(bars[0]!.getAttribute('aria-label')).toBe('best 45.00s, average 1:23.86, worst 2:30.00');
+    expect(bars[5]!.getAttribute('aria-label')).toBe('best 9.00s, average 18.52s, worst 30.00s'); // the last boss: 16.57, 9 and 30
+    expect(range.getByText('3 runs')).toBeTruthy(); // said once, under the total
+    expect(range.getAllByText(/^best$/)).toHaveLength(6);
   });
 
   it('lists the seven best groups and the rest on Show more', async () => {
@@ -214,7 +220,12 @@ describe('Dream Hunt page', () => {
     const table = within(await screen.findByRole('table', { name: 'This week' }));
     await table.findByText('Mirage Frostspike');
     expect(table.getAllByRole('row').slice(1)).toHaveLength(7);
+    await user.click(table.getByRole('button', { name: /Show the days of group 1/ }));
+    expect(table.getByText('1 run')).toBeTruthy(); // a group of one day
+    const barBefore = within(table.getByRole('row', { name: 'Range of the group' })).getAllByRole('img')[1]!.firstElementChild!.getAttribute('style');
     await user.click(screen.getByRole('button', { name: 'Show 2 more' }));
+    expect(within(table.getByRole('row', { name: 'Range of the group' })).getAllByRole('img')[1]!.firstElementChild!.getAttribute('style')).toBe(barBefore); // the scale is the week's, not the listed groups'
+    await user.click(table.getByRole('button', { name: /Hide the days of group 1/ }));
     expect(table.getAllByRole('row').slice(1)).toHaveLength(9);
     await user.click(screen.getByRole('button', { name: 'Show fewer' }));
     expect(table.getAllByRole('row').slice(1)).toHaveLength(7);

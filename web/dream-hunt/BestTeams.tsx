@@ -75,12 +75,15 @@ function LayoutList({ boss, composition, maps, send }: { boss: string; compositi
   );
 }
 
-/** Where a composition's clear times fall: best to worst as a bar, with a tick for the median, and a hollow dot for each clear under a Rule. */
-function TimeSpread({ best, median, worst, ruleTimes, scaleMax }: { best: number | null; median: number | null; worst: number | null; ruleTimes: number[]; scaleMax: number }) {
-  const pct = (seconds: number) => `${(seconds / scaleMax) * 100}%`;
-  const parts = [best !== null && `best ${formatDuration(best)}, median ${formatDuration(median!)}, worst ${formatDuration(worst!)}`, ruleTimes.length > 0 && `under a Rule ${ruleTimes.map(formatDuration).join(', ')}`];
+/**
+ * Where a composition's clear times fall: best to worst as a bar, with a tick for the median (or the average, `centre`), and a hollow dot for
+ * each clear under a Rule. The track runs from `scaleMin` (0 by default) to `scaleMax`; `wide` stretches it over its cell instead of 140px.
+ */
+export function TimeSpread({ best, median, worst, ruleTimes = [], scaleMin = 0, scaleMax, centre = 'median', wide = false, format = formatDuration }: { best: number | null; median: number | null; worst: number | null; ruleTimes?: number[]; scaleMin?: number; scaleMax: number; centre?: 'median' | 'average'; wide?: boolean; format?: (seconds: number) => string }) {
+  const pct = (seconds: number) => `${((seconds - scaleMin) / (scaleMax - scaleMin)) * 100}%`;
+  const parts = [best !== null && `best ${format(best)}, ${centre} ${format(median!)}, worst ${format(worst!)}`, ruleTimes.length > 0 && `under a Rule ${ruleTimes.map(format).join(', ')}`];
   return (
-    <span className="spread" role="img" aria-label={parts.filter(Boolean).join('; ')}>
+    <span className={wide ? 'spread spread-wide' : 'spread'} role="img" aria-label={parts.filter(Boolean).join('; ')}>
       {best !== null && <span className="spread-range" style={{ left: pct(best), width: `max(4px, calc(${pct(worst!)} - ${pct(best)}))` }} />}
       {best !== null && <span className="spread-median" style={{ left: pct(median!) }} />}
       {ruleTimes.map((seconds, i) => (

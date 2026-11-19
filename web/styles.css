@@ -345,6 +345,7 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .week-toggle { display: flex; flex-direction: column; align-items: flex-start; border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }
 .week-group-facts { font-size: var(--font-sm); white-space: nowrap; }
 .week-placements td { padding-top: var(--sp-1); }
+.range-figures { display: flex; flex-direction: column; margin-top: var(--sp-2); font-size: var(--font-sm); font-variant-numeric: tabular-nums; }
 .week-boss { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
 .week-boss > span { display: flex; flex-direction: column; min-width: 0; }
 /* Every time has the same width and digits line up, whether it is 47.70s or 1:32.00. */
@@ -363,6 +364,7 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .layout-facts { display: flex; flex-direction: column; gap: var(--sp-1); }
 .badge.few { background: var(--warn); margin-left: var(--sp-2); }
 .spread { position: relative; display: inline-block; width: 140px; height: 10px; background: var(--border); border-radius: var(--r-control); }
+.spread.spread-wide { display: block; width: 100%; }
 .spread-range { position: absolute; top: 0; height: 10px; background: var(--win); border-radius: var(--r-control); }
 .spread-dot { position: absolute; top: 0; width: var(--sp-2); height: var(--sp-2); margin-left: calc(var(--sp-1) * -1); box-sizing: border-box; border: 2px solid var(--text); border-radius: 50%; background: transparent; }
 .rule-line { font-size: var(--font-sm); }
