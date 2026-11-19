@@ -71,7 +71,7 @@ export function PhantimalField({ phantimals, placed, heroes, choice, shown, onCh
       </ul>
       {options.length === 0 && <p className="muted">No phantimals are tagged for this season.</p>}
       {options.length > 0 && noneEligible && choice === '' && <p className="muted">Three heroes of one faction bring a Phantimal.</p>}
-      {choice !== '' && shown === null && problem(choice) === null && options.some((p) => p.name === choice) && <p className="error">No free tile for {choice}.</p>}
+      {choice !== '' && shown === null && problem(choice) === null && options.some((p) => p.name === choice) && <p className="error" role="alert">No free tile for {choice}.</p>}
     </>
   );
 }

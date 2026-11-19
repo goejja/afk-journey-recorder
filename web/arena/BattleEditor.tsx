@@ -374,10 +374,10 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
             }}
           />
           {!!bannerOrder && <SideBanner side={bannerOrder[1]} labels={labels} active={side} />}
-          {!hasZone('A') && <p className="error">This map has no player deployment tiles. Paint some in Admin → Maps first.</p>}
-          {!hasZone('B') && <p className="error">This map has no enemy deployment tiles. Paint some in Admin → Maps first.</p>}
-          {message && <p className="error">{message}</p>}
-          {missingPhantimals.map((part) => <p key={part} className="error">{part} still has to be placed: the wedges always stand together.</p>)}
+          {!hasZone('A') && <p className="error" role="alert">This map has no player deployment tiles. Paint some in Admin → Maps first.</p>}
+          {!hasZone('B') && <p className="error" role="alert">This map has no enemy deployment tiles. Paint some in Admin → Maps first.</p>}
+          {message && <p className="error" role="alert">{message}</p>}
+          {missingPhantimals.map((part) => <p key={part} className="error" role="alert">{part} still has to be placed: the wedges always stand together.</p>)}
         </div>
         <div className="picker">
           <div className="picker-fixed">

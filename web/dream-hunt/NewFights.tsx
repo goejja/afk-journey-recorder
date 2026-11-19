@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { afterSaved, useSaveRecord } from '../useSaveRecord.js';
 import { heroesAlreadyUsed } from '../../src/domain/arena.js';
 import { DREAM_HUNT_FIGHTS } from '../../src/domain/dream-hunt.js';
 import { api, type DreamHuntAttempt, type WeeklySetups } from '../backend.js';
@@ -19,7 +20,7 @@ interface NewFightsProps {
   editing?: { id: number; fights: DreamHuntAttempt[] } | null;
   /** Fights to start the day with, each at its place: the teams of a plan of the Advisor or the Simulator. */
   seed?: { index: number; draft: Draft }[] | null;
-  onSaved: () => void;
+  onSaved: (notice?: string | null) => void;
   onRecorded: () => void;
   /** The Weekly defaults after "Set as default" saved them. */
   onDefaults: (defaults: WeeklySetups) => void;
@@ -72,7 +73,10 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
     }
   }
 
-  async function save(another: boolean) {
+  const saving = useSaveRecord();
+  const save = (another: boolean) => saving.run(() => saveNow(another));
+
+  async function saveNow(another: boolean) {
     const filled = drafts.map((d, index) => ({ d, index })).filter(({ d }) => d.formation.placed.length > 0);
     if (filled.length === 0) return setError('Place at least one hero in a fight');
     const fights = [];
@@ -81,20 +85,21 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
       if ('error' in built) return setError(`Fight ${index + 1}: ${built.error}`);
       fights.push({ index, fight: built.fight });
     }
+    let notice: string | null = null;
     try {
       const day = fights.map(({ index, fight }) => ({ ...fight, position: index + 1 }));
       const saved = await (editing ? api.updateDreamHuntBattle(editing.id, day, { formationId }) : api.createDreamHuntBattle(day, { formationId }));
       // New fights may carry upgrades the roster has not heard of yet; editing a saved day does not ask.
-      if (!editing) await sync.ask(day.flatMap((fight) => recordedHeroes(fight.formation)), reference.heroes, reference.heroRules, undefined, { attemptIds: saved.fights.map((f) => f.id), side: 'A' });
+      if (!editing) notice = await afterSaved(() => sync.ask(day.flatMap((fight) => recordedHeroes(fight.formation)), reference.heroes, reference.heroRules, undefined, { attemptIds: saved.fights.map((f) => f.id), side: 'A' }));
     } catch (e) {
       setStatus(null);
       return setError((e as Error).message);
     }
-    if (!another || editing) return onSaved();
+    if (!another || editing) return onSaved(notice);
     // The formations stay, so the same teams can be tried again with only the time changed.
     setDrafts((old) => old.map((d) => ({ ...d, outcome: 'Win' as const, time: '' })));
     setError(null);
-    setStatus(`Saved ${fights.length} ${fights.length === 1 ? 'fight' : 'fights'} as one battle. The teams are still here: enter the new time and save again.`);
+    setStatus(`Saved ${fights.length} ${fights.length === 1 ? 'fight' : 'fights'} as one battle. The teams are still here: enter the new time and save again.${notice ? ` ${notice}` : ''}`);
     onRecorded();
   }
 
@@ -130,6 +135,7 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
       saveLabel={editing ? 'Save changes' : 'Save fights'}
       onSave={() => void save(false)}
       onSaveAnother={editing ? undefined : () => void save(true)}
+      saving={saving.busy}
       onCancel={onCancel}
     >
       <FightBoard key={current} draft={draft} reference={reference} unavailable={unavailable} borrow={borrow} onChange={change} />

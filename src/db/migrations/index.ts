@@ -23,6 +23,11 @@ import { migration as m22 } from './022-placement-rule-relations.js';
 import { migration as m23 } from './023-placement-rule-adjacent-frontmost.js';
 import { migration as m24 } from './024-starting-heroes.js';
 import { migration as m25 } from './025-afk-range-origin.js';
+import { migration as m26 } from './026-rank-look-feature.js';
+import { migration as m27 } from './027-lookup-indexes.js';
+import { migration as m28 } from './028-look-features.js';
+import { migration as m29 } from './029-parked-readings.js';
+import { migration as m30 } from './030-clear-stage-hero-state.js';
 
 /**
  * A change to the tables of an existing database, run once in a transaction. `schema.sql` is the baseline (version 1) and is
@@ -32,4 +37,4 @@ import { migration as m25 } from './025-afk-range-origin.js';
  */
 export type Migration = (db: Database.Database) => void;
 
-export const migrations: Migration[] = [m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25];
+export const migrations: Migration[] = [m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28, m29, m30];

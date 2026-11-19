@@ -95,7 +95,7 @@ describe('Battle import in the Arena page', () => {
         const method = init?.method ?? 'GET';
         requests.push({ method, url });
         if (url === '/api/maps') return Response.json([{ name: 'Duel', tags: ['Arena'], rowLengths: [2, 5, 6, 6, 7, 6, 6, 5, 2], cells, source: 'manual', canRestore: false }]);
-        if (url === '/api/heroes') return Response.json([hero('Evie'), hero('Fay'), hero('Zed')]);
+        if (url.startsWith('/api/heroes')) return Response.json([hero('Evie'), hero('Fay'), hero('Zed')]); // a profile's roster too
         if (url === '/api/profiles' && method === 'POST') return Response.json({ id: 9, name: 'Rover', playerId: null, isDefault: false, heroCount: 0 });
         if (url === '/api/profiles') return Response.json([{ id: 1, name: 'Me', playerId: '1111', isDefault: true, heroCount: 3 }, { id: 2, name: 'Luna', playerId: '2222', isDefault: false, heroCount: 2 }]);
         if (url === '/api/artifacts' || url === '/api/phantimals') return Response.json([]);
@@ -159,6 +159,18 @@ describe('Battle import in the Arena page', () => {
     await user.click(within(naming).getByRole('button', { name: 'Create' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/profiles')).toBe(true));
     await waitFor(() => expect((screen.getByLabelText('Profile of Side B') as HTMLSelectElement).value).toBe('9'));
+  });
+
+  it('does not open a battle in the form, and says why, when the saved battles of its mode could not be read', async () => {
+    const stubbed = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    await user.click(await screen.findByRole('button', { name: 'Import from pictures' }));
+    await screen.findByRole('group', { name: 'Battle 1' });
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/battles') && url.includes('limit=1000') ? Response.json({ error: 'Network down' }, { status: 500 }) : stubbed(url, init))));
+    await user.click(screen.getByRole('button', { name: 'Open in the form' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('The saved Guild Duel battles could not be read: Network down');
+    expect(screen.queryByLabelText('Profile of Side B')).toBeNull(); // the form did not open
   });
 
   it('keeps the fight numbers and Battles the player chose with the pictures, even when their ids change', async () => {
@@ -234,6 +246,21 @@ describe('Battle import in the Arena page', () => {
     expect(screen.getByText(/A later Round \(Swiss stage\) already has Battles/)).toBeTruthy();
     await user.selectOptions(tournament, '1');
     expect(screen.getByText(/Season 8, Tournament 2 is the latest Tournament/)).toBeTruthy();
+  });
+
+  it('says when the Tournaments could not be read, in Super League only, where a batch would have none to be saved in', async () => {
+    const stubbed = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => (url === '/api/tournaments' ? Response.json({ error: 'Network down' }, { status: 500 }) : stubbed(url, init))),
+    );
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    await user.click(await screen.findByRole('button', { name: 'Import from pictures' }));
+    await user.selectOptions(await screen.findByLabelText('The reports are from'), 'Guild Duel');
+    expect(screen.queryByText(/could not be read/)).toBeNull(); // the other modes have no Tournament to be missing
+    await user.selectOptions(screen.getByLabelText('The reports are from'), 'Super League');
+    expect((await screen.findByRole('alert')).textContent).toBe('The Tournaments and Seasons could not be read: Network down');
   });
 });
 
@@ -342,7 +369,9 @@ describe('feedback of a Battle import', () => {
       final: { heroes: [{ hero: 'Evie', rank: 'Paragon 1', equipmentLevel: 10 }, { hero: 'Fay', rank: 'Paragon 1', equipmentLevel: 10 }], artifact: { name: 'Awakening', level: null }, phantimal: 'Orson' },
       crops,
       skipRank: [],
+      side: 'A',
     });
+    expect(sides[1]!.side).toBe('B');
     expect(sides[1]!.final).toEqual({ heroes: [{ hero: 'Zed', rank: null, equipmentLevel: null }], artifact: null, phantimal: null });
   });
 

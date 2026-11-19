@@ -1,7 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, learnedLookUrl, type ReviewExplainJob, type ReviewRun, type ThinningKind } from '../backend.js';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { api, learnedLookUrl, type ReviewExplainJob, type ReviewFinding, type ReviewRun, type ThinningKind } from '../backend.js';
 import { ReviewFindingsView } from './ReviewFindings.js';
 import { usePolling } from '../useLoad.js';
+
+/** One picture of a Thinning group; it renders again only when its own tick changes, not each time another is ticked among the many. */
+const ThinningTile = memo(function ThinningTile({ id, remove, ticked, onToggle }: { id: number; remove: boolean; ticked: boolean; onToggle: (id: number) => void }) {
+  return (
+    <li className="reader-tile">
+      <img src={learnedLookUrl('rank', id)} alt={`Rank Look ${id} ${remove ? 'to remove' : 'stays'}`} loading="lazy" />
+      {remove ? (
+        <label className="check">
+          <input type="checkbox" checked={ticked} onChange={() => onToggle(id)} aria-label={`Remove Rank Look ${id}`} /> Remove
+        </label>
+      ) : (
+        <span className="muted">Stays</span>
+      )}
+    </li>
+  );
+});
 
 /** The Reader review (ADR 0031): what the code finds in the reader's data, here the near-identical pictures Thinning would remove. */
 export function ReviewPage() {
@@ -11,13 +27,16 @@ export function ReviewPage() {
   const [job, setJob] = useState<ReviewExplainJob | null>(null);
   // only an explanation seen going and then done reloads the run; one found finished on arrival is already in it
   const seenRunning = useRef(false);
-  const [rank, setRank] = useState<ThinningKind | null>(null);
+  // undefined until the player asks: the proposal compares every Rank Look with the others, which keeps the server busy for seconds
+  const [rank, setRank] = useState<ThinningKind | null | undefined>(undefined);
+  const [looking, setLooking] = useState(false);
   const [ticked, setTicked] = useState<Set<number>>(new Set());
   const [distance, setDistance] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLooking(true);
     try {
       const found = (await api.thinningProposal()).kinds.find((k) => k.kind === 'rank') ?? null;
       setRank(found);
@@ -26,6 +45,8 @@ export function ReviewPage() {
       setError(null);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setLooking(false);
     }
   }, []);
 
@@ -80,16 +101,15 @@ export function ReviewPage() {
   }
 
   useEffect(() => {
-    void load();
     void loadRun();
     api.thinningSettings().then((s) => setDistance(String(s.rank)), (e: Error) => setError(e.message));
-  }, [load, loadRun]);
+  }, [loadRun]);
 
   async function saveDistance() {
     try {
       setDistance(String((await api.saveThinningSettings(Number(distance))).rank));
       setMessage(null);
-      await load();
+      if (rank !== undefined) await load();
     } catch (e) {
       setError(`Could not save the distance: ${(e as Error).message}`);
     }
@@ -105,12 +125,28 @@ export function ReviewPage() {
     }
   }
 
-  const toggle = (id: number) =>
-    setTicked((current) => {
-      const next = new Set(current);
-      if (!next.delete(id)) next.add(id);
-      return next;
+  const toggle = useCallback(
+    (id: number) =>
+      setTicked((current) => {
+        const next = new Set(current);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      }),
+    [],
+  );
+
+  /** What the player did to some findings is done: they leave the run shown, and nothing is looked at again until the player asks. */
+  function resolved(done: ReviewFinding[]) {
+    setMessage(null);
+    const gone = new Set(done.map((f) => `${f.code}\u0000${f.subject}`));
+    const without = (list: ReviewFinding[]) => list.filter((f) => !gone.has(`${f.code}\u0000${f.subject}`));
+    setRun((current) => {
+      if (!current) return current;
+      const { wrong, obsolete, improve, kept } = current.findings;
+      return { ...current, findings: { wrong: without(wrong), obsolete: without(obsolete), improve: without(improve), kept } };
     });
+    if (rank !== undefined) void load();
+  }
 
   const thinning = (
     <>
@@ -125,6 +161,11 @@ export function ReviewPage() {
         </label>
         <button onClick={() => void saveDistance()}>Save distance</button>
       </div>
+      {rank === undefined && (
+        <button disabled={looking} onClick={() => void load()}>
+          {looking ? 'Looking…' : 'Look for pictures to remove'}
+        </button>
+      )}
       {rank && (
         <>
           <p>
@@ -137,18 +178,10 @@ export function ReviewPage() {
               </h4>
               <ul className="reader-tiles">
                 {g.keep.map((id) => (
-                  <li key={id} className="reader-tile">
-                    <img src={learnedLookUrl('rank', id)} alt={`Rank Look ${id} stays`} loading="lazy" />
-                    <span className="muted">Stays</span>
-                  </li>
+                  <ThinningTile key={id} id={id} remove={false} ticked={false} onToggle={toggle} />
                 ))}
                 {g.remove.map((id) => (
-                  <li key={id} className="reader-tile">
-                    <img src={learnedLookUrl('rank', id)} alt={`Rank Look ${id} to remove`} loading="lazy" />
-                    <label className="check">
-                      <input type="checkbox" checked={ticked.has(id)} onChange={() => toggle(id)} aria-label={`Remove Rank Look ${id}`} /> Remove
-                    </label>
-                  </li>
+                  <ThinningTile key={id} id={id} remove ticked={ticked.has(id)} onToggle={toggle} />
                 ))}
               </ul>
             </article>
@@ -200,11 +233,7 @@ export function ReviewPage() {
         findings={run?.findings ?? null}
         dismissed={run?.dismissed ?? []}
         placeholder={run === undefined ? 'Looking for the last run…' : 'No review has been run yet.'}
-        onChanged={() => {
-          setMessage(null);
-          void startRun();
-          void load();
-        }}
+        onChanged={resolved}
         onDismissalChanged={() => void loadRun()}
         onError={setError}
       >

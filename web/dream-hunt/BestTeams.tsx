@@ -240,7 +240,7 @@ export function BestTeams({ bosses, rules, send }: { bosses: Boss[]; rules: Boss
   const [thisWeek, setThisWeek] = useState(false);
   const [include, setInclude] = useState<string[]>([]);
   const [exclude, setExclude] = useState<string[]>([]);
-  const maps = useMaps();
+  const { maps, error: mapsError } = useMaps();
 
   useEffect(() => {
     if (!boss && bosses.length) setBoss((bosses.find((b) => b.attempts > 0) ?? bosses[0]!).name);
@@ -291,6 +291,11 @@ export function BestTeams({ bosses, rules, send }: { bosses: Boss[]; rules: Boss
         are those of the fights without a Rule, the fights under one are written beneath in grey and shown as hollow dots, and a team cleared only
         under a Rule is ranked last of the cleared ones and flagged. The same heroes and artifact count as one team wherever they stand; open a team to see where its heroes stood, fastest placement first.
       </p>
+      {mapsError && (
+        <p className="error" role="alert">
+          {mapsError}
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}

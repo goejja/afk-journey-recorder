@@ -26,6 +26,9 @@ export interface Reference {
   profiles: Profile[];
 }
 
+/** How a part of the page's reference is changed: what changes, or a function of the reference as it is when the change is applied (so two quick changes cannot overwrite each other). */
+export type PatchReference = (change: Partial<Reference> | ((old: Reference) => Partial<Reference>)) => void;
+
 /** One team's battle while it is being set up, before it is saved as a record. */
 export interface Draft {
   mapName: string;
@@ -165,17 +168,26 @@ export function cloneOf(reference: Reference, fights: ArenaBattle[], keepResult 
   };
 }
 
-/** The saved fights of Super League, in every Round and Tournament: the Round's own are picked where the Round matters, and a Player with none there falls back to these (ADR 0021). */
-export const savedOfMode = (): Promise<ArenaBattle[]> => api.arenaBattles({ mode: ['Super League'], limit: '1000' }).catch(() => []);
+/** A read that fails says what it was reading: an empty answer is "none", so a failure must never be turned into one. */
+async function reading<T>(what: string, read: Promise<T>): Promise<T> {
+  try {
+    return await read;
+  } catch (e) {
+    throw new Error(`${what} could not be read: ${(e as Error).message}`);
+  }
+}
+
+/** The saved fights of a mode (Super League, whose Round is picked where it matters): a Player with none in the Round falls back to these (ADR 0021). */
+export const savedOfMode = (mode: ArenaMode = 'Super League'): Promise<ArenaBattle[]> => reading(`The saved ${mode} battles`, api.arenaBattles({ mode: [mode], limit: '1000' }));
 
 /** The rosters of the Profiles the pictures name, by Profile id: the ranks and equipment a picture could not read come from them (ADR 0021). */
 export async function rostersOf(groups: ImportGroup[]): Promise<Map<number, Hero[]>> {
-  const ids = new Set<number>();
+  const profiles = new Map<number, string>();
   for (const group of groups)
     for (const picture of group.pictures)
-      for (const side of [picture.draft.sideA, picture.draft.sideB]) if (side.profile) ids.add(side.profile.id);
+      for (const side of [picture.draft.sideA, picture.draft.sideB]) if (side.profile) profiles.set(side.profile.id, side.profile.name);
   const rosters = new Map<number, Hero[]>();
-  await Promise.all([...ids].map(async (id) => rosters.set(id, await api.heroes(id).catch(() => []))));
+  await Promise.all([...profiles].map(async ([id, name]) => rosters.set(id, await reading(`The roster of ${name}`, api.heroes(id)))));
   return rosters;
 }
 
@@ -192,8 +204,8 @@ export function pairOf(group: ImportGroup): string | null {
  */
 export async function loadRoundDeployments(round: ImportRound, profiles: Profile[], fights?: ArenaBattle[]): Promise<RoundDeploymentEntry[]> {
   const [confirmed, saved] = await Promise.all([
-    api.roundDeployments(round.tournamentId, round.round).catch(() => []),
-    fights ?? api.arenaBattles({ mode: ['Super League'], tournament: String(round.tournamentId), round: round.round, limit: '1000' }).catch(() => []),
+    reading('The Round Deployments', api.roundDeployments(round.tournamentId, round.round)),
+    fights ?? reading('The saved Battles of this Round', api.arenaBattles({ mode: ['Super League'], tournament: String(round.tournamentId), round: round.round, limit: '1000' })),
   ]);
   return mergeDeployments(confirmed, deploymentsFromRecords(reusableIn(saved, round), profiles));
 }

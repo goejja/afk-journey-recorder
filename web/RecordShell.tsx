@@ -75,6 +75,8 @@ interface Props {
   /** Saves and keeps the form as it is, so a retry of the same formation only needs a new result. Absent when editing. */
   onSaveAnother?: () => void;
   saveDisabled?: boolean;
+  /** A save is running: both Save buttons stay disabled until it ends. */
+  saving?: boolean;
   onCancel: () => void;
   /** The cancel button's text; "Cancel" by default. */
   cancelLabel?: string;
@@ -105,7 +107,7 @@ function useFillWindow() {
  * line, then the result, note, tags and Formation IDs (the same line in every mode, all in view), then a line for what only the mode
  * has, then the team tabs, and the board in the rest of the window (ADR 0034).
  */
-export function RecordShell({ title, identity, result, note, onNote, tags, onTags, lockedTags, fields, deployment, formationIds, teams, onSetDefault, error, status, saveLabel, onSave, onSaveAnother, saveDisabled, onCancel, cancelLabel, children }: Props) {
+export function RecordShell({ title, identity, result, note, onNote, tags, onTags, lockedTags, fields, deployment, formationIds, teams, onSetDefault, error, status, saveLabel, onSave, onSaveAnother, saveDisabled, saving, onCancel, cancelLabel, children }: Props) {
   const fill = useFillWindow();
   return (
     <section className="workspace" ref={fill.ref} style={fill.style}>
@@ -114,11 +116,11 @@ export function RecordShell({ title, identity, result, note, onNote, tags, onTag
           <h2>{title}</h2>
           {identity}
           <div className="workspace-actions">
-            <button className="primary" onClick={onSave} disabled={saveDisabled}>
-              {saveLabel}
+            <button className="primary" onClick={onSave} disabled={saveDisabled || saving}>
+              {saving ? 'Saving…' : saveLabel}
             </button>
             {onSaveAnother && (
-              <button onClick={onSaveAnother} disabled={saveDisabled}>
+              <button onClick={onSaveAnother} disabled={saveDisabled || saving}>
                 Save and record another
               </button>
             )}

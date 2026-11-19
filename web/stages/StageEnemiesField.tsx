@@ -73,7 +73,7 @@ export function StageEnemiesField({ enemies, heroes, value, onChange }: Props) {
             <option key={`hero:${h.name}`} value={h.name} label="Hero" />
           ))}
         </datalist>
-        {message && <span className="error">{message}</span>}
+        {message && <span className="error" role="alert">{message}</span>}
       </div>
     </div>
   );

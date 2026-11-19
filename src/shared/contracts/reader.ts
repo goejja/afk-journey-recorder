@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ArenaMode, LearnedView, ReaderView } from '../api.js';
+import type { ArenaMode, LearnedView, ParkedList, ReaderView } from '../api.js';
 import { Binary, endpoint } from '../contract.js';
 
 // The learned pictures and reader examples the Admin review looks at (ADR 0012). The bodies are typed, not checked by the schema: the
@@ -45,6 +45,20 @@ export const importFeedbackContract = {
     method: 'POST',
     path: '/api/import-feedback',
     body: z.custom<{ mode: ArenaMode; sides: unknown[] }>(),
-    response: z.object({ logged: z.number(), looks: z.number(), heroExamples: z.number(), rankLooks: z.number() }),
+    response: z.object({ logged: z.number(), looks: z.number(), heroExamples: z.number(), rankLooks: z.number(), parked: z.number(), full: z.array(z.enum(['difference', 'unsure'])) }),
   }),
+};
+
+/** The readings of Battle imports that wait for the player to say which hero a tile shows (ADR 0040). */
+export const parkedReadingsContract = {
+  /**
+   * The parked readings, oldest first, `limit` of them from `offset` (20 by default), of one `kind` or of all. `total` counts the readings of the
+   * kind asked for, and `counts` every kind, with the caps.
+   */
+  list: endpoint({ method: 'GET', path: '/api/admin/parked-readings', query: z.object({ offset: z.string().optional(), limit: z.string().optional(), kind: z.string().optional() }), response: z.custom<ParkedList>() }),
+  image: endpoint({ method: 'GET', path: '/api/admin/parked-readings/:id/image', response: Binary }),
+  /** The player says which hero the tile shows: it becomes a Hero Example, unless a tile just like it is already one. The reading leaves the list either way. */
+  confirm: endpoint({ method: 'POST', path: '/api/admin/parked-readings/:id/confirm', body: z.custom<{ hero: string }>(), response: z.object({ learnt: z.boolean() }) }),
+  /** The player puts the reading aside: it and its picture are deleted and nothing is learnt. */
+  dismiss: endpoint({ method: 'DELETE', path: '/api/admin/parked-readings/:id', response: z.undefined(), status: 204 }),
 };

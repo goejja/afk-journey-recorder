@@ -82,8 +82,10 @@ export interface ImportFeedbackSide {
     artifact: string | null;
     phantimal: string | null;
     /** The tile of each hero the reading named, and of each hero tile it did not name (hero null), as PNG data URLs: what a correction teaches the hero and rank readers. */
-    tiles?: { hero: string | null; png: string }[];
+    tiles?: { hero: string | null; png: string; /** The Agent was not sure of this hero, and what else it might be. */ unsure?: boolean; candidates?: string[] }[];
   };
+  /** Which side of the battle this is, for the readings that are parked for review. */
+  side?: 'A' | 'B';
   /** Heroes whose rank in the form may only be what a profile's roster filled in: not taken as a correction. */
   skipRank?: string[];
 }

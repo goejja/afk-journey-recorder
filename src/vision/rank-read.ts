@@ -26,6 +26,13 @@ export const RANK_MAX_DISTANCE = 0.15;
 /** How much closer the best rank's closest example must be than the closest example of any other rank, as a share of that distance. */
 export const RANK_MARGIN = 0.3;
 
+/**
+ * The version of what `rankFeatures` computes. Vectors are stored with it (`rank_look_feature`), so a change to the extractor, its sizes,
+ * windows or weights must raise it, or the stored vectors would be compared with new ones. `tests/vision/rank-read.test.ts` fails when the
+ * output for a fixed picture changes.
+ */
+export const FEATURES_VERSION = 1;
+
 /** Features: the colours of the top as a small grid, then one ornament share per `ORNAMENTS` entry. */
 export type Features = Float32Array;
 

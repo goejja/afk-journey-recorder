@@ -98,7 +98,7 @@ describe('stages', () => {
 });
 
 describe('attempts', () => {
-  it('records an attempt with a snapshot of rank and equipment, unchanged by later roster edits', async () => {
+  it('records an attempt with no hero state, whatever the roster holds (ADR 0041)', async () => {
     const stage = await json(createStage());
     const created = await json(attempt(stage.id, { note: ' first try ' }));
     expect(created).toMatchObject({
@@ -106,18 +106,31 @@ describe('attempts', () => {
       buffLevel: null,
       formation: {
         artifact: 'Bladestorm',
-        
         heroes: [
-          { tile: 38, name: 'A', rank: 'Mythic+', equipmentLevel: 10 },
-          { tile: 39, name: 'B', rank: 'Mythic+', equipmentLevel: 10 },
+          { tile: 38, name: 'A', rank: null, equipmentLevel: null },
+          { tile: 39, name: 'B', rank: null, equipmentLevel: null },
         ],
-        assist: { name: 'C', rank: 'Mythic+', equipmentLevel: 10 },
+        assist: { name: 'C', rank: null, equipmentLevel: null },
       },
     });
+    expect(db.prepare("SELECT count(*) FROM formation_hero WHERE rank IS NOT NULL OR equipment_level IS NOT NULL").pluck().get()).toBe(0);
+  });
 
-    db.prepare("UPDATE roster SET rank = NULL, equipment_level = NULL WHERE hero_name = 'A'").run();
-    const list = await json(send('GET', '/api/attempts'));
-    expect(list[0].formation.heroes[0]).toMatchObject({ name: 'A', rank: 'Mythic+', equipmentLevel: 10 });
+  it('rejects the rank or equipment of a hero, or of the assist hero', async () => {
+    const stage = await json(createStage());
+    const heroes = (extra: object) => [{ tile: 38, hero: 'A', ...extra }];
+    for (const bad of [
+      formation({ heroes: heroes({ rank: 'Mythic+' }) }),
+      formation({ heroes: heroes({ equipmentLevel: 10 }) }),
+      formation({ heroes: heroes({ rank: null }) }),
+      formation({ assistRank: 'Mythic+' }),
+      formation({ assistEquipmentLevel: 10 }),
+    ]) {
+      const response = await attempt(stage.id, { formation: bad });
+      expect(response.status).toBe(400);
+      expect((await json(response)).error).toBe('A stage record does not keep the rank or equipment of a hero');
+    }
+    expect(db.prepare('SELECT count(*) FROM attempt').pluck().get()).toBe(0);
   });
 
   it('stores a buff level for Apex stages (default 0) and none for other kinds', async () => {
@@ -141,9 +154,10 @@ describe('attempts', () => {
     expect((await attempt(phanti.id, { formation: wrongSeason })).status).toBe(400);
   });
 
-  it('rejects heroes outside the roster, an outcome and unknown stages', async () => {
+  it('accepts any known hero, not only the roster, and rejects an unknown hero, an outcome and unknown stages', async () => {
     const stage = await json(createStage());
-    expect((await attempt(stage.id, { formation: formation({ heroes: [{ tile: 38, hero: 'D' }] }) })).status).toBe(400);
+    expect((await attempt(stage.id, { formation: formation({ heroes: [{ tile: 38, hero: 'D' }] }) })).status).toBe(201); // D is not on the roster
+    expect((await attempt(stage.id, { formation: formation({ heroes: [{ tile: 38, hero: 'Nobody' }] }) })).status).toBe(400);
     expect((await attempt(stage.id, { outcome: 'Loss' })).status).toBe(400);
     expect((await attempt(stage.id, { outcome: 'Win' })).status).toBe(400);
     expect((await attempt(9999)).status).toBe(404);

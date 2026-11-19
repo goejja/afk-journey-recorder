@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DREAM_HUNT_FIGHTS, formatDuration } from '../../src/domain/dream-hunt.js';
 import { api, type DreamHuntAttempt, type WeeklySetups } from '../backend.js';
 import { RecordList, RecordToolbar, useGroupedList, type ListItem } from '../GroupedList.js';
@@ -9,7 +9,8 @@ import { MultiSelect } from '../MultiSelect.js';
 import { FormationIdBadge } from '../FormationIdField.js';
 import { TagBadges, TagFilter } from '../Tags.js';
 import { useConfirm } from '../ui/Dialog.js';
-import { useNewest } from '../useLoad.js';
+import { useLoad } from '../useLoad.js';
+import { ListStatus } from '../ui/ListStatus.js';
 import { type Reference, type Draft } from './draft.js';
 import { NewFights } from './NewFights.js';
 import { EditFight } from './EditFight.js';
@@ -132,38 +133,34 @@ function FightRow({ fight: f, onEdit, onDelete, onClone, shares, inBattle = fals
   );
 }
 
+const NO_FIGHTS: DreamHuntAttempt[] = [];
+
 export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPrefillUsed }: { reference: Reference; onChanged: () => void; onDefaults: (defaults: WeeklySetups) => void; onForm: (open: boolean) => void; prefill: { index: number; draft: Draft }[] | null; onPrefillUsed: () => void }) {
-  const [fights, setFights] = useState<DreamHuntAttempt[]>([]);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<DreamHuntAttempt | null>(null);
   const [cloning, setCloning] = useState<DreamHuntAttempt[] | null>(null);
   const [seed, setSeed] = useState<{ index: number; draft: Draft }[] | null>(null);
   const [editingDay, setEditingDay] = useState<{ id: number; fights: DreamHuntAttempt[] } | null>(null);
+  // what a plain Save left undone, shown after the form has closed (reload() clears `error`, so it is kept apart)
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (adding || editing || editingDay) setNotice(null);
+  }, [adding, editing, editingDay]);
   const [limit, setLimit] = useState(PAGE);
-  /** Whether there are fights older than the ones listed: one more than the limit came back. */
-  const [older, setOlder] = useState(false);
   const [boss, setBoss] = useState<string[]>([]);
   const [tag, setTag] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
 
-  const newest = useNewest();
-  const reload = useCallback(async () => {
-    const current = newest();
-    try {
-      const loaded = await api.dreamHuntAttempts({ limit: String(limit + 1), boss, tag });
-      if (!current()) return;
-      setFights(loaded.slice(0, limit));
-      setOlder(loaded.length > limit);
-      setError(null);
-    } catch (e) {
-      if (current()) setError((e as Error).message);
-    }
-  }, [boss, tag, limit, newest]);
-
+  // one more than the limit is asked for: that it came back tells whether there are older fights
+  const loaded = useLoad(() => api.dreamHuntAttempts({ limit: String(limit + 1), boss, tag }), [boss, tag, limit]);
+  const fights = useMemo(() => (loaded.data ?? NO_FIGHTS).slice(0, limit), [loaded.data, limit]);
+  const older = (loaded.data?.length ?? 0) > limit;
+  const reload = loaded.reload;
+  // an answer clears what an action here failed to do, as the answer of the list did before
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (loaded.data) setError(null);
+  }, [loaded.data]);
 
   async function remove(fight: DreamHuntAttempt) {
     if (
@@ -307,12 +304,13 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
           void reload();
           onChanged();
         }}
-        onSaved={() => {
+        onSaved={(saved) => {
           setAdding(false);
           setCloning(null);
           setSeed(null);
           void reload();
           onChanged();
+          if (saved) setNotice(`Saved. ${saved}`);
         }}
       />
     );
@@ -356,14 +354,21 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
         <MultiSelect label="Boss" options={reference.bosses.map((b) => b.name)} value={boss} onChange={setBoss} />
         <TagFilter value={tag} onChange={setTag} />
       </RecordToolbar>
-      {error && (
+      {(error ?? loaded.error) && (
         <p className="error" role="alert">
-          {error}
+          {error ?? loaded.error}
         </p>
       )}
-      <RecordList list={list} label="Boss fights" battle="day" fight="fight" renderItem={renderItem} />
+      {notice && (
+        <p className="error" role="alert">
+          {notice}
+        </p>
+      )}
+      <div className={loaded.loading && loaded.data ? 'refreshing' : undefined} aria-busy={loaded.loading}>
+        <RecordList list={list} label="Boss fights" battle="day" fight="fight" renderItem={renderItem} />
+      </div>
       {older && <button onClick={() => setLimit((old) => old + PAGE)}>Show older fights</button>}
-      {fights.length === 0 && <p className="muted">No boss fights recorded yet.</p>}
+      <ListStatus loaded={loaded.data !== undefined} failed={loaded.error !== null} empty={fights.length === 0} filtered={boss.length > 0 || tag.length > 0} none="No boss fights recorded yet." noMatch="No boss fights match these filters." />
       {dialog}
     </div>
   );

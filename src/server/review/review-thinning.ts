@@ -1,14 +1,13 @@
 import type Database from 'better-sqlite3';
-import { existsSync, unlinkSync } from 'node:fs';
+import { statSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Hono } from 'hono';
 import { planThinning, THINNING_FLOOR, type ThinningPicture, type ThinningSource } from '../../domain/thinning.js';
-import { distanceTable } from '../../vision/nearest.js';
-import { distance as rankDistance, rankFeatures, type Features } from '../../vision/rank-read.js';
-import { fileCache } from '../file-cache.js';
+import type { Features } from '../../vision/rank-read.js';
 import { reviewContract } from '../../shared/contracts/review.js';
 import { fail, serve } from '../contract.js';
 import { wrongReadings } from '../reader/learned.js';
+import { rankFeaturesFor, rankMeasure } from '../reader/rank-looks.js';
 import { loadThinningSettings } from './thinning-settings.js';
 
 type RankPicture = ThinningPicture & { features: Features };
@@ -17,25 +16,32 @@ type RankPicture = ThinningPicture & { features: Features };
 export function reviewThinningRoutes(db: Database.Database, options: { imagesDir?: string } = {}): Hono {
   const app = new Hono();
   const root = join(resolve(options.imagesDir ?? 'images'), 'custom');
-  const features = fileCache<Promise<Features>>();
 
-  const rankPictures = async (): Promise<RankPicture[]> => {
+  /** The Rank Looks as they are now, with a key that changes when a row or a picture file does. */
+  const rankPictures = async (): Promise<{ key: string; pictures: RankPicture[] }> => {
     const rows = db.prepare('SELECT id, rank, file, source FROM rank_look ORDER BY id').all() as { id: number; rank: string; file: string; source: ThinningSource }[];
     const pictures: RankPicture[] = [];
+    const stamps: string[] = [];
+    // a picture that is missing or cannot be read is left out; the findings of the review name it
+    const { features } = await rankFeaturesFor(db, rows, join(root, 'rank-look'));
     for (const r of rows) {
-      const file = join(root, 'rank-look', r.file);
-      if (existsSync(file)) pictures.push({ id: r.id, group: r.rank, source: r.source, flagged: false, features: await features(file, rankFeatures) });
+      const found = features.get(r.id);
+      if (!found) continue;
+      const { size, mtimeMs } = statSync(join(root, 'rank-look', r.file));
+      stamps.push(`${r.id}:${r.rank}:${r.source}:${size}:${mtimeMs}`);
+      pictures.push({ id: r.id, group: r.rank, source: r.source, flagged: false, features: found });
     }
-    return pictures;
+    return { key: stamps.join('|'), pictures };
   };
 
-  /** The groups of Rank Looks the review offers to remove, as they are now. */
-  const rankProposal = async () => {
-    const pictures = await rankPictures();
-    const plans = planThinning(pictures, { threshold: loadThinningSettings(db).rank, floor: THINNING_FLOOR, distance: (a, b) => rankDistance(a.features, b.features) });
+  type Proposal = Awaited<ReturnType<typeof computeProposal>>;
+
+  const computeProposal = (pictures: RankPicture[], threshold: number) => {
+    // the table is filled once, and the plan and every pass of the reader below read from it
+    const measure = rankMeasure(pictures.map((p) => p.features));
+    const plans = planThinning(pictures, { threshold, floor: THINNING_FLOOR, distance: (a, b) => measure(a.features, b.features) });
     // a removal is offered only if the rank reader, reading each look from all the others, names no more wrong ranks without it than without
     // the removals offered before it (ADR 0031); one that does harm stays, and does not hold back the others of its group
-    const measure = distanceTable(pictures.map((p) => p.features), rankDistance);
     const wrong = (without: Set<number>) => wrongReadings(pictures.filter((p) => !without.has(p.id)).map((p) => ({ rank: p.group, features: p.features })), measure);
     const removed = new Set<number>();
     const baseline = wrong(removed);
@@ -53,6 +59,20 @@ export function reviewThinningRoutes(db: Database.Database, options: { imagesDir
       return { group: plan.group, keep: [...plan.keep, ...plan.remove.filter((p) => !remove.includes(p))], remove };
     }).filter((plan) => plan.remove.length > 0);
     return { offered, baseline, wrong, looks: pictures.length };
+  };
+
+  /**
+   * The groups of Rank Looks the review offers to remove, as they are now. The work grows with the square of the looks and runs on the
+   * one thread that serves every page, so the answer is kept while the looks (rows and picture files) and the threshold are the same.
+   */
+  let kept: { key: string; proposal: Proposal } | null = null;
+  const rankProposal = async (): Promise<Proposal> => {
+    const { key: looks, pictures } = await rankPictures();
+    const key = `${loadThinningSettings(db).rank}#${looks}`;
+    if (kept?.key === key) return kept.proposal;
+    const proposal = computeProposal(pictures, loadThinningSettings(db).rank);
+    kept = { key, proposal };
+    return proposal;
   };
 
   const groupsOf = (offered: { group: string; keep: { id: number }[]; remove: { id: number }[] }[]) => offered.map((p) => ({ group: p.group, keep: p.keep.map((k) => k.id), remove: p.remove.map((r) => r.id) }));

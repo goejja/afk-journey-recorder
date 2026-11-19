@@ -90,6 +90,18 @@ describe('the Reader review', () => {
     expect((await app.request('/api/admin/reader/look/999/image')).status).toBe(404);
   });
 
+  it('lets the browser keep the picture of a tile and answers 304 while the file is unchanged', async () => {
+    const id = await learn('look', 'Evie', await tile(200, 20, 20));
+    const url = `/api/admin/reader/look/${id}/image`;
+    const etag = (await app.request(url)).headers.get('etag');
+    expect(etag).toBeTruthy();
+    const again = await app.request(url, { headers: { 'if-none-match': etag! } });
+    expect(again.status).toBe(304);
+    expect((await again.arrayBuffer()).byteLength).toBe(0);
+    writeFileSync(join(images, 'custom', 'look', `${id}.png`), await tile(20, 200, 20));
+    expect((await app.request(url, { headers: { 'if-none-match': etag! } })).status).toBe(200);
+  });
+
   it('deletes a tile with its row and its picture, only when asked for from the app', async () => {
     const id = await learn('example', 'Evie', await tile(200, 20, 20));
     const file = join(images, 'custom', 'hero-example', `${id}.png`);

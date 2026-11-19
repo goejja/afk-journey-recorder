@@ -33,19 +33,14 @@ const team = (names: string[], extra: object = {}) => ({
 });
 
 describe('editing a stage attempt', () => {
-  it('changes the heroes and note, keeping a stored rank the roster has outgrown', async () => {
+  it('changes the heroes and note, and keeps no hero state', async () => {
     const stage = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 10, mapName: 'Open' }));
     const created = await json(send('POST', '/api/attempts', { stageId: stage.id, formation: team(['A', 'B']) }));
     db.prepare("UPDATE roster SET rank = 'Mythic+'").run();
-    const edited = await json(
-      send('PUT', `/api/attempts/${created.id}`, {
-        stageId: stage.id,
-        note: 'typo',
-        formation: { ...team(['A', 'C']), heroes: [{ tile: 38, hero: 'A', rank: 'Mythic' }, { tile: 39, hero: 'C' }] },
-      }),
-    );
+    const edited = await json(send('PUT', `/api/attempts/${created.id}`, { stageId: stage.id, note: 'typo', formation: team(['A', 'H']) })); // H is not on the roster
     expect(edited).toMatchObject({ id: created.id, note: 'typo' });
-    expect(edited.formation.heroes.map((h: any) => [h.name, h.rank])).toEqual([['A', 'Mythic'], ['C', 'Mythic+']]);
+    expect(edited.formation.heroes.map((h: any) => [h.name, h.rank])).toEqual([['A', null], ['H', null]]);
+    expect((await send('PUT', `/api/attempts/${created.id}`, { stageId: stage.id, formation: team(['A'], { rank: 'Mythic' }) })).status).toBe(400);
     expect(await json(send('GET', '/api/attempts'))).toHaveLength(1);
   });
 

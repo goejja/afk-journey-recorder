@@ -70,6 +70,7 @@
   /* Room kept at the right edge of every scrolling box, so its scrollbar (also the overlay kind that floats over the content) never covers what is inside */
   --scroll-room: var(--sp-4);
   --stage-box: 44px;
+  --stage-card-min: 11rem;
   --stage-cleared: color-mix(in srgb, var(--win) 40%, var(--panel));
   --stage-older: color-mix(in srgb, var(--warn) 40%, var(--panel));
   /* Corners: controls, cards and panels, pills */
@@ -113,6 +114,8 @@ main { padding: var(--sp-4) var(--sp-5); }
 p { margin: 0 0 var(--sp-3); }
 h2 { font-size: var(--font-lg); margin: 0 0 var(--sp-3); }
 .muted { color: var(--muted); font-weight: normal; font-size: var(--font-md); }
+/* A list whose rows are being read again keeps them, dimmed once the answer is slow (the delay keeps a fast one from flashing). */
+.refreshing { opacity: 0.6; transition: opacity 0.15s ease 0.2s; }
 .filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-4); align-items: flex-end; }
 /* Every control is one height, so a select, a button and a text box in the same row line up. The compact size is for controls inside cards and tables. */
 input, select, button, textarea { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-control); padding: var(--sp-1) var(--sp-3); min-height: var(--control-h); font: inherit; }
@@ -122,7 +125,7 @@ input[type='checkbox'], input[type='radio'] { flex: none; width: var(--check-siz
 .filters .upload { min-height: var(--control-h); padding: 0 var(--sp-3); }
 .small, .profile, .enemy-chip, .upload { min-height: var(--control-h-compact); padding: 0 var(--sp-2); }
 /* Buttons that are only an icon or a link inside something else are not controls of their own. */
-.hex, .hex-slot, .tag-remove, button.link, .chip button, .placed li button { min-height: 0; }
+.hex, .hex-slot, .tag-remove, button.link, .chip button, .placed li button, .toast button { min-height: 0; }
 button { cursor: pointer; }
 button:disabled { opacity: 0.4; cursor: default; }
 button.danger { border-color: var(--danger); color: var(--danger); }
@@ -275,11 +278,13 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .attempt-top:has(> .battle-info) > .attempt-info { grid-area: info; }
 .attempt-top:has(> .battle-info) > .attempt-actions { grid-area: actions; }
 /* A record of a stage in the panel of its box: the season, the date, the buff level, the tags, the buttons. */
-.stage-record { display: grid; grid-template-columns: 3rem 9.5rem 4.5rem minmax(0, 1fr) auto; column-gap: var(--sp-3); align-items: center; }
-.stage-record > .badge { justify-self: start; }
-.record-map { margin-top: var(--sp-2); }
+.attempts.stage-records { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(var(--stage-card-min), calc((100% - 4 * var(--sp-2)) / 5)), 1fr)); gap: var(--sp-2); } /* 5 cards to a row, fewer when a card would be narrower than --stage-card-min */
+.stage-card { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.stage-card .attempt-actions { justify-content: flex-start; margin-top: auto; }
+.stage-card .attempt-actions button { min-width: 0; }
+.stage-record { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); }
+.record-map { min-width: 0; }
 .stage-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stage-record .tags-cell { flex-wrap: nowrap; min-width: 0; }
 
 /* The Stages grid: a lane of boxes, one per stage number, in three states. */
 .stage-toolbar .tabs { margin-bottom: 0; }
@@ -329,7 +334,7 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .team-lost { border-color: var(--danger-soft); }
 /* This week: the bosses as columns and a few whole days under them, small enough to need no scrolling. Header and cells share the column widths. */
 .week-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0 var(--sp-2); }
-.week-table th:first-child, .week-table td:first-child { width: 72px; }
+.week-table th:first-child, .week-table td:first-child { width: 9rem; }
 /* The Advisor's first column holds a plan's name, its total and its minimum clears, so it is wider than a day's total. */
 .week-table.advisor th:first-child, .week-table.advisor td:first-child { width: 12rem; }
 .week-table th, .week-table td { text-align: left; vertical-align: middle; padding: var(--sp-2) var(--sp-3); }
@@ -338,6 +343,7 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .week-table td:last-child { border-right: 1px solid var(--border); border-radius: 0 var(--r-card) var(--r-card) 0; }
 .week-day { cursor: pointer; }
 .week-toggle { display: flex; flex-direction: column; align-items: flex-start; border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+.week-group-facts { font-size: var(--font-sm); white-space: nowrap; }
 .week-placements td { padding-top: var(--sp-1); }
 .week-boss { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
 .week-boss > span { display: flex; flex-direction: column; min-width: 0; }
@@ -612,10 +618,24 @@ a.button:hover { background: var(--panel-hi); }
 .reader-tile.flagged { border-color: var(--warn); }
 .reader-tile img { width: 100%; height: auto; border-radius: var(--r-control); }
 .reader-tile .warn-text { color: var(--warn); }
+.warn-text { color: var(--warn); }
+/* To confirm: the readings the hero reader could not learn by itself, one card each */
+.parked-list { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--sp-3); }
+.parked-card { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-3); }
+.parked-card p { margin: 0; }
+.crop { max-width: 160px; height: auto; border-radius: var(--r-control); }
+.parked-choices { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.parked-choices button { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.parked-actions { display: flex; gap: var(--sp-2); }
+.parked-dialog { display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: flex-start; }
+.parked-dialog-grid { flex: 1 1 280px; min-width: 0; }
 
 /* Round Deployments: one condensed line per Profile, five boxes (one per team), detail on demand */
 .deployment-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
 .deployment-head h4 { margin: 0; }
+#learned-summary-body h3 { margin: var(--sp-4) 0 var(--sp-2); }
+.sources-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: var(--sp-2) var(--sp-4); }
+.sources-list li { display: contents; }
 .deployment-toggle, .deployment-name { padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
 .deployment-toggle:hover, .deployment-name:hover { text-decoration: underline; }
 .deployment-line { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; padding: var(--sp-2) 0; border-top: 1px solid var(--border); }
@@ -670,3 +690,11 @@ button.group-row:hover { background: var(--panel-hi); }
 .counter-matrix th[scope="row"] { white-space: nowrap; }
 .group-rank { display: inline-block; min-width: 1.5rem; margin-right: var(--sp-2); text-align: right; font-variant-numeric: tabular-nums; }
 .counter-matrix th[scope="row"] .group-heroes { display: inline-flex; vertical-align: middle; }
+
+/* Toasts: a short message at the top right that fades by itself; above every other layer, and the stack never blocks what is under the gaps */
+.toasts { position: fixed; top: var(--sp-4); right: var(--sp-4); z-index: var(--z-toast); display: grid; gap: var(--sp-2); width: min(360px, calc(100vw - 2 * var(--sp-4))); pointer-events: none; }
+.toast { pointer-events: auto; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); background: var(--panel-hi); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: 0 4px 16px var(--shadow-strong); font-size: var(--font-md); animation: toast-in 0.15s ease-out; }
+.toast.leaving { opacity: 0; transition: opacity 0.2s; }
+.toast button { border: 0; background: transparent; padding: 0 var(--sp-1); color: var(--muted); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(calc(-1 * var(--sp-2))); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } .toast.leaving { transition: none; } }

@@ -64,7 +64,7 @@ describe('queries', () => {
     await post('/api/attempts', { stageId: stage.id, formation: { heroes: side(['A']), phantimal: null, assistHero: null, artifact: null} });
     const history = stageHistory(db, { season: 8, kind: 'Normal', number: 5 });
     expect(history.attempts).toHaveLength(1);
-    expect((history.attempts[0] as any).heroes[0].name).toBe('A');
+    expect((history.attempts[0] as any).heroes).toEqual([{ name: 'A' }]); // no rank or equipment: a stage record keeps none (ADR 0041)
     expect(stageHistory(db, { season: 8, kind: 'Normal', number: 6 }).stage).toBeNull();
 
     for (const timeSeconds of [60, 90]) {

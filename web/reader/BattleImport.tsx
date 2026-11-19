@@ -51,7 +51,7 @@ export function BattleImport({ start: restore, onClose, onOpen, onReview, onSave
       await api.retryBattleImport(id);
       await refresh();
     });
-  const { problems, info, deployments, changes, ready, recheck } = useRoundReview({ groups, chosen, reuse, onReview });
+  const { problems, info, deployments, changes, ready, recheck, error: reviewError } = useRoundReview({ groups, chosen, reuse, onReview });
 
   /** A repair of the Round Deployments (move or delete): the table is worked out again afterwards (ADR 0021). */
   const repair = (action: { kind: 'delete'; profileId: number } | { kind: 'move'; profileId: number; to: number }, round: ImportRound) =>
@@ -110,6 +110,16 @@ export function BattleImport({ start: restore, onClose, onOpen, onReview, onSave
       {error && (
         <p className="error" role="alert">
           {error}
+        </p>
+      )}
+      {choice.problem && (
+        <p className="error" role="alert">
+          {choice.problem}
+        </p>
+      )}
+      {reviewError && (
+        <p className="error" role="alert">
+          The Round could not be checked: {reviewError}
         </p>
       )}
 

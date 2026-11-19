@@ -9,7 +9,7 @@ const schemaSql = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8')
 const viewsSql = readFileSync(new URL('./views.sql', import.meta.url), 'utf8');
 
 /** The versions a migration starts from that rebuild a table other tables point at: they run with foreign keys off, then every key is checked. */
-const REBUILDS_TABLES = new Set([16]);
+const REBUILDS_TABLES = new Set([16, 28]);
 
 /** The `user_version` of a database that has every migration. */
 export const SCHEMA_VERSION = 1 + migrations.length;

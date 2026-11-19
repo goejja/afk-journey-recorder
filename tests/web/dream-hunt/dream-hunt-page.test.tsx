@@ -124,7 +124,37 @@ describe('Fights list', () => {
 });
 
 describe('Dream Hunt page', () => {
-  it('opens on This week: the bosses as columns and the fastest days played this week under them', async () => {
+  it('says when the maps could not be read, since the boards then show no map', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    let asked = 0; // the page reads the maps for its own reference first; the board reads them again
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/maps' && ++asked > 1 ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
+    render(<DreamHuntPage />);
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.map((a) => a.textContent)).toContain('The maps could not be read: Network down');
+  });
+
+  it('says Loading… on the Fights tab until its first answer, and only then that no fights are recorded', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    let answer!: () => void;
+    const held = new Promise<void>((resolve) => (answer = resolve));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const list = url.startsWith('/api/dream-hunt/attempts') && !url.includes('limit=100000') && (init?.method ?? 'GET') === 'GET'; // This week reads 100000 of them
+        if (list) await held;
+        return base(url, init);
+      }),
+    );
+    render(<DreamHuntPage />);
+    await userEvent.setup().click(await screen.findByRole('tab', { name: 'Fights' }));
+    expect(await screen.findByText('Loading…')).toBeTruthy();
+    expect(screen.queryByText('No boss fights recorded yet.')).toBeNull();
+    answer();
+    expect(await screen.findByText('No boss fights recorded yet.')).toBeTruthy();
+    expect(screen.queryByText('Loading…')).toBeNull();
+  });
+
+  it('opens on This week: the bosses as columns and the days of the week grouped by the teams they fielded', async () => {
     const createdAt = '2026-01-05 10:00:00'; // the date does not matter: the weekly default decides what is this week
     const bosses = ['Illucia', 'Blightshroom', 'Crazed Shellbrute', 'Lady Starfallen', 'Mirage Frostspike'];
     const fight = (id: number, battleId: number, position: number, timeSeconds: number | null, outcome = 'Win') => ({
@@ -134,35 +164,60 @@ describe('Dream Hunt page', () => {
     const day = (battleId: number, times: (number | null)[], outcome = 'Win') => times.map((t, i) => fight(battleId * 10 + i, battleId, i + 1, t, outcome));
     // Day 5 was played against last week's bosses, so it is not part of this week whatever its date. Day 6 has this week's bosses but another rule.
     const lastWeek = [...day(5, [1, 1, 1, 1, 1]).map((f) => ({ ...f, boss: `Old ${f.boss}` })), ...day(6, [1, 1, 1, 1, 1]).map((f) => ({ ...f, bossRule: 'Berserk' }))];
-    const attempts = [...day(1, [10, 10, 10, 10, 16.57]), ...day(2, [9, 9, 9, 9, 9]), ...day(3, [1, 1, 1, 1, null]), ...day(4, [1, 1, 1, 1, 1], 'Loss'), ...lastWeek];
+    // Days 1, 2 and 3 fielded the same teams (day 3 with the heroes elsewhere on the map), so they are one group; day 7 changed the team against the last boss.
+    const elsewhere = day(3, [30, 30, 30, 30, 30]).map((f) => ({ ...f, formation: { ...f.formation, heroes: f.formation.heroes.map((h) => ({ ...h, tile: h.tile - 1 })) } }));
+    const other = day(7, [20, 20, 20, 20, 20]).map((f, i) => (i === 4 ? { ...f, formation: { ...f.formation, artifact: 'Other Artifact' } } : f));
+    const unfinished = [...day(8, [1, 1, 1, 1, null]), ...day(9, [1, 1, 1, 1, 1], 'Loss')];
+    const attempts = [...day(1, [10, 10, 10, 10, 16.57]), ...day(2, [9, 9, 9, 9, 9]), ...elsewhere, ...other, ...unfinished, ...lastWeek];
     const slots = bosses.map((boss) => ({ boss, mapName: 'Open', rule: null }));
     const defaults = { 'Supreme Arena': { slots: [], updatedAt: null }, 'Super League': { slots: [], updatedAt: null }, 'Dream Hunt': { slots, updatedAt: null } };
     const fetchBefore = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/dream-hunt/attempts') && (init?.method ?? 'GET') === 'GET' ? Response.json(attempts) : url === '/api/defaults' ? Response.json(defaults) : fetchBefore(url, init))));
+    const user = userEvent.setup();
     render(<DreamHuntPage />);
     const table = within(await screen.findByRole('table', { name: 'This week' }));
     expect(await table.findByText('Mirage Frostspike')).toBeTruthy(); // the bosses are the column headings
     const rows = table.getAllByRole('row').slice(1);
-    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual(['Day 1', 'Day 2']); // a day with a lost or untimed fight is left out
-    expect(within(rows[0]!).getByText('45.00s')).toBeTruthy(); // the fastest total first
-    expect(within(rows[1]!).getByText('56.57s')).toBeTruthy();
+    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual(['Group 1', 'Group 2']); // days with a lost or untimed fight, or another week's bosses, are left out
+    expect(within(rows[0]!).getByText('45.00s')).toBeTruthy(); // the group with the fastest day first: day 2 (45) of days 1, 2 and 3 (56.57, 45, 150)
+    expect(within(rows[0]!).getByText('avg 1:23.86 · ×3', { exact: false })).toBeTruthy();
+    expect(within(rows[1]!).getByText('1:40.00')).toBeTruthy(); // day 7, alone
+    expect(within(rows[1]!).getByText(/×1/)).toBeTruthy();
     expect(rows[0]!.querySelectorAll('.week-team-units > span[title="Zanie"]')).toHaveLength(1); // a hero on several tiles shows once
-    // Every day fields the same units against each boss: the won, timed fights count (day 3 won four, day 4 was lost, day 1 and 2 won all five).
-    const cells = '.week-times .week-time';
-    expect(within(rows[1]!).getAllByText('1.00s', { selector: cells })).toHaveLength(4); // the best of 10, 9 and 1
-    expect(within(rows[1]!).getAllByText('6.67s', { selector: cells })).toHaveLength(4); // their average
-    expect(within(rows[1]!).getByText('9.00s', { selector: cells })).toBeTruthy(); // the last boss: 16.57 and 9
-    expect(within(rows[1]!).queryByText(/×/)).toBeNull(); // the number of fights is not shown
-    expect(rows[1]!.querySelectorAll('.week-times')[0]!.textContent).toBe('10.00s · best 1.00s · avg 6.67s'); // run, best and average on one line
-    // Against each boss the fastest of the days listed is green (0) and the slowest red (1); the last boss took 9 on the fastest day and 16.57 on the other.
+    expect(rows[0]!.textContent).not.toMatch(/best|#1/); // no per-team best and average, no rank under the total
+    // Against each boss the fastest of the groups' best days is green (0) and the slowest red (1); against the last boss 9 and 20.
     const share = (row: HTMLElement, index: number) => row.querySelectorAll('td')[index + 1]!.querySelector<HTMLElement>('.week-times > .week-time')!.style.getPropertyValue('--worst');
-    expect(share(rows[0]!, 0)).toBe('0'); // the fastest day, with 9 against 10
+    expect(share(rows[0]!, 0)).toBe('0'); // 9 against 20
     expect(share(rows[1]!, 0)).toBe('1');
-    expect(share(rows[0]!, 4)).toBe('0'); // 9 against 16.57
-    expect(share(rows[1]!, 4)).toBe('1');
     expect(table.queryAllByRole('group', { name: 'Layout on Open' })).toHaveLength(0); // collapsed
-    await userEvent.setup().click(within(rows[0]!).getByRole('button', { name: /Show placements of day 1/ }));
-    expect(await table.findAllByRole('group', { name: 'Layout on Open' })).toHaveLength(5); // where the heroes stood against each boss
+    await user.click(within(rows[0]!).getByRole('button', { name: /Show the days of group 1/ }));
+    expect(await table.findAllByRole('group', { name: 'Layout on Open' })).toHaveLength(5); // where the heroes stood on the best day
+    const dayRows = table.getAllByRole('row').filter((r) => r.getAttribute('aria-label') === 'Day of group 1');
+    expect(dayRows.map((r) => r.querySelector('td')!.querySelector('strong')!.textContent)).toEqual(['45.00s', '56.57s', '2:30.00']); // the group's days, the fastest first
+    expect(within(dayRows[0]!).getAllByText('9.00s')).toHaveLength(5);
+  });
+
+  it('lists the seven best groups and the rest on Show more', async () => {
+    const bosses = ['Illucia', 'Blightshroom', 'Crazed Shellbrute', 'Lady Starfallen', 'Mirage Frostspike'];
+    const day = (battleId: number) =>
+      bosses.map((boss, i) => ({
+        id: battleId * 10 + i, createdAt: '2026-01-05 10:00:00', outcome: 'Win', note: null, boss, mapName: 'Open', timeSeconds: battleId, bossRule: null, tags: [], battleId, battlePosition: i + 1, battleFormationId: null,
+        formation: { ...formation, artifact: `Artifact ${battleId}`, heroes: [{ tile: 38, name: 'Evie', rank: null, equipmentLevel: null }] }, // another team each day
+      }));
+    const attempts = Array.from({ length: 9 }, (_, i) => day(i + 1)).flat();
+    const slots = bosses.map((boss) => ({ boss, mapName: 'Open', rule: null }));
+    const defaults = { 'Supreme Arena': { slots: [], updatedAt: null }, 'Super League': { slots: [], updatedAt: null }, 'Dream Hunt': { slots, updatedAt: null } };
+    const fetchBefore = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/dream-hunt/attempts') && (init?.method ?? 'GET') === 'GET' ? Response.json(attempts) : url === '/api/defaults' ? Response.json(defaults) : fetchBefore(url, init))));
+    const user = userEvent.setup();
+    render(<DreamHuntPage />);
+    const table = within(await screen.findByRole('table', { name: 'This week' }));
+    await table.findByText('Mirage Frostspike');
+    expect(table.getAllByRole('row').slice(1)).toHaveLength(7);
+    await user.click(screen.getByRole('button', { name: 'Show 2 more' }));
+    expect(table.getAllByRole('row').slice(1)).toHaveLength(9);
+    await user.click(screen.getByRole('button', { name: 'Show fewer' }));
+    expect(table.getAllByRole('row').slice(1)).toHaveLength(7);
   });
 
   it('ranks teams and flags those with few clears', async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { buildLane, defaultPhase, GRID_PHASES, laneId, laneKey, openByDefault, standardPhase, type Lane } from '../../src/domain/stage-grid.js';
 import { isApex, STAGE_KINDS, type StageKind } from '../../src/domain/stage.js';
-import { api, type Artifact, type Attempt, type Enemy, type GameMap, type Hero, type Phantimal, type Rules } from '../backend.js';
+import { api, type Artifact, type Attempt, type Enemy, type GameMap, type Hero, type Phantimal } from '../backend.js';
 import { useConfirm } from '../ui/Dialog.js';
 import { useLoad } from '../useLoad.js';
 import { AttemptForm, type AttemptFormProps } from './AttemptForm.js';
@@ -16,7 +16,6 @@ interface Reference {
   artifacts: Artifact[];
   enemies: Enemy[];
   phantimals: Phantimal[];
-  rules: Rules;
 }
 
 /** How long a box flashes after a jump. */
@@ -29,8 +28,8 @@ export function StagesPage() {
   const grid = useLoad(() => api.stageGrid(), []);
   const reference = useLoad<Reference>(
     async () => {
-      const [maps, heroes, artifacts, enemies, phantimals, rules] = await Promise.all([api.maps(), api.heroes(), api.artifacts(), api.enemies(), api.phantimals(), api.rules()]);
-      return { maps, heroes, artifacts, enemies, phantimals, rules };
+      const [maps, heroes, artifacts, enemies, phantimals] = await Promise.all([api.maps(), api.heroes(), api.artifacts(), api.enemies(), api.phantimals()]);
+      return { maps, heroes, artifacts, enemies, phantimals };
     },
     [],
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, type BossRule, type GameMap } from '../backend.js';
+import { api, type BossRule } from '../backend.js';
 import { HeroFilter } from './HeroFilter.js';
 import { CompositionTable, type SendToSimulator } from './BestTeams.js';
 import { TagFilter } from '../Tags.js';
@@ -17,7 +17,7 @@ export function Finder({ rules, send }: Props) {
   const [exclude, setExclude] = useState<string[]>([]);
   const [rule, setRule] = useState('any');
   const [tag, setTag] = useState<string[]>([]);
-  const maps: GameMap[] = useMaps();
+  const { maps, error: mapsError } = useMaps();
   const asked = include.length + exclude.length > 0;
   const found = useLoad(() => api.finder(include, exclude, rule, tag), [include.join('|'), exclude.join('|'), rule, tag.join('|')], asked);
   const result = asked ? found.data : undefined;
@@ -42,6 +42,11 @@ export function Finder({ rules, send }: Props) {
       <p className="muted">
         Every team recorded in Dream Hunt that holds all the included heroes and none of the excluded ones, grouped by boss because clear times only compare within one boss. Open a team to see where its heroes stood.
       </p>
+      {mapsError && (
+        <p className="error" role="alert">
+          {mapsError}
+        </p>
+      )}
       {found.error && asked && (
         <p className="error" role="alert">
           {found.error}

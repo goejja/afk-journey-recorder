@@ -38,7 +38,7 @@ import { draftOf } from '../records/battle-draft.js';
 import type { AgentRunner } from '../agent/scenario-run.js';
 import { hasName, heroNames as allHeroNames } from '../db-helpers.js';
 import { rosterImportContract } from '../../shared/contracts/roster-import.js';
-import { fail, file, serve } from '../contract.js';
+import { fail, Failure, file, readUpload, serve } from '../contract.js';
 
 const MAX_PICTURE_BYTES = 12 * 1024 * 1024;
 
@@ -214,9 +214,9 @@ export function rosterImportRoutes(
     const asked = c.req.query('profile');
     const hallProfile = screen === 'hall' || (screen === 'info' && asked) ? findProfile(db, asked) : undefined;
     if ((screen === 'hall' || (screen === 'info' && asked)) && !hallProfile) return fail(404, 'Unknown profile');
-    const bytes = Buffer.from(await c.req.arrayBuffer());
+    const bytes = await readUpload(c, MAX_PICTURE_BYTES, 'The picture can be at most 12 MB');
+    if (bytes instanceof Failure) return bytes;
     if (bytes.length === 0) return fail(400, 'The file is empty');
-    if (bytes.length > MAX_PICTURE_BYTES) return fail(413, 'The picture can be at most 12 MB');
     const waiting = queuedBytes();
     if (waiting + bytes.length > maxQueuedBytes) return fail(409, `The pictures waiting take ${Math.round(waiting / 1048576)} MB of the ${Math.round(maxQueuedBytes / 1048576)} MB allowed: review, save or discard some first`);
     const type = pictureType(bytes);

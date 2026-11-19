@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import { ArenaPage } from '../../../web/arena/ArenaPage.js';
+import { Battles } from '../../../web/arena/BattleList.js';
+import { api } from '../../../web/backend.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
 const hero = (name: string) => ({ name, tier: 'S', class: 'Mage', faction: 'Wilder', damageType: 'Magic', imagePath: null, owned: true, rank: 'Mythic+', equipmentLevel: 10 });
@@ -68,6 +70,40 @@ const phantimalButtons = () =>
 const fieldablePhantimals = () => phantimalButtons().filter((button) => !(button as HTMLButtonElement).disabled).map((button) => button.getAttribute('aria-label'));
 
 describe('Arena page', () => {
+  it('says Loading… until the first answer, then the empty sentence, and another one when a filter matches nothing', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    let answer!: (battles: unknown[]) => void;
+    const held = new Promise<unknown[]>((resolve) => (answer = resolve));
+    let first = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (!url.startsWith('/api/pvp/battles') || (init?.method ?? 'GET') !== 'GET') return base(url, init);
+        if (!first) return Response.json([]);
+        first = false;
+        return Response.json(await held);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    expect(await screen.findByText('Loading…')).toBeTruthy();
+    expect(screen.queryByText('No battles recorded yet.')).toBeNull(); // not before the answer
+    answer([]);
+    expect(await screen.findByText('No battles recorded yet.')).toBeTruthy();
+    await user.type(screen.getByRole('searchbox', { name: 'Player' }), 'Luna');
+    expect(await screen.findByText('No battles match these filters.')).toBeTruthy();
+    expect(screen.queryByText('No battles recorded yet.')).toBeNull();
+  });
+
+  it('says only why when the first load failed, not that nothing is recorded', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/battles') && (init?.method ?? 'GET') === 'GET' ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
+    render(<ArenaPage />);
+    expect((await screen.findByRole('alert')).textContent).toBe('Network down');
+    expect(screen.queryByText('No battles recorded yet.')).toBeNull();
+    expect(screen.queryByText('Loading…')).toBeNull();
+  });
+
   it('searches the battles by Player name or ID', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
@@ -402,6 +438,73 @@ describe('Arena page', () => {
     expect(requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!.body.playerIdA).toBe('4444');
   });
 
+  it('changes the reference through patchReference and never on the prop the page was given', async () => {
+    const [maps, heroes, artifacts, rules, heroRules, phantimals, defaults, profiles] = await Promise.all([api.maps(), api.heroes(), api.artifacts(), api.bossRules(), api.rules(), api.phantimals(), api.defaults(), api.profiles()]);
+    const reference = Object.freeze({ maps, heroes, artifacts, rules, heroRules, phantimals, defaults, profiles: Object.freeze(profiles) as typeof profiles }); // writing to it throws
+    const patchReference = vi.fn();
+    const user = userEvent.setup();
+    render(<Battles reference={reference} patchReference={patchReference} />);
+    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await placeFirstHero(user, /^Evie/);
+    await user.selectOptions(screen.getByLabelText('Profile of Side A'), '4');
+    const prompt = screen.getByRole('group', { name: 'Player ID of Side A' });
+    await user.type(within(prompt).getByLabelText('Player ID of Side A'), '4444');
+    await user.click(within(prompt).getByRole('button', { name: 'Set Player ID' }));
+    await waitFor(() => expect(patchReference).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alert')).toBeNull(); // no "read only" failure from assigning to the prop
+    const change = patchReference.mock.calls[0]![0] as (old: typeof reference) => { profiles: { id: number; playerId: string | null }[] };
+    expect(change(reference).profiles.find((p) => p.id === 4)?.playerId).toBe('4444'); // computed from the reference as it is when applied
+    expect(reference.profiles.find((p) => p.id === 4)?.playerId).toBeNull();
+  });
+
+  it('keeps the roster of the profile chosen last when the answer for the one chosen before arrives late', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/heroes?profile=2' ? (await held, base(url, init)) : base(url, init)))); // Luna's roster is Elite +0
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await placeFirstHero(user, /^Evie/);
+    await user.selectOptions(screen.getByLabelText('Profile of Side A'), '2'); // slow
+    await user.selectOptions(screen.getByLabelText('Profile of Side A'), '3'); // Kai's roster is Mythic+ +10, answered at once
+    await waitFor(() => expect(requests.some((r) => r.url === '/api/heroes?profile=3')).toBe(true));
+    await act(async () => {
+      release();
+      await held;
+    });
+    await user.click(screen.getByRole('button', { name: 'Save battle' }));
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
+    expect(requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!.body.formation.heroes).toEqual([{ tile: 38, hero: 'Evie', rank: 'Mythic+', equipmentLevel: 10 }]);
+  });
+
+  it('keeps the count of waiting pictures from the newest read when an older one answers last', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    const queue = (n: number) => ({ queue: Array.from({ length: n }, (_, i) => ({ id: i + 1, state: 'queued' })), profiles: [], rulesVersion: 0 });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let reads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (!url.startsWith('/api/roster-import')) return base(url, init);
+        reads += 1;
+        if (reads === 1) return (await held, Response.json(queue(0))); // the read made when the page opened, answered last
+        return Response.json(queue(2));
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    await user.click(await screen.findByRole('button', { name: 'New battles' })); // no read while the form is open
+    await user.click(await screen.findByRole('button', { name: 'Cancel' })); // the list again: a newer read, 2 waiting
+    expect(await screen.findByText(/2 waiting/)).toBeTruthy();
+    await act(async () => {
+      release();
+      await held;
+    });
+    expect(screen.getByText(/2 waiting/)).toBeTruthy();
+  });
+
   it('asks to update the profile’s roster after saving a new battle, and applies the ticked upgrades', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
@@ -417,6 +520,31 @@ describe('Arena page', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Update roster' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'PUT' && r.url.startsWith('/api/roster/Evie'))).toBe(true));
     expect(requests.find((r) => r.method === 'PUT' && r.url.startsWith('/api/roster/Evie'))!.url).toContain('profile=2');
+  });
+
+  it('tells the owner on the list that the battle was saved but the roster could not be updated, when a plain Save closes the form', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    // the profile's roster loads when the profile is chosen, and fails when it is read again after the save
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const saved = requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles');
+        if (url === '/api/heroes?profile=2' && saved) return Response.json({ error: 'Network down' }, { status: 500 });
+        return base(url, init);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await placeFirstHero(user, /^Evie/);
+    await user.selectOptions(screen.getByLabelText('Profile of Side A'), '2');
+    await waitFor(() => expect(requests.some((r) => r.url === '/api/heroes?profile=2')).toBe(true));
+    await user.click(screen.getByRole('button', { name: 'Save battle' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/^Saved\. The roster could not be updated: .*Network down/);
+    expect(screen.queryByRole('button', { name: 'Save battle' })).toBeNull(); // the form has closed
+    expect(requests.filter((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'New battles' }));
+    expect(screen.queryByRole('alert')).toBeNull(); // opening a form clears it
   });
 
   it('does not ask about the roster when the sides have no profile', async () => {

@@ -400,10 +400,13 @@ export async function fetchCrops(picture: BattleImportPicture & { draft: BattleD
   };
   const side = async (s: BattleDraftSide) => {
     // the tile of each hero as the readers learn it, to teach them if the player corrects the reading
-    const tiles: { hero: string | null; png: string }[] = [];
-    for (const [hero, key] of [...s.heroes.map((h) => [h.hero, h.tile] as const), ...(s.unread ?? []).map((key) => [null, key] as const)]) {
+    // and, for a hero the Agent was not sure of or a tile it only guessed at, what else it might be: the readings left unpaired wait for the player to confirm
+    const tiles: NonNullable<ImportFeedbackSide['crops']['tiles']> = [];
+    const named = s.heroes.map((h) => ({ hero: h.hero as string | null, key: h.tile, ...(h.unsure ? { unsure: true, candidates: h.candidates ?? [] } : {}) }));
+    const unread = (s.unread ?? []).map((key) => ({ hero: null, key, ...(s.unreadCandidates?.[key] ? { candidates: s.unreadCandidates[key] } : {}) }));
+    for (const { key, ...tile } of [...named, ...unread]) {
       const png = await one(key, true);
-      if (png) tiles.push({ hero, png });
+      if (png) tiles.push({ ...tile, png });
     }
     return { artifact: await one(s.crops?.artifact), phantimal: await one(s.crops?.phantimal), tiles };
   };
@@ -466,8 +469,8 @@ export function feedbackOf(drafts: { imported?: ImportedTeam; formation: Formati
   return drafts.flatMap((d) =>
     d.imported
       ? [
-          side(d.imported.A.read, withoutCorrected(keptOwn(d.formation, d.imported.A.read), d.imported.A.corrected), d.imported.A.crops, rosters.A),
-          side(d.imported.B.read, withoutCorrected(keptOpponent(d.opponent, d.imported.B.read), d.imported.B.corrected), d.imported.B.crops, rosters.B),
+          { ...side(d.imported.A.read, withoutCorrected(keptOwn(d.formation, d.imported.A.read), d.imported.A.corrected), d.imported.A.crops, rosters.A), side: 'A' as const },
+          { ...side(d.imported.B.read, withoutCorrected(keptOpponent(d.opponent, d.imported.B.read), d.imported.B.corrected), d.imported.B.crops, rosters.B), side: 'B' as const },
         ]
       : [],
   );

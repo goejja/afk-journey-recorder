@@ -7,7 +7,7 @@ import { PAIR_HEROES, UNIT_OWNERS } from '../../domain/units.js';
 import { hasName } from '../db-helpers.js';
 import { imageType, type ImageType } from '../image-type.js';
 import { imagesContract } from '../../shared/contracts/images.js';
-import { fail, file, serve } from '../contract.js';
+import { fail, Failure, file, readUpload, serve } from '../contract.js';
 
 const IMAGE_KINDS = ['hero', 'enemy', 'phantimal', 'boss', 'artifact'] as const;
 export type ImageKind = (typeof IMAGE_KINDS)[number];
@@ -118,16 +118,17 @@ export function imageRoutes(db: Database.Database, imagesDir: string): Hono {
     if (!isKind(kind) || !exists(kind, name)) return fail(404, 'Unknown unit');
     const extension = EXTENSION_BY_MIME.get((c.req.header('content-type') ?? '').split(';')[0]!.trim());
     if (!extension) return fail(415, 'Upload a PNG, JPEG, WebP or GIF image');
-    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const bytes = await readUpload(c, MAX_UPLOAD_BYTES, 'Images can be at most 2 MB');
+    if (bytes instanceof Failure) return bytes;
     if (bytes.length === 0) return fail(400, 'The file is empty');
-    if (bytes.length > MAX_UPLOAD_BYTES) return fail(413, 'Images can be at most 2 MB');
     if (imageType(bytes) !== extension) return fail(400, `The file is not really a ${extension.toUpperCase()} image`);
 
     const dir = customDir(kind);
     mkdirSync(dir, { recursive: true });
     const previous = customFile(kind, name);
-    if (previous) rmSync(previous);
-    writeFileSync(join(dir, `${safeFileName(name)}.${extension}`), bytes);
+    const written = join(dir, `${safeFileName(name)}.${extension}`);
+    writeFileSync(written, bytes); // the earlier image goes only once the new one is saved
+    if (previous && previous !== written) rmSync(previous);
     return { name, source: 'custom' as const };
   });
 

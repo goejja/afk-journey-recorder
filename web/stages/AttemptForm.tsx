@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSaveRecord } from '../useSaveRecord.js';
 import { allowsPhantimal, isApex, PHASES, STAGE_KINDS } from '../../src/domain/stage.js';
 import { AFK_RANGE_TAG } from '../../src/domain/tags.js';
 import {
@@ -9,7 +10,6 @@ import {
   type GameMap,
   type Hero,
   type Phantimal,
-  type Rules,
   type Stage,
   type StageEnemy,
   type StageKind,
@@ -18,7 +18,6 @@ import { emptyFormation, formationFromRecord, toPayload } from '../FormationEdit
 import { emptyOpponent } from '../arena/OpponentEditor.js';
 import { keepOnMap } from '../relocate.js';
 import { RecordShell } from '../RecordShell.js';
-import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { useCurrentSeason } from '../seasons.js';
 import { FormationEditor } from '../FormationEditor.js';
 import { StageEnemiesField } from './StageEnemiesField.js';
@@ -36,7 +35,6 @@ export interface AttemptFormProps {
   cloneFrom?: Attempt;
   /** The stage a new attempt starts on, from a box of the Stages grid; the season is the current one. */
   prefill?: { kind: StageKind; phase: number; number: number; mapName?: string };
-  rules?: Rules;
   onSaved: () => void;
   /** A record was saved with "Save and record another": the form stays open, the list behind it can refresh. */
   onRecorded?: () => void;
@@ -45,7 +43,7 @@ export interface AttemptFormProps {
 
 /** The tag put on the attempts of a range of stages cleared by one formation in auto-battle. */
 
-export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, editing, cloneFrom, prefill, rules, onSaved, onRecorded, onCancel }: AttemptFormProps) {
+export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, editing, cloneFrom, prefill, onSaved, onRecorded, onCancel }: AttemptFormProps) {
   const stageMaps = maps.filter((m) => m.tags.includes('Stage'));
 
   // ---- which stage -------------------------------------------------------------------------
@@ -66,13 +64,12 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
 
   // ---- Stage Enemies, player formation, result -----------------------------------------------
   const [enemyDraft, setEnemyDraft] = useState<StageEnemy[]>([]);
-  const [formation, setFormation] = useState(seed ? formationFromRecord(seed.formation) : emptyFormation());
+  const [formation, setFormation] = useState(seed ? formationFromRecord(seed.formation, false) : emptyFormation());
   const [buffLevel, setBuffLevel] = useState(String(seed?.buffLevel ?? 0));
   const [note, setNote] = useState(editing?.note ?? '');
   const [tags, setTags] = useState(seed?.tags ?? []);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const sync = useRosterSync();
 
   const stageNumber = Number(number);
   const numberValid = Number.isInteger(stageNumber) && stageNumber >= 1;
@@ -156,10 +153,9 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
         buffLevel: isApex(kind) ? Number(buffLevel) : null,
         note,
         tags,
-        formation: toPayload(formation),
+        formation: toPayload(formation, false),
       };
       const { attempts } = await api.createAttemptRange(range);
-      if (rules) await sync.ask(recordedHeroes(range.formation), heroes, rules, undefined, { attemptIds: attempts.map((a) => a.id), side: 'A' });
       if (!another) return onSaved();
       setError(null);
       setStatus(`Saved ${attempts.length} attempts, stages ${range.from} to ${range.to}. Change the range for the next clear, or the formation.`);
@@ -170,7 +166,10 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
     }
   }
 
-  async function saveAttempt(another: boolean) {
+  const saving = useSaveRecord();
+  const saveAttempt = (another: boolean) => saving.run(() => saveOne(another));
+
+  async function saveOne(another: boolean) {
     if (inRange) return saveRange(another);
     try {
       const resolved = await resolveStage();
@@ -179,11 +178,9 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
         buffLevel: isApex(resolved.kind) ? Number(buffLevel) : null,
         note,
         tags,
-        formation: toPayload(formation),
+        formation: toPayload(formation, false),
       };
-      const saved = await (editing ? api.updateAttempt(editing.id, attempt) : api.createAttempt(attempt));
-      // A new record may carry upgrades the roster has not heard of yet; an edited one is mostly an older fight, so it does not ask.
-      if (!editing && rules) await sync.ask(recordedHeroes(attempt.formation), heroes, rules, undefined, { attemptIds: [saved.id], side: 'A' });
+      await (editing ? api.updateAttempt(editing.id, attempt) : api.createAttempt(attempt));
       if (!another) return onSaved();
       // The formation, note and tags stay, so the same team can be recorded again on another stage.
       setError(null);
@@ -264,8 +261,6 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
   );
 
   return (
-    <>
-    {sync.dialog}
     <RecordShell
       title={editing ? 'Edit attempt' : 'New attempt'}
       identity={identity}
@@ -283,6 +278,7 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
       onSave={() => void saveAttempt(false)}
       onSaveAnother={editing ? undefined : () => void saveAttempt(true)}
       saveDisabled={!numberValid || !map || formation.placed.length === 0}
+      saving={saving.busy}
       onCancel={onCancel}
     >
       {numberValid && map ? (
@@ -294,13 +290,13 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
           season={stage?.season ?? season}
           value={formation}
           onChange={setFormation}
-          rules={rules}
+          heroSource="all"
+          withState={false}
           mapLabel="Stage map"
         />
       ) : (
         <p className="muted">Enter the stage number to place the formation.</p>
       )}
     </RecordShell>
-    </>
   );
 }

@@ -20,6 +20,13 @@ const MIN_LOOKS = 3;
 /** Two names with looks closer than this are told apart by the Agent: the reader confused them in the trial (Soulbound and Soulshock, 0.019). */
 const LOOKALIKE = 0.03;
 
+/**
+ * The version of what `unitFeatures` computes. Vectors are stored with it (`unit_look_feature`), so a change to the extractor, its region or
+ * size must raise it, or the stored vectors would be compared with new ones. `tests/vision/unit-read.test.ts` fails when the output for a
+ * fixed picture changes.
+ */
+export const UNIT_FEATURES_VERSION = 1;
+
 export type UnitFeatures = Float32Array;
 
 export async function unitFeatures(crop: Buffer): Promise<UnitFeatures> {

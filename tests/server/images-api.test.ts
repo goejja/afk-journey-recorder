@@ -98,6 +98,14 @@ describe('uploads', () => {
     expect(existsSync(join(dir, 'custom', 'hero', 'Fay.png'))).toBe(false);
   });
 
+  it('keeps the earlier custom image when the new one cannot be written', async () => {
+    expect((await put('/api/images/hero/Fay', PNG)).status).toBe(200);
+    mkdirSync(join(dir, 'custom', 'hero', 'Fay.webp')); // a folder where the new file would go, so writing it fails
+    const response = await put('/api/images/hero/Fay', new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4, 0x57, 0x45, 0x42, 0x50]), 'image/webp');
+    expect(response.status).toBe(500);
+    expect(existsSync(join(dir, 'custom', 'hero', 'Fay.png'))).toBe(true);
+  });
+
   it('removing the custom image brings the imported one back', async () => {
     await put('/api/images/hero/Evie', JPEG, 'image/jpeg');
     expect((await app.request('/api/images/hero/Evie', { method: 'DELETE', headers: { 'x-afk-action': 'app' } })).status).toBe(204);

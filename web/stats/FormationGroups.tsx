@@ -385,7 +385,7 @@ function GroupListHead() {
 
 /** The Formation groups of the recorded sides under their Archetype rows, counted from the owner's own records. */
 export function FormationGroups({ filters }: { filters: Filters }) {
-  const maps = useMaps();
+  const { maps, error: mapsError } = useMaps();
   const [picked, setPicked] = useState<string[]>([]);
   // the archetypes the owner folded or unfolded against the default; the group whose card is open
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
@@ -420,6 +420,7 @@ export function FormationGroups({ filters }: { filters: Filters }) {
       <div className="filters">
         <MultiSelect label="Hero" options={heroes} value={picked} onChange={setPicked} />
       </div>
+      {mapsError && <p className="error" role="alert">{mapsError}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {report && report.rows.length === 0 && <p className="muted">Nothing to show with these filters.</p>}
       {report && report.rows.length > 0 && (

@@ -150,6 +150,8 @@ export function StatsPage() {
   const [size, setSize] = useState<2 | 3>(2);
   const [stages, setStages] = useState<StageStat[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // The lists the filters offer (seasons, Players) are read apart from the report, so a failure to read them is kept apart too: the report's own load clears `error`.
+  const [optionsError, setOptionsError] = useState<string | null>(null);
 
   useEffect(() => {
     api.statsSettings().then(
@@ -193,13 +195,13 @@ export function StatsPage() {
   // The seasons to choose from, read once when a view that filters by season is first opened.
   const filtersBySeason = view !== 'overview' && view !== 'phantimals';
   useEffect(() => {
-    if (filtersBySeason && seasons.length === 0) api.seasons().then((all) => setSeasons(all.filter((s) => s.records > 0).map((s) => String(s.number))), () => undefined);
+    if (filtersBySeason && seasons.length === 0) api.seasons().then((all) => setSeasons(all.filter((s) => s.records > 0).map((s) => String(s.number))), (e: Error) => setOptionsError(`The seasons to choose from could not be read: ${e.message}`));
   }, [filtersBySeason, seasons.length]);
 
   // The Players to choose from, read once when a view that filters by Player is first opened.
   const filtersByPlayer = view === 'formations' || view === 'heroes' || view === 'pairs' || view === 'partners' || view === 'artifacts' || view === 'maps';
   useEffect(() => {
-    if (filtersByPlayer && knownPlayers === null) api.statsPlayers({}).then(setKnownPlayers, () => setKnownPlayers([]));
+    if (filtersByPlayer && knownPlayers === null) api.statsPlayers({}).then(setKnownPlayers, (e: Error) => (setKnownPlayers([]), setOptionsError(`The Players to choose from could not be read: ${e.message}`)));
   }, [filtersByPlayer, knownPlayers]);
 
   /** Trios are rare, so a trio starts at 3 games and a pair at 1, unless the player typed another minimum. */
@@ -269,6 +271,11 @@ export function StatsPage() {
       {error && (
         <p className="error" role="alert">
           {error}
+        </p>
+      )}
+      {optionsError && (
+        <p className="error" role="alert">
+          {optionsError}
         </p>
       )}
 

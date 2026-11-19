@@ -1,6 +1,6 @@
 import type { LookSource } from '../../src/shared/api.js';
 
-const SOURCE_LABEL: Record<LookSource, string> = { roster: 'Roster import', battle: 'Battle import', offline: 'learn:ranks' };
+const SOURCE_LABEL: Record<LookSource, string> = { roster: 'Roster import', battle: 'Battle import', offline: 'learn:ranks', review: 'Confirmed in Admin' };
 
 /** Where a learned picture came from, for a label. */
 export const sourceLabel = (source: LookSource | null) => (source ? SOURCE_LABEL[source] : 'Before sources were kept');

@@ -30,7 +30,7 @@ The rule that keeps this simple: `src/domain` imports nothing from the other fol
 
 SQLite through `better-sqlite3`, one file (`data/afk.db`, or `AFK_DB`). `schema.sql` is the version 1 baseline and is never edited to change a table. A change is a new numbered file in `src/db/migrations/`, which takes the file from version n to n + 1 inside a transaction. A file of an older version is copied to `<file>.before-v<n>` before it is migrated. The query CLI opens the file read-only and never migrates.
 
-A battle record keeps a snapshot of each hero's rank and equipment on the day, so a record never changes when the roster does. The roster is the current state; recorded ranks are history.
+A Dream Hunt or PvP record keeps a snapshot of each hero's rank and equipment on the day, so a record never changes when the roster does. The roster is the current state; recorded ranks are history. A Stage record keeps no hero state (ADR 0041), because it is often entered days after the clear.
 
 ## Reading pictures
 

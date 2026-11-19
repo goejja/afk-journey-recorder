@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
@@ -82,6 +82,21 @@ describe('deleting unreferenced files', () => {
     expect(await response.json()).toEqual({ deleted: 1 });
     expect(existsSync(stray)).toBe(false);
     expect(existsSync(other)).toBe(true);
+  });
+
+  it('removes the other files and names the ones it could not remove, instead of stopping at the first', async () => {
+    const locked = put('rank-look', 'locked.png');
+    const free = put('look', 'free.png');
+    chmodSync(join(images, 'custom', 'rank-look'), 0o500); // a folder that cannot be written to: its file cannot be removed
+    try {
+      const response = await post({ files: ['rank-look/locked.png', 'look/free.png'] });
+      expect(response.status).toBe(500);
+      expect(((await response.json()) as { error: string }).error).toMatch(/Removed 1 of 2.*rank-look\/locked\.png/);
+      expect(existsSync(free)).toBe(false);
+      expect(existsSync(locked)).toBe(true);
+    } finally {
+      chmodSync(join(images, 'custom', 'rank-look'), 0o700);
+    }
   });
 
   it('counts a file listed twice once', async () => {

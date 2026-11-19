@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from 'node:fs';
 import type { Context, Hono } from 'hono';
 import type { z } from 'zod';
 import { Upload, type Endpoint, type ServerInput } from '../shared/contract.js';
@@ -28,8 +29,49 @@ export class FileAnswer {
 }
 export const file = (bytes: Uint8Array, contentType: string, headers: Record<string, string> = {}) => new FileAnswer(bytes, contentType, headers);
 
+/** A handler answers with this when the browser's copy of a file is still the current one: 304, no body. */
+export class NotModified {
+  constructor(readonly headers: Record<string, string> = {}) {}
+}
+
+/**
+ * A picture the browser asks about on every use and keeps while it is unchanged. The ETag is the file's size and modification time,
+ * so a file that was replaced is never shown stale, and one that was not costs a few hundred bytes instead of the whole picture.
+ */
+export function revalidated(c: Context, path: string, contentType: string): FileAnswer | NotModified {
+  const { size, mtimeMs } = statSync(path);
+  const etag = `W/"${size}-${mtimeMs}"`;
+  const headers = { 'cache-control': 'no-cache', etag };
+  const asked = (c.req.header('if-none-match') ?? '').split(',').map((tag) => tag.trim());
+  if (asked.includes(etag)) return new NotModified(headers);
+  return file(new Uint8Array(readFileSync(path)), contentType, headers);
+}
+
+/**
+ * Reads an uploaded body of at most `max` bytes, or answers 413 with `tooLarge`. A declared length over the limit is refused before
+ * anything is read, and a body that declares less (or nothing) is cut off as soon as it has sent more than `max`.
+ */
+export async function readUpload(c: Context, max: number, tooLarge: string): Promise<Buffer | Failure> {
+  if (Number(c.req.header('content-length')) > max) return fail(413, tooLarge);
+  const reader = c.req.raw.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > max) {
+      await reader.cancel();
+      return fail(413, tooLarge);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
 /** What a handler returns: the response, a `fail`, and nothing at all for a route that answers nothing. */
-type Answer<E extends Endpoint> = z.output<E['response']> | Created<z.output<E['response']>> | Failure | (undefined extends z.output<E['response']> ? void : never) | (z.output<E['response']> extends Uint8Array ? FileAnswer : never);
+type Answer<E extends Endpoint> = z.output<E['response']> | Created<z.output<E['response']>> | Failure | (undefined extends z.output<E['response']> ? void : never) | (z.output<E['response']> extends Uint8Array ? FileAnswer | NotModified : never);
 
 /**
  * Registers the handler of a route described in `src/shared/contract.ts`. The body is read with the route's schema (a bad one is
@@ -46,6 +88,7 @@ export function serve<E extends Endpoint>(app: Hono, route: E, handler: (input: 
       body = parsed.data;
     }
     const answered = await handler({ params: c.req.param(), body } as unknown as ServerInput<E>, c);
+    if (answered instanceof NotModified) return c.body(null, 304, answered.headers);
     if (answered instanceof FileAnswer) return c.body(answered.bytes as Uint8Array<ArrayBuffer>, 200, { 'content-type': answered.contentType, ...answered.headers });
     const result = answered instanceof Created ? answered.value : answered;
     const status = answered instanceof Created ? 201 : route.status;

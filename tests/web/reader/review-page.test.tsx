@@ -61,6 +61,7 @@ afterEach(cleanup);
 describe('ReviewPage', () => {
   it('offers the pictures Thinning removes, all ticked, with the counts before and after, and removes only the ones left ticked', async () => {
     render(<ReviewPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Look for pictures to remove' }));
     expect(await screen.findByText('Supreme+')).toBeTruthy();
     expect(screen.getByText('R1')).toBeTruthy();
     expect(screen.getByText(/9 Rank Looks now, 6 after/)).toBeTruthy();
@@ -79,13 +80,24 @@ describe('ReviewPage', () => {
     expect(apply.body).toEqual({ kind: 'rank', ids: [4, 9] });
   });
 
+  it('does not compare the Rank Looks until the player asks, and saving the distance before that proposes nothing', async () => {
+    render(<ReviewPage />);
+    const field = (await screen.findByLabelText('Rank Looks are alike closer than')) as HTMLInputElement;
+    await waitFor(() => expect(field.value).toBe('0.05'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save distance' }));
+    await waitFor(() => expect(requests.some((r) => r.url === '/api/thinning-settings' && r.method === 'PUT')).toBe(true));
+    expect(requests.some((r) => r.url === '/api/admin/review/thinning')).toBe(false);
+  });
+
   it('shows the distance that makes two Rank Looks alike, saves a new one and proposes again', async () => {
     render(<ReviewPage />);
     // the field is looked up each time: the page draws it again once the findings arrive
     const field = () => screen.getByLabelText('Rank Looks are alike closer than') as HTMLInputElement;
     await screen.findByLabelText('Rank Looks are alike closer than');
     await waitFor(() => expect(field().value).toBe('0.05'));
+    await userEvent.click(screen.getByRole('button', { name: 'Look for pictures to remove' }));
     const proposals = () => requests.filter((r) => r.url === '/api/admin/review/thinning' && r.method === 'GET').length;
+    await waitFor(() => expect(proposals()).toBe(1));
     const before = proposals();
 
     await userEvent.clear(field());
@@ -140,10 +152,17 @@ describe('ReviewPage', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Move Rank Look 7 to R2' }));
       await waitFor(() => expect(requests.find((r) => r.url === '/api/admin/learned/rank/7' && r.method === 'PATCH')?.body).toEqual({ rank: 'R2' }));
-      await waitFor(() => expect(runsStarted()).toBe(1)); // a fix starts a new run
+      // the fixed finding leaves the list, and a fix starts no new run: that scan takes seconds and the player asks for it with the button
+      await waitFor(() => expect(screen.queryByText(findings.wrong[0].message)).toBeNull());
+      expect(runsStarted()).toBe(0);
+      expect(requests.some((r) => r.url === '/api/admin/review/thinning')).toBe(false);
+    });
 
-      await userEvent.click(screen.getByRole('button', { name: 'Delete Rank Look 7' }));
+    it('deletes a Rank Look the others read as another rank', async () => {
+      render(<ReviewPage />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Delete Rank Look 7' }));
       await waitFor(() => expect(requests.some((r) => r.url === '/api/admin/learned/rank/7' && r.method === 'DELETE')).toBe(true));
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Delete Rank Look 7' })).toBeNull());
     });
 
     it('offers no change for a record: the finding only names it', async () => {

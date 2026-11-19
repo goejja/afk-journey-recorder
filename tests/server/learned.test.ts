@@ -88,6 +88,22 @@ describe('the learned review', () => {
     expect((await app.request(`/api/admin/learned/hero/${id}/image`)).status).toBe(404);
   });
 
+  it('lets the browser keep a picture of a look and answers 304 while the file is unchanged, and the picture again once it is replaced', async () => {
+    const id = await rankLook('Supreme+', await tile(BROWN, [200, 150, 90]));
+    const url = `/api/admin/learned/rank/${id}/image`;
+    const first = await app.request(url);
+    const etag = first.headers.get('etag');
+    expect(etag).toBeTruthy();
+    expect(first.headers.get('cache-control')).toBe('no-cache'); // the browser asks every time; the answer is what is cheap
+    const again = await app.request(url, { headers: { 'if-none-match': etag! } });
+    expect(again.status).toBe(304);
+    expect((await again.arrayBuffer()).byteLength).toBe(0);
+    writeFileSync(join(images, 'custom', 'rank-look', db.prepare('SELECT file FROM rank_look WHERE id = ?').pluck().get(id) as string), await tile(GOLD, [255, 255, 255]));
+    const replaced = await app.request(url, { headers: { 'if-none-match': etag! } });
+    expect(replaced.status).toBe(200);
+    expect(replaced.headers.get('etag')).not.toBe(etag);
+  });
+
   it('moves a Rank Look to another rank and says how many wrong readings that makes before and after', async () => {
     for (let i = 0; i < 3; i++) await rankLook('Paragon 4', await tile(GOLD, [255, 255, 255], i));
     for (let i = 0; i < 3; i++) await rankLook('Supreme+', await tile(BROWN, [200, 150, 90], i));

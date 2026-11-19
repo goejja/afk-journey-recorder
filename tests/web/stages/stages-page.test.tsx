@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import { StagesPage } from '../../../web/stages/StagesPage.js';
-import { columnsOf } from '../css-columns.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
 const rowLengths = [2, 5, 6, 6, 7, 6, 6, 5, 2];
@@ -27,11 +26,13 @@ const data: Record<string, unknown> = {
 let requests: { method: string; url: string; body?: any }[];
 let attempts: unknown[];
 let gridBoxes: unknown[];
+let holdCreate: Promise<void> | null;
 
 beforeEach(() => {
   requests = [];
   attempts = [];
   gridBoxes = [];
+  holdCreate = null;
   window.history.replaceState(null, '', '#stages'); // the page state lives in the address
   vi.stubGlobal('window', Object.assign(window, { confirm: () => true }));
   vi.stubGlobal(
@@ -43,7 +44,10 @@ beforeEach(() => {
       if (url === '/api/reference') return Response.json({ ranks: ['Elite', 'Mythic+'], equipmentLevels: [0, 10], caps: [{ rank: 'Mythic+', minLevel: 0, maxLevel: 10 }] });
       if (url === '/api/stage-grid') return Response.json({ season: 8, boxes: gridBoxes });
       if (url.startsWith('/api/attempts') && method === 'GET') return Response.json(attempts);
-      if (url === '/api/attempts' && method === 'POST') return Response.json({ id: 1 }, { status: 201 });
+      if (url === '/api/attempts' && method === 'POST') {
+        await holdCreate;
+        return Response.json({ id: 1 }, { status: 201 });
+      }
       if (url.startsWith('/api/roster/') && method === 'PUT') return new Response(null, { status: 204 });
       if (url === '/api/stages' && method === 'POST') {
         return Response.json({ id: 7, ...body, phase: body.phase ?? 0, attemptCount: 0, enemies: [] });
@@ -108,21 +112,21 @@ describe('StagesPage', () => {
     expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation).toMatchObject({ assistHero: 'Fay', artifact: 'Bladestorm'});
   });
 
-  it('edits the assist hero’s rank and equipment in a Popover under its buttons, from the roster until set', async () => {
+  it('records an attempt once when Save is clicked again while the first save is still running', async () => {
+    let release!: () => void;
+    holdCreate = new Promise((resolve) => (release = resolve));
     const user = userEvent.setup();
     await openForm(user);
     await user.type(screen.getByLabelText('Stage number'), '100');
     await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
-    await user.click(screen.getByRole('button', { name: 'Choose assist hero' }));
-    await user.click(within(screen.getByRole('list', { name: 'Assist heroes' })).getByRole('button', { name: 'Fay' }));
-    expect(screen.getByRole('button', { name: 'Rank of Fay: Mythic+' })).toBeTruthy(); // the roster's
-    expect(screen.queryByRole('combobox', { name: /Assist/ })).toBeNull(); // no selects
-    await user.click(screen.getByRole('button', { name: /^Rank of Fay/ }));
-    await user.click(within(screen.getByRole('group', { name: 'Rank of Fay' })).getByRole('button', { name: 'Elite' }));
-    expect(screen.queryByRole('button', { name: /^Equipment of Fay/ })).toBeNull(); // Elite has no equipment
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
-    await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
-    expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation).toMatchObject({ assistHero: 'Fay', assistRank: 'Elite', assistEquipmentLevel: null });
+    await user.click(yourTiles()[0]!);
+    await user.dblClick(screen.getByRole('button', { name: 'Save attempt' }));
+    const saving = await screen.findByRole('button', { name: 'Saving…' });
+    expect((saving as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save and record another' }) as HTMLButtonElement).disabled).toBe(true);
+    release();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Saving…' })).toBeNull());
+    expect(requests.filter((r) => r.url === '/api/attempts' && r.method === 'POST')).toHaveLength(1);
   });
 
   it('keeps the formation after "Save and record another", so the same team can be recorded on the next stage', async () => {
@@ -138,89 +142,27 @@ describe('StagesPage', () => {
     expect(within(screen.getByRole('list', { name: 'Placed on Your formation' })).getByText('Evie')).toBeTruthy();
   });
 
-  it('edits a hero’s rank by clicking it on the map and shows the artifact in its map tile', async () => {
+  it('keeps no hero state: no rank or equipment to edit, on the tile or in the assist hero, and none is sent (ADR 0041)', async () => {
     const user = userEvent.setup();
     await openForm(user);
     await user.type(screen.getByLabelText('Stage number'), '100');
     await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
+    await user.click(yourTiles()[0]!);
+    await user.click(yourTiles()[0]!); // a second click on the hero would open its rank and equipment in the other modes
+    expect(screen.queryByRole('group', { name: 'Rank of Evie' })).toBeNull();
+    expect(document.querySelector('.tile-tag')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Choose assist hero' }));
+    await user.click(within(screen.getByRole('list', { name: 'Assist heroes' })).getByRole('button', { name: 'Fay' }));
+    expect(screen.queryByRole('button', { name: /^Rank of Fay/ })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Choose artifact' }));
     await user.click(within(screen.getByRole('list', { name: 'Artifacts' })).getByRole('button', { name: 'Bladestorm' }));
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(document.querySelector('.map-slot .hex-slot:not(.hex-slot-empty)')).toBeTruthy();
-    await user.click(yourTiles()[0]!);
-    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Elite' }));
     await user.click(screen.getByRole('button', { name: 'Save attempt' }));
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
-    expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation.heroes[0]).toMatchObject({ hero: 'Evie', rank: 'Elite' });
-  });
-
-  it('opens the rank and equipment beside the tile, keeps them open after a pick, shows the state on the tile and closes on a press elsewhere', async () => {
-    const user = userEvent.setup();
-    await openForm(user);
-    await user.type(screen.getByLabelText('Stage number'), '100');
-    await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
-    expect(yourTiles()[0]!.closest('.hex-cell')?.querySelector('.tile-tag')?.textContent).toBe('My+★+10'); // from the roster
-    await user.click(yourTiles()[0]!);
-    const popover = within(screen.getByRole('group', { name: 'Rank and equipment of Evie' }));
-    await user.click(popover.getByRole('button', { name: 'Elite' }));
-    expect(screen.getByRole('group', { name: 'Rank and equipment of Evie' })).toBeTruthy(); // still open
-    expect(yourTiles()[0]!.closest('.hex-cell')?.querySelector('.tile-tag')?.textContent).toBe('El'); // Elite has no equipment
-    await user.click(popover.getByRole('button', { name: 'Mythic+' }));
-    await user.click(popover.getByRole('button', { name: /^\+0/ }));
-    expect(yourTiles()[0]!.closest('.hex-cell')?.querySelector('.tile-tag')?.textContent).toBe('My+★+0');
-    await user.click(document.body);
-    expect(screen.queryByRole('group', { name: 'Rank and equipment of Evie' })).toBeNull();
-  });
-
-  it('closes the rank and equipment when the hero is dragged, and does not open them for the drag', async () => {
-    const user = userEvent.setup();
-    await openForm(user);
-    await user.type(screen.getByLabelText('Stage number'), '100');
-    await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
-    fireEvent.dragStart(yourTiles()[0]!, { dataTransfer: { setData: () => {}, effectAllowed: '' } });
-    expect(screen.queryByRole('group', { name: 'Rank and equipment of Evie' })).toBeNull();
-    fireEvent.dragEnd(yourTiles()[0]!);
-    await user.click(yourTiles()[0]!);
-    expect(screen.getByRole('group', { name: 'Rank and equipment of Evie' })).toBeTruthy();
-    fireEvent.dragStart(yourTiles()[0]!, { dataTransfer: { setData: () => {}, effectAllowed: '' } });
-    expect(screen.queryByRole('group', { name: 'Rank and equipment of Evie' })).toBeNull();
-  });
-
-  it('offers to update the roster when the attempt was recorded at a higher rank, and the form waits for the answer', async () => {
-    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/heroes' ? Response.json([{ ...hero('Evie', true), rank: 'Elite', equipmentLevel: null }]) : base(url, init))));
-    const user = userEvent.setup();
-    await openForm(user);
-    await user.type(screen.getByLabelText('Stage number'), '100');
-    await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
-    await user.click(yourTiles()[0]!);
-    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Mythic+' }));
-    await user.click(screen.getByRole('button', { name: 'Save and record another' }));
-    const dialog = within(await screen.findByRole('dialog', { name: 'Update the roster?' }));
-    expect((dialog.getByLabelText('Update Evie') as HTMLInputElement).checked).toBe(true);
-    expect(screen.queryByText(/Saved\./)).toBeNull(); // not before the answer
-    await user.click(dialog.getByRole('button', { name: 'Update roster' }));
-    await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/roster/Evie')?.body).toMatchObject({ rank: 'Mythic+' }));
-    expect(await screen.findByText(/Saved\./)).toBeTruthy();
-  });
-
-  it('corrects the rank the reader misread in the roster question with the Popover buttons, and the roster takes it', async () => {
-    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/heroes' ? Response.json([{ ...hero('Evie', true), rank: 'Elite', equipmentLevel: null }]) : base(url, init))));
-    const user = userEvent.setup();
-    await openForm(user);
-    await user.type(screen.getByLabelText('Stage number'), '100');
-    await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
-    await user.click(yourTiles()[0]!);
-    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Mythic+' }));
-    await user.click(screen.getByRole('button', { name: 'Save and record another' }));
-    const dialog = within(await screen.findByRole('dialog', { name: 'Update the roster?' }));
-    expect(dialog.queryByRole('combobox')).toBeNull(); // no selects
-    await user.click(dialog.getByRole('button', { name: 'Rank of Evie: Mythic+' }));
-    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Elite' }));
-    expect(dialog.getByRole('button', { name: 'Rank of Evie: Elite' })).toBeTruthy();
-    await user.click(dialog.getByRole('button', { name: 'Update roster' }));
-    await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/roster/Evie')?.body).toMatchObject({ rank: 'Elite' }));
+    const formation = requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation;
+    expect(formation).toEqual({ heroes: [{ tile: 38, hero: 'Evie' }], phantimal: null, assistHero: 'Fay', artifact: 'Bladestorm', formationId: null });
+    expect(requests.some((r) => r.url.startsWith('/api/roster/'))).toBe(false); // nothing asks to update the roster
   });
 
   it('clones an attempt into a new one on the current season’s stage, with the formation, buff level and tags but not the note', async () => {
@@ -333,7 +275,7 @@ describe('StagesPage', () => {
     expect(button.nextElementSibling).toBe(panel); // one column wide in the test, so the box's row ends at the box
     expect(within(panel).getByText('Cleared this season')).toBeTruthy();
     expect(requests.find((r) => r.url.startsWith('/api/attempts?'))!.url).toContain('number=12');
-    const records = () => within(panel).getAllByRole('listitem').filter((li) => li.className === 'attempt');
+    const records = () => within(panel).getAllByRole('listitem').filter((li) => li.classList.contains('stage-card'));
     expect(records()).toHaveLength(5);
     expect(within(panel).getByText('note 7')).toBeTruthy();
     expect(within(panel).queryByText('note 2')).toBeNull();
@@ -345,15 +287,17 @@ describe('StagesPage', () => {
     expect(button.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('gives every cell of a record in the panel its own grid column, so the buttons stay at the right of the first line', async () => {
+  it('lays a record out as a card: its facts, then its map, tags and note, and the buttons last', async () => {
     const user = userEvent.setup();
     gridBoxes = [box('Normal', 12)];
     attempts = [record(3, { note: 'n', tags: ['Luna'] })];
     render(<StagesPage />);
     await user.click(await screen.findByRole('button', { name: 'Normal stage 12, cleared this season' }));
-    const row = (await screen.findByRole('list', { name: 'Records of Normal · stage 12' })).querySelector('.stage-record')!;
-    expect(row.children).toHaveLength(columnsOf('.stage-record'));
-    expect(row.lastElementChild!.className).toBe('attempt-actions');
+    const card = (await screen.findByRole('list', { name: 'Records of Normal · stage 12' })).querySelector('.stage-card')!;
+    expect(card.querySelector('.stage-record')).toBeTruthy();
+    expect(within(card as HTMLElement).getByText('n').getAttribute('title')).toBe('n');
+    expect(card.lastElementChild!.className).toBe('attempt-actions');
+    expect(within(card.lastElementChild as HTMLElement).getAllByRole('button').map((b) => b.textContent)).toEqual(['Edit', 'Clone', 'Delete']);
     expect(screen.queryByText('Win')).toBeNull(); // a stage record is a clear: no win/loss badge
   });
 
@@ -431,14 +375,14 @@ describe('StagesPage', () => {
     expect(screen.queryByRole('button', { name: /^Kind:/ })).toBeNull();
   });
 
-  it('records a Normal stage attempt with heroes from the roster', async () => {
+  it('records a Normal stage attempt with any hero, the roster’s or not', async () => {
     const user = userEvent.setup();
     await openForm(user);
 
     await user.type(screen.getByLabelText('Stage number'), '100');
     const heroes = within(await screen.findByRole('list', { name: 'Heroes' }));
     expect(heroes.getByRole('button', { name: /Evie/ })).toBeTruthy();
-    expect(heroes.queryByRole('button', { name: /Lucca/ })).toBeNull(); // not owned
+    expect(heroes.getByRole('button', { name: /Lucca/ })).toBeTruthy(); // not owned: a stage record keeps no hero state, so any hero may be placed
 
     await user.click(heroes.getByRole('button', { name: /Evie/ }));
     await user.click(yourTiles()[0]!);

@@ -40,7 +40,8 @@ export function useLoad<T>(load: () => Promise<T>, deps: DependencyList, enabled
     // The caller names what the load depends on.
   }, deps); // oxlint-disable-line react/exhaustive-deps
 
-  return { ...state, reload: run };
+  // A request still on its way when `enabled` turns false is dropped (the cleanup above), so nothing is waited for: not loading.
+  return { ...state, loading: state.loading && enabled, reload: run };
 }
 
 /**

@@ -4,9 +4,8 @@ import { join, resolve } from 'node:path';
 import { Hono } from 'hono';
 import { loadReviewRun, latestReviewRunId } from '../../query/review-run.js';
 import { factionMismatches } from '../../query/faction-mismatches.js';
-import { distanceTable } from '../../vision/nearest.js';
-import { distance as rankDistance, MIN_EXAMPLES, rankFeatures, readRank, type Features } from '../../vision/rank-read.js';
-import { fileCache } from '../file-cache.js';
+import { MIN_EXAMPLES, readRank, type Features } from '../../vision/rank-read.js';
+import { rankFeaturesFor, rankMeasure } from '../reader/rank-looks.js';
 import { reviewContract } from '../../shared/contracts/review.js';
 import { fail, serve } from '../contract.js';
 
@@ -41,7 +40,6 @@ export interface Finding {
 /** The Reader review's findings (ADR 0031), found by code from the readers' data and never fixed here. */
 export function reviewFindingsRoutes(db: Database.Database, options: { imagesDir?: string } = {}): Hono {
   const app = new Hono();
-  const features = fileCache<Promise<Features>>();
   const root = join(resolve(options.imagesDir ?? 'images'), 'custom');
 
   // the folders of learned pictures and the table whose rows reference their files; other folders hold pictures kept for a purpose
@@ -97,22 +95,16 @@ export function reviewFindingsRoutes(db: Database.Database, options: { imagesDir
   /** The Rank Looks the others would read as another rank: the reader's own measure of ADR 0012, as Admin > Reader marks them. */
   const rankLookMisread = async (): Promise<Finding[]> => {
     const rows = db.prepare('SELECT id, rank, file FROM rank_look ORDER BY id').all() as { id: number; rank: string; file: string }[];
-    const looks: { id: number; rank: string; features: Features }[] = [];
-    for (const r of rows) {
-      const file = join(root, 'rank-look', r.file);
-      if (!existsSync(file)) continue;
-      try {
-        looks.push({ id: r.id, rank: r.rank, features: await features(file, rankFeatures) });
-      } catch {
-        // a file that is not a picture cannot be read, so it cannot be judged; the review goes on without it
-      }
-    }
-    const measure = distanceTable(looks.map((l) => l.features), rankDistance);
-    return looks.flatMap((look, i) => {
+    const { features, unreadable } = await rankFeaturesFor(db, rows, join(root, 'rank-look'));
+    const looks: { id: number; rank: string; features: Features }[] = rows.flatMap((r) => (features.has(r.id) ? [{ id: r.id, rank: r.rank, features: features.get(r.id)! }] : []));
+    const measure = rankMeasure(looks.map((l) => l.features));
+    // a file that is not a picture cannot be judged: it is named, and the review goes on without it
+    const unreadableLooks: Finding[] = unreadable.map((id) => ({ code: 'rank-look-unreadable', subject: String(id), message: `Rank Look ${id}: the picture cannot be read. Delete the look, or put a picture back.` }));
+    return [...unreadableLooks, ...looks.flatMap((look, i) => {
       const reading = readRank(look.features, looks.filter((_, j) => j !== i), measure);
       if (!reading?.confident || reading.rank === look.rank) return [];
       return [{ code: 'rank-look-misread', subject: String(look.id), filedUnder: look.rank, readAs: reading.rank, message: `Rank Look ${look.id}, filed under ${look.rank}, is read as ${reading.rank} by the others: check which rank it shows.` }];
-    });
+    })];
   };
 
   /** The stored records whose Phantimal the game could not have put on the field (ADR 0029): only linked, a record is history and never changed here. */
@@ -155,7 +147,16 @@ export function reviewFindingsRoutes(db: Database.Database, options: { imagesDir
     const offered = new Set(unreferencedFiles().map((f) => f.subject));
     if (!body.files.every((file) => offered.has(file))) return fail(409, 'The selection no longer matches the findings. Review again.');
     const files = [...new Set(body.files)];
-    for (const file of files) unlinkSync(join(root, file));
+    // every file is tried: one that cannot be removed must not leave the others standing, and one that is gone already is as good as removed
+    const kept: string[] = [];
+    for (const file of files) {
+      try {
+        unlinkSync(join(root, file));
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') kept.push(file);
+      }
+    }
+    if (kept.length > 0) return fail(500, `Removed ${files.length - kept.length} of ${files.length} files. Could not remove: ${kept.join(', ')}`);
     return { deleted: files.length };
   });
 

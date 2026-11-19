@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Where a learnt picture came from (ADR 0027): `roster` is the one the player confirmed in a Roster import. */
-export type ThinningSource = 'roster' | 'battle' | 'offline' | null;
+export type ThinningSource = 'roster' | 'battle' | 'offline' | 'review' | null;
 
 /** A learnt picture as Thinning sees it: its group (the Rank, Hero or name it teaches) and what decides which of two alike stays. */
 export interface ThinningPicture {

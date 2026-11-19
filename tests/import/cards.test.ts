@@ -51,4 +51,9 @@ describe('parseCards', () => {
   it('ignores links that are not cards', () => {
     expect(parseCards('<a href="/heroes/Nobody">no portrait</a>')).toEqual([]);
   });
+
+  it('keeps the rest of the list when one link holds a % that is not an escape', () => {
+    const broken = `<a href="/heroes/100%25%"><img src="/assets/images/hexes/unit/Broken.png"/><img src="/assets/images/class/mage.png"/></a>`;
+    expect(parseCards(broken + heroCard).map((card) => card.name)).toEqual(['100%25%', 'Smokey & Meerky']);
+  });
 });

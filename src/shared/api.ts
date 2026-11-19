@@ -611,6 +611,9 @@ export interface DraftHero {
   hero: string;
   rank: string | null;
   equipmentLevel: number | null;
+  /** Set when the Agent said it was not sure of this hero, with the heroes it might be instead. */
+  unsure?: boolean;
+  candidates?: string[];
 }
 
 export interface BattleDraftSide {
@@ -627,6 +630,8 @@ export interface BattleDraftSide {
   crops: { artifact: string; phantimal: string } | null;
   /** The keys of the tiles that show a hero (not an empty slot) which nobody named: a hero the player adds in the form may be one of them. */
   unread: string[];
+  /** For the unread tiles the Agent had guesses for, the heroes it thought they might be, by the tile's key. */
+  unreadCandidates?: Record<string, string[]>;
 }
 
 /** What one picture of a PvP battle report says, as the start of a record. Nothing here is saved. */
@@ -645,7 +650,7 @@ export interface BattleDraft {
 }
 
 /** Where a learned picture came from (ADR 0027). */
-export type LookSource = 'roster' | 'battle' | 'offline';
+export type LookSource = 'roster' | 'battle' | 'offline' | 'review';
 
 export interface ReaderExample {
   kind: 'example' | 'look';
@@ -893,4 +898,31 @@ export interface PastCounters {
   group: { core: string[]; flex: string[]; games: number; wins: number };
   rule: { winRate: number; minGames: number };
   counteredBy: PastCounter[];
+}
+
+/** What a parked reading is: a tile whose heroes differ from the ones kept and could not be paired with one, or one the Agent was not sure of (ADR 0040). */
+export type ParkKind = 'difference' | 'unsure';
+
+/** A tile of a saved Battle import that waits for the player to say which hero it shows. Its picture is at `/api/admin/parked-readings/:id/image`. */
+export interface ParkedReading {
+  id: number;
+  kind: ParkKind;
+  side: 'A' | 'B';
+  mode: string | null;
+  /** The hero the Agent named for the tile; null when it named none. */
+  readHero: string | null;
+  /** For an unsure reading, the hero the player kept. */
+  keptHero: string | null;
+  /** The heroes it may be: the ones the player added on that side, then the Agent's own alternatives. */
+  candidates: string[];
+  createdAt: string;
+}
+
+export interface ParkedList {
+  entries: ParkedReading[];
+  /** Every parked reading of the kind asked for, not only the page returned. */
+  total: number;
+  counts: Record<ParkKind, number>;
+  /** The most readings kept of each kind: a full kind parks no more. */
+  caps: Record<ParkKind, number>;
 }

@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
-import { addFormationId, deleteFormationId, findFormationIds, listFormationIds } from '../../db/formation-ids.js';
+import { addFormationId, deleteFormationId, findFormationIds, getFormationId, listFormationIds } from '../../db/formation-ids.js';
 import { deploymentFrom, deploymentProblem, isFormationId, layoutFrom, normalizeFormationId, phantimalOf, type Deployment, type LayoutUnit, type PlacedFormation } from '../../domain/layout.js';
 import { checkFactionRequirement } from '../../domain/units.js';
 import { formationIdsContract } from '../../shared/contracts/formation-ids.js';
@@ -39,7 +39,7 @@ export function formationIdRoutes(db: Database.Database): Hono {
     }
     if (db.prepare('SELECT 1 FROM formation_id WHERE code = ?').get(code)) return fail(409, `${code} is already stored`);
     addFormationId(db, code, stored);
-    return listFormationIds(db).find((e) => e.code === code)!;
+    return getFormationId(db, code)!;
   });
   serve(app, formationIdsContract.remove, ({ params }) => (deleteFormationId(db, params.code) === 0 ? fail(404, 'Unknown Formation ID') : undefined));
   return app;

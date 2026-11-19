@@ -1,14 +1,15 @@
 import { useState } from 'react';
+import { useNewest } from '../useLoad.js';
 import { api, type ArenaBattle } from '../backend.js';
 import { SideProfileBar } from './BattleEditor.js';
 import { withRosterStates } from '../FormationEditor.js';
 import { withRosterOpponent } from './OpponentEditor.js';
 import { RecordShell } from '../RecordShell.js';
 import { useProfileRosters } from '../reader/useProfileRosters.js';
-import { type Reference, draftFromBattle, toInput, profileByPlayerId, type Side } from './draft.js';
+import { type PatchReference, type Reference, draftFromBattle, toInput, profileByPlayerId, type Side } from './draft.js';
 import { ArenaIdentity, WinnerField, Board, FightFormationIds, UnionLevels } from './BoardParts.js';
 
-export function EditBattle({ battle, reference, onSaved, onCancel }: { battle: ArenaBattle; reference: Reference; onSaved: () => void; onCancel: () => void }) {
+export function EditBattle({ battle, reference, patchReference, onSaved, onCancel }: { battle: ArenaBattle; reference: Reference; patchReference: PatchReference; onSaved: () => void; onCancel: () => void }) {
   const [mode, setMode] = useState(battle.mode);
   const [draft, setDraft] = useState(() => draftFromBattle(battle));
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +19,12 @@ export function EditBattle({ battle, reference, onSaved, onCancel }: { battle: A
     B: profileByPlayerId(reference.profiles, battle.playerIdB),
   }));
   const [profileRoster, setProfileRoster] = useProfileRosters(chosenProfile);
+  const newestA = useNewest();
+  const newestB = useNewest();
+  const newestRoster = { A: newestA, B: newestB };
 
   async function chooseProfile(side: Side, id: number | null) {
+    const current = newestRoster[side](); // a roster that arrives after another profile was chosen for this side, or None, is dropped
     const after = reference.profiles.find((p) => p.id === id);
     setChosenProfile((old) => ({ ...old, [side]: id }));
     const key = side === 'A' ? 'playerIdA' : 'playerIdB';
@@ -27,12 +32,13 @@ export function EditBattle({ battle, reference, onSaved, onCancel }: { battle: A
     if (id === null) return setProfileRoster((old) => ({ ...old, [side]: null }));
     try {
       const roster = await api.heroes(id);
+      if (!current()) return;
       setProfileRoster((old) => ({ ...old, [side]: roster }));
       // A saved record keeps the states it recorded (ADR 0001): only heroes with none take the profile's.
       setDraft((old) => (side === 'A' ? { ...old, formation: withRosterStates(old.formation, roster, false) } : { ...old, opponent: withRosterOpponent(old.opponent, roster, false) }));
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      if (current()) setError((e as Error).message);
     }
   }
 
@@ -41,7 +47,7 @@ export function EditBattle({ battle, reference, onSaved, onCancel }: { battle: A
     if (!profile) return;
     try {
       const updated = await api.updateProfile(profile.id, { playerId });
-      reference.profiles = reference.profiles.map((p) => (p.id === updated.id ? updated : p));
+      patchReference((old) => ({ profiles: old.profiles.map((p) => (p.id === updated.id ? updated : p)) }));
       setDraft((old) => ({ ...old, [side === 'A' ? 'playerIdA' : 'playerIdB']: updated.playerId }));
       setError(null);
     } catch (e) {

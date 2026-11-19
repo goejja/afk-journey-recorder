@@ -113,7 +113,7 @@ function AddByHand({ onAdded, onCancel }: { onAdded: (code: string) => void; onC
           </button>
         )}
       </div>
-      {board && !map && <p className="error">No map has player deployment tiles. Paint some in Admin → Maps first.</p>}
+      {board && !map && <p className="error" role="alert">No map has player deployment tiles. Paint some in Admin → Maps first.</p>}
       {map && board && (
         <FormationEditor
           key={current}

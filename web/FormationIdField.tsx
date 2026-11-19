@@ -61,8 +61,8 @@ export function FormationIdField({ label, value, onChange, teams }: Props) {
           onChange={(e) => onChange(e.target.value.toUpperCase())}
         />
         {code !== '' && !isFormationId(code) && <span className="muted">Digits or capital letters, 8 in all.</span>}
-        {clash === 'units' && <span className="error">{code} is stored with other units or tiles: check the code, or clear it to save without.</span>}
-        {clash && clash !== 'units' && <span className="error">{code} is stored with {clash.stored} on team {clash.team}, not {clash.placed}: check the code, or clear it to save without.</span>}
+        {clash === 'units' && <span className="error" role="alert">{code} is stored with other units or tiles: check the code, or clear it to save without.</span>}
+        {clash && clash !== 'units' && <span className="error" role="alert">{code} is stored with {clash.stored} on team {clash.team}, not {clash.placed}: check the code, or clear it to save without.</span>}
         {known && !clash && (
           <span className="muted" title={[seen(known), artifactsOf(known)].filter(Boolean).join(' · ')}>
             Known{teamCount(known) > 1 ? `: ${teamCount(known)} teams` : ''}

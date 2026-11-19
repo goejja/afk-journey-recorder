@@ -1,22 +1,22 @@
 import type Database from 'better-sqlite3';
-import { existsSync, readFileSync, unlinkSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Hono } from 'hono';
-import { MIN_EXAMPLES, rankFeatures, readRank, type RankExample } from '../../vision/rank-read.js';
+import { MIN_EXAMPLES, readRank, type RankExample } from '../../vision/rank-read.js';
 import type { LearnedAccuracy, LearnedLook, LearnedRank, LearnedUnit, LearnedView, LookSource } from '../../shared/api.js';
-import { fileCache } from '../file-cache.js';
+import { rankFeaturesFor, rankMeasure } from './rank-looks.js';
 import { learnedContract } from '../../shared/contracts/reader.js';
-import { fail, file, serve } from '../contract.js';
+import { fail, revalidated, serve } from '../contract.js';
 
 /** The tables of learned pictures the review reaches, and the folder of each under `images/custom`. */
 const TABLES = { hero_example: 'hero-example', hero_look: 'look', rank_look: 'rank-look', unit_look: 'unit-look' } as const;
 type Table = keyof typeof TABLES;
-const SOURCES: LookSource[] = ['roster', 'battle', 'offline'];
+const SOURCES: LookSource[] = ['roster', 'battle', 'offline', 'review'];
 const KINDS = { rank: 'rank_look', unit: 'unit_look' } as const;
 const isKind = (value: string): value is keyof typeof KINDS => value in KINDS;
 
 /** How many looks the rank reader names wrong when each is read from all the others (ADR 0012 measured it this way). */
-export function wrongReadings(looks: RankExample[], measure?: (a: RankExample['features'], b: RankExample['features']) => number): number {
+export function wrongReadings(looks: RankExample[], measure: (a: RankExample['features'], b: RankExample['features']) => number = rankMeasure(looks.map((l) => l.features))): number {
   let wrong = 0;
   for (const [i, look] of looks.entries()) {
     const reading = readRank(look.features, looks.filter((_, j) => j !== i), measure);
@@ -33,20 +33,23 @@ export function learnedRoutes(db: Database.Database, options: { imagesDir?: stri
   const app = new Hono();
   const root = join(resolve(options.imagesDir ?? 'images'), 'custom');
   const fileOf = (table: Table, file: string) => join(root, TABLES[table], file);
-  const features = fileCache<Promise<RankExample['features']>>();
 
   const rankRows = () => db.prepare('SELECT id, rank, file, created_at AS createdAt, source FROM rank_look ORDER BY id').all() as { id: number; rank: string; file: string; createdAt: string; source: LookSource | null }[];
-  const examplesOf = async (rows: { rank: string; file: string }[]): Promise<(RankExample | null)[]> =>
-    Promise.all(rows.map(async (r) => (existsSync(fileOf('rank_look', r.file)) ? { rank: r.rank, features: await features(fileOf('rank_look', r.file), rankFeatures) } : null)));
+  /** The rows with the features of their pictures; null for a row whose picture is missing or cannot be read. */
+  const examplesOf = async (rows: { id: number; rank: string; file: string }[]): Promise<(RankExample | null)[]> => {
+    const { features } = await rankFeaturesFor(db, rows, join(root, TABLES.rank_look));
+    return rows.map((r) => (features.has(r.id) ? { rank: r.rank, features: features.get(r.id)! } : null));
+  };
 
   serve(app, learnedContract.view, async () => {
     const rows = rankRows();
     const examples = await examplesOf(rows);
     const present = rows.flatMap((r, i) => (examples[i] ? [{ row: r, example: examples[i]! }] : []));
     const byRank = new Map<string, LearnedLook[]>();
+    const measure = rankMeasure(present.map((p) => p.example.features));
     for (const [i, { row, example }] of present.entries()) {
       // the look is read against every other, as the reader would read it when it first met it
-      const reading = readRank(example.features, present.filter((_, j) => j !== i).map((p) => p.example));
+      const reading = readRank(example.features, present.filter((_, j) => j !== i).map((p) => p.example), measure);
       const looks = byRank.get(row.rank) ?? [];
       looks.push({ id: row.id, createdAt: row.createdAt, source: row.source, looksLike: reading?.confident && reading.rank !== row.rank ? reading.rank : null });
       byRank.set(row.rank, looks);
@@ -71,13 +74,13 @@ export function learnedRoutes(db: Database.Database, options: { imagesDir?: stri
     return view;
   });
 
-  serve(app, learnedContract.image, ({ params }) => {
+  serve(app, learnedContract.image, ({ params }, c) => {
     const kind = params.kind;
     if (!isKind(kind)) return fail(404, 'Unknown kind of look');
     const row = db.prepare(`SELECT file FROM ${KINDS[kind]} WHERE id = ?`).get(Number(params.id)) as { file: string } | undefined;
     const path = row && fileOf(KINDS[kind], row.file);
     if (!path || !existsSync(path)) return fail(404, 'No picture');
-    return file(new Uint8Array(readFileSync(path)), 'image/png', { 'cache-control': 'no-cache' });
+    return revalidated(c, path, 'image/png');
   });
 
   serve(app, learnedContract.moveRank, async ({ params, body: given }) => {
@@ -86,9 +89,11 @@ export function learnedRoutes(db: Database.Database, options: { imagesDir?: stri
     const body = given as { rank?: unknown } | null;
     if (typeof body?.rank !== 'string' || !db.prepare('SELECT 1 FROM rank WHERE name = ?').get(body.rank)) return fail(400, 'Unknown rank');
     const looks = async () => (await examplesOf(rankRows())).filter((e): e is RankExample => e !== null);
-    const wrongBefore = wrongReadings(await looks());
+    const before = await looks();
+    const measure = rankMeasure(before.map((e) => e.features));
+    const wrongBefore = wrongReadings(before, measure);
     db.prepare('UPDATE rank_look SET rank = ? WHERE id = ?').run(body.rank, id);
-    return { wrongBefore, wrongAfter: wrongReadings(await looks()) };
+    return { wrongBefore, wrongAfter: wrongReadings(await looks(), measure) };
   });
 
   serve(app, learnedContract.moveUnit, ({ params, body: given }) => {

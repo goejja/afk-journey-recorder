@@ -35,6 +35,16 @@ describe('useLoad', () => {
     expect(result.current.data).toBe(1);
   });
 
+  it('is not loading once it is turned off while a request is still on its way, and drops that answer', async () => {
+    const pending = later<number>();
+    const { result, rerender } = renderHook(({ on }) => useLoad(() => pending.promise, [on], on), { initialProps: { on: true } });
+    expect(result.current.loading).toBe(true);
+    rerender({ on: false });
+    expect(result.current.loading).toBe(false);
+    await act(async () => pending.resolve(1));
+    expect(result.current).toMatchObject({ data: undefined, loading: false });
+  });
+
   it('says why a load failed and keeps the earlier answer', async () => {
     let fail = false;
     const { result } = renderHook(() => useLoad(() => (fail ? Promise.reject(new Error('nope')) : Promise.resolve(1)), []));

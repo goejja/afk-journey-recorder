@@ -8,6 +8,7 @@ import { openDb } from '../../src/db/open.js';
 import { storeHeroes } from '../../src/import/store-cards.js';
 import { storeReferenceData } from '../../src/import/store-reference.js';
 import { createApp } from '../../src/server/app.js';
+import { dropObjectsOfMigrationsFrom26 } from '../support/rewind.js';
 
 let db: Database.Database;
 let app: Hono;
@@ -79,6 +80,7 @@ describe('migration 24', () => {
     first.prepare("INSERT INTO profile (name) VALUES ('Other')").run();
     first.prepare("INSERT INTO roster (profile_id, hero_name, rank) VALUES (1, 'Chippy', 'Epic')").run();
     first.prepare("DELETE FROM roster WHERE profile_id = 2").run();
+    dropObjectsOfMigrationsFrom26(first); // made by migrations 26 and 27, which run again below
     first.pragma('user_version = 23');
     first.close();
     const db2 = openDb(path);

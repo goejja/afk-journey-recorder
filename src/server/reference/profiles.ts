@@ -92,7 +92,7 @@ export function profileRoutes(db: Database.Database): Hono {
 
   // Merges this profile into another (`into`: id or name): the heroes of both end up on the other profile, each at the stronger of its two
   // states (a higher rank, else more equipment), and this profile is deleted. The other keeps its name; it takes this profile's Player ID
-  // when it has none, and the default when this one held it.
+  // when it has none, and the default when this one held it. Its Round Deployments move over; the older of two sets for one Round is dropped.
   serve(app, profilesContract.merge, ({ params, body }) => {
     const source = findProfile(db, Number(params.id));
     if (!source) return fail(404, 'Unknown profile');
@@ -112,6 +112,16 @@ export function profileRoutes(db: Database.Database): Hono {
       // the Seen names go with the player, so a spelling resolved to the old Profile keeps resolving
       db.prepare('UPDATE profile_name SET profile_id = ? WHERE profile_id = ?').run(target.id, source.id);
       db.prepare('INSERT OR IGNORE INTO profile_name (folded, profile_id, name) VALUES (?, ?, ?)').run(foldName(source.name), target.id, source.name);
+      // A Round Deployment is a whole set of teams (a hero is on one team only), so teams of the two profiles are never mixed: a Round only
+      // this profile has moves over, and for a Round both have the set confirmed last wins whole (the other's, on a tie).
+      const latest = db.prepare('SELECT max(updated_at) FROM round_deployment WHERE profile_id = ? AND tournament_id = ? AND round = ?').pluck();
+      const rounds = db.prepare('SELECT tournament_id AS tournament, round, max(updated_at) AS at FROM round_deployment WHERE profile_id = ? GROUP BY tournament_id, round').all(source.id) as { tournament: number; round: string; at: string }[];
+      for (const { tournament, round, at } of rounds) {
+        const there = latest.get(target.id, tournament, round) as string | null;
+        if (there !== null && there >= at) continue;
+        db.prepare('DELETE FROM round_deployment WHERE profile_id = ? AND tournament_id = ? AND round = ?').run(target.id, tournament, round);
+        db.prepare('UPDATE round_deployment SET profile_id = ? WHERE profile_id = ? AND tournament_id = ? AND round = ?').run(target.id, source.id, tournament, round);
+      }
       db.prepare('DELETE FROM profile WHERE id = ?').run(source.id);
       // after the delete, so the Player ID and the default are free to move
       if (!target.playerId && source.playerId) db.prepare('UPDATE profile SET player_id = ? WHERE id = ?').run(source.playerId, target.id);
@@ -123,7 +133,7 @@ export function profileRoutes(db: Database.Database): Hono {
     return list();
   });
 
-  // Removes a profile and its heroes. Saved records keep their own copy of every hero's state, so they are untouched.
+  // Removes a profile, its heroes and its Round Deployments. Saved records keep their own copy of every hero's state, so they are untouched.
   serve(app, profilesContract.remove, ({ params }) => {
     const profile = findProfile(db, Number(params.id));
     if (!profile) return fail(404, 'Unknown profile');

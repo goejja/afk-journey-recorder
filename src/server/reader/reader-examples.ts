@@ -1,17 +1,17 @@
 import type Database from 'better-sqlite3';
-import { existsSync, readFileSync, statSync, unlinkSync } from 'node:fs';
-import { fileCache } from '../file-cache.js';
+import { existsSync, statSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Hono } from 'hono';
-import { heroFeatures, readHero, type Features, type HeroExample } from '../../vision/hero-read.js';
+import { readHero, type HeroExample } from '../../vision/hero-read.js';
+import { HERO_EXAMPLES, HERO_LOOKS, storedFeaturesFor } from './stored-features.js';
 import type { LookSource, ReaderExample, ReaderHero } from '../../shared/api.js';
 import { readerExamplesContract } from '../../shared/contracts/reader.js';
-import { fail, file, serve } from '../contract.js';
+import { fail, revalidated, serve } from '../contract.js';
 
 /** Where the two kinds of hero tile live: a Hero Example (from a confirmed import or a correction) and a Hero Look (also shown to the Agent). */
 const KINDS = {
-  example: { table: 'hero_example', dir: 'hero-example' },
-  look: { table: 'hero_look', dir: 'look' },
+  example: { table: 'hero_example', dir: 'hero-example', spec: HERO_EXAMPLES },
+  look: { table: 'hero_look', dir: 'look', spec: HERO_LOOKS },
 } as const;
 type Kind = keyof typeof KINDS;
 const isKind = (value: string): value is Kind => value in KINDS;
@@ -21,10 +21,6 @@ export function readerExampleRoutes(db: Database.Database, options: { imagesDir?
   const app = new Hono();
   const root = join(resolve(options.imagesDir ?? 'images'), 'custom');
   const fileOf = (kind: Kind, file: string) => join(root, KINDS[kind].dir, file);
-
-  /** The features of a file, kept while the file is unchanged. */
-  const cached = fileCache<Promise<Features>>();
-  const featuresFor = (file: string): Promise<Features> => cached(file, heroFeatures);
 
   /**
    * Every hero's examples with the hint of a wrong assignment. Each tile is read against all the others, which takes time
@@ -55,8 +51,11 @@ export function readerExampleRoutes(db: Database.Database, options: { imagesDir?
     return heroes;
   };
 
-  async function readExamples(rows: { kind: Kind; id: number; hero: string; file: string; createdAt: string; source: LookSource | null }[]): Promise<ReaderHero[]> {
-    const samples = await Promise.all(rows.map(async (r): Promise<HeroExample & { kind: Kind; id: number }> => ({ hero: r.hero, kind: r.kind, id: r.id, features: await featuresFor(fileOf(r.kind, r.file)) })));
+  async function readExamples(all: { kind: Kind; id: number; hero: string; file: string; createdAt: string; source: LookSource | null }[]): Promise<ReaderHero[]> {
+    // each kind keeps its vectors (`storedFeaturesFor`); an example whose picture cannot be decoded is left out
+    const found = new Map(await Promise.all((Object.keys(KINDS) as Kind[]).map(async (kind) => [kind, (await storedFeaturesFor(db, KINDS[kind].spec, all.filter((r) => r.kind === kind), join(root, KINDS[kind].dir))).features] as const)));
+    const rows = all.filter((r) => found.get(r.kind)!.has(r.id));
+    const samples = rows.map((r): HeroExample & { kind: Kind; id: number } => ({ hero: r.hero, kind: r.kind, id: r.id, features: found.get(r.kind)!.get(r.id)! }));
     const byHero = new Map<string, ReaderExample[]>();
     for (const [i, r] of rows.entries()) {
       // the tile is read against every other example, as the reader would read it when it first met it
@@ -75,13 +74,13 @@ export function readerExampleRoutes(db: Database.Database, options: { imagesDir?
     return { heroes, withoutExamples: total - heroes.length };
   });
 
-  serve(app, readerExamplesContract.image, ({ params }) => {
+  serve(app, readerExamplesContract.image, ({ params }, c) => {
     const kind = params.kind;
     if (!isKind(kind)) return fail(404, 'Unknown kind of example');
     const row = db.prepare(`SELECT file FROM ${KINDS[kind].table} WHERE id = ?`).get(Number(params.id)) as { file: string } | undefined;
     const path = row && fileOf(kind, row.file);
     if (!path || !existsSync(path)) return fail(404, 'No picture');
-    return file(new Uint8Array(readFileSync(path)), 'image/png', { 'cache-control': 'no-cache' });
+    return revalidated(c, path, 'image/png');
   });
 
   serve(app, readerExamplesContract.move, ({ params, body: given }) => {

@@ -6,6 +6,7 @@ import { RosterPage } from './reader/RosterPage.js';
 import { ScenariosPage } from './scenarios/ScenariosPage.js';
 import { StatsPage } from './stats/StatsPage.js';
 import { StagesPage } from './stages/StagesPage.js';
+import { ToastProvider } from './ui/Toast.js';
 
 const PAGES = {
   roster: { label: 'Roster', component: RosterPage },
@@ -38,7 +39,7 @@ export function App() {
   }, [page]);
 
   return (
-    <>
+    <ToastProvider>
       <header className="app-header">
         <div className="brand">AFK Journey Recorder</div>
         <nav>
@@ -53,6 +54,6 @@ export function App() {
         <h1 className="sr-only">{PAGES[page].label}</h1>
         <Page />
       </main>
-    </>
+    </ToastProvider>
   );
 }

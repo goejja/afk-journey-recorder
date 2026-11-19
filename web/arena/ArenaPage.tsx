@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../backend.js';
-import { type Reference } from './draft.js';
+import { type PatchReference, type Reference } from './draft.js';
 import { Battles } from './BattleList.js';
 
 export function ArenaPage() {
   const [reference, setReference] = useState<Reference | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const patchReference: PatchReference = useCallback((change) => setReference((old) => old && { ...old, ...(typeof change === 'function' ? change(old) : change) }), []);
 
   const reload = useCallback(async () => {
     try {
@@ -28,7 +30,7 @@ export function ArenaPage() {
           {error}
         </p>
       )}
-      {reference && <Battles reference={reference} />}
+      {reference && <Battles reference={reference} patchReference={patchReference} />}
     </div>
   );
 }

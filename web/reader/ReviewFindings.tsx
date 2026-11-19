@@ -5,7 +5,7 @@ import { api, type ReviewFinding, type ReviewFindings } from '../backend.js';
 const NewMark = ({ finding }: { finding: ReviewFinding }) => (finding.new ? <><span className="badge">New</span>{' '}</> : null);
 
 /** What a finding is about, in the words of its buttons. */
-const about = (f: ReviewFinding) => (f.code === 'rank-look-misread' ? `Rank Look ${f.subject}` : f.code === 'record-phantimal-faction' ? `record ${f.subject}` : f.subject);
+const about = (f: ReviewFinding) => (f.code === 'rank-look-misread' || f.code === 'rank-look-unreadable' ? `Rank Look ${f.subject}` : f.code === 'record-phantimal-faction' ? `record ${f.subject}` : f.subject);
 const identity = (f: ReviewFinding) => ({ code: f.code, subject: f.subject, message: f.message });
 
 /** Hides a finding the player judges fine, until its message changes (ADR 0032). */
@@ -28,13 +28,13 @@ function DismissButton({ finding, onDismissalChanged, onError }: { finding: Revi
 const kilobytes = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** The Rank Looks the others read as another rank: move one to that rank, or delete it, with the routes of Admin > Reader. */
-function Misread({ finding, onChanged, onDismissalChanged, onError }: { finding: ReviewFinding; onChanged: () => void; onDismissalChanged: () => void; onError: (message: string) => void }) {
+/** The Rank Looks the others read as another rank, or whose picture cannot be read: move one to that rank, or delete it, with the routes of Admin > Reader. */
+function Misread({ finding, onChanged, onDismissalChanged, onError }: { finding: ReviewFinding; onChanged: (done: ReviewFinding[]) => void; onDismissalChanged: () => void; onError: (message: string) => void }) {
   const id = Number(finding.subject);
   async function run(action: () => Promise<unknown>, failure: string) {
     try {
       await action();
-      onChanged();
+      onChanged([finding]);
     } catch (e) {
       onError(`${failure}: ${(e as Error).message}`);
     }
@@ -43,7 +43,11 @@ function Misread({ finding, onChanged, onDismissalChanged, onError }: { finding:
     <li>
       <NewMark finding={finding} />
       {finding.message}{' '}
-      <button onClick={() => void run(() => api.moveRankLook(id, finding.readAs!), `Could not move Rank Look ${id}`)}>Move Rank Look {id} to {finding.readAs}</button>{' '}
+      {finding.readAs && (
+        <>
+          <button onClick={() => void run(() => api.moveRankLook(id, finding.readAs!), `Could not move Rank Look ${id}`)}>Move Rank Look {id} to {finding.readAs}</button>{' '}
+        </>
+      )}
       <button className="danger small" onClick={() => void run(() => api.deleteLearned('rank', id), `Could not delete Rank Look ${id}`)}>
         Delete Rank Look {id}
       </button>{' '}
@@ -56,7 +60,7 @@ function Misread({ finding, onChanged, onDismissalChanged, onError }: { finding:
 const EMPTY: ReviewFindings = { wrong: [], obsolete: [], improve: [], kept: [] };
 
 /** `findings` is null while there is no run to show; `placeholder` then says why. The page around the findings stays where it is meanwhile. */
-export function ReviewFindingsView({ findings: found, dismissed, placeholder, onChanged, onDismissalChanged, onError, children }: { findings: ReviewFindings | null; dismissed: ReviewFinding[]; placeholder: string; onChanged: () => void; onDismissalChanged: () => void; onError: (message: string) => void; children?: React.ReactNode }) {
+export function ReviewFindingsView({ findings: found, dismissed, placeholder, onChanged, onDismissalChanged, onError, children }: { findings: ReviewFindings | null; dismissed: ReviewFinding[]; placeholder: string; onChanged: (done: ReviewFinding[]) => void; onDismissalChanged: () => void; onError: (message: string) => void; children?: React.ReactNode }) {
   const findings = found ?? EMPTY;
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
   const files = findings.obsolete.filter((f) => f.code === 'unreferenced-file');
@@ -72,7 +76,7 @@ export function ReviewFindingsView({ findings: found, dismissed, placeholder, on
   async function deleteFiles() {
     try {
       await api.deleteReviewFiles(ticked);
-      onChanged();
+      onChanged(files.filter((f) => ticked.includes(f.subject)));
     } catch (e) {
       onError(`Could not delete the files: ${(e as Error).message}`);
     }
@@ -88,7 +92,7 @@ export function ReviewFindingsView({ findings: found, dismissed, placeholder, on
       ) : (
         <ul>
           {findings.wrong.map((f) =>
-            f.code === 'rank-look-misread' ? (
+            f.code === 'rank-look-misread' || f.code === 'rank-look-unreadable' ? (
               <Misread key={`${f.code}-${f.subject}`} finding={f} onChanged={onChanged} onDismissalChanged={onDismissalChanged} onError={onError} />
             ) : (
               <li key={`${f.code}-${f.subject}`}>

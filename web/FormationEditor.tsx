@@ -66,23 +66,24 @@ export function withRosterStates(value: FormationState, heroes: Hero[], overwrit
 
 export const emptyFormation = (): FormationState => ({ placed: [], phantimal: null, phantimalChoice: '', assist: '', artifact: '', formationId: '', snapshots: {} });
 
-/** The editor state for a formation already saved, so the record can be edited. */
-export const formationFromRecord = (f: Attempt['formation']): FormationState => ({
+/** The editor state for a formation already saved, so the record can be edited. `withState` false leaves the saved ranks and equipment out, for a record that keeps none (a Stage, ADR 0041). */
+export const formationFromRecord = (f: Attempt['formation'], withState = true): FormationState => ({
   placed: f.heroes.map((h) => ({ tile: h.tile, hero: h.name, ...(h.part ? { part: h.part } : {}) })),
   phantimal: f.phantimal,
   phantimalChoice: f.phantimal?.name ?? '',
   assist: f.assist?.name ?? '',
   artifact: f.artifact ?? '',
   formationId: f.formationId ?? '',
-  snapshots: Object.fromEntries(
-    [...f.heroes.filter((h) => !isSummon({ hero: h.name, part: h.part })), ...(f.assist ? [f.assist] : [])].map((h) => [h.name, { rank: h.rank, equipmentLevel: h.equipmentLevel }]),
-  ),
+  snapshots: withState
+    ? Object.fromEntries([...f.heroes.filter((h) => !isSummon({ hero: h.name, part: h.part })), ...(f.assist ? [f.assist] : [])].map((h) => [h.name, { rank: h.rank, equipmentLevel: h.equipmentLevel }]))
+    : {},
 });
 
-export const toPayload = (state: FormationState): FormationInput => {
-  const assistState = state.assist ? state.snapshots[state.assist] : undefined;
+/** The payload of a formation. `withState` false sends no rank or equipment at all, which a record that keeps none requires (a Stage, ADR 0041). */
+export const toPayload = (state: FormationState, withState = true): FormationInput => {
+  const assistState = withState && state.assist ? state.snapshots[state.assist] : undefined;
   return {
-    heroes: state.placed.map((p) => ({ ...p, ...state.snapshots[p.hero] })),
+    heroes: state.placed.map((p) => ({ ...p, ...(withState ? state.snapshots[p.hero] : {}) })),
     phantimal: state.phantimal,
     assistHero: state.assist || null,
     ...(assistState ? { assistRank: assistState.rank, assistEquipmentLevel: assistState.equipmentLevel } : {}),
@@ -113,6 +114,8 @@ interface Props {
   heroesOnly?: boolean;
   /** Draw each placed hero's rank and equipment under its tile; Dream Hunt turns it off. */
   stateTags?: boolean;
+  /** Whether the record keeps each hero's rank and equipment. Without, the editor shows and edits none (no tags, no popover, no state of the assist hero); a Stage record keeps none (ADR 0041) and the Clashfronts entries will not either. */
+  withState?: boolean;
   /** Accessible name of the map; Arena calls its sides A and B. */
   mapLabel?: string;
   /** When given (editing a saved record, or always for Arena), each hero's stored rank and equipment can be corrected. */
@@ -124,7 +127,7 @@ interface Props {
 }
 
 /** Placing your heroes on the map's player tiles, plus the assist hero and artifact. */
-export function FormationEditor({ map, heroes, artifacts, phantimals, season, value, onChange, unavailable, rules, heroSource = 'roster', mapLabel = 'Your formation map', heroesOnly = false, stateTags = true, withAssist = true, borrow }: Props) {
+export function FormationEditor({ map, heroes, artifacts, phantimals, season, value, onChange, unavailable, rules, heroSource = 'roster', mapLabel = 'Your formation map', heroesOnly = false, stateTags = true, withState = true, withAssist = true, borrow }: Props) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Picked | null>(null);
@@ -140,6 +143,7 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
   const currentSeason = useCurrentSeason();
   const usableArtifacts = season === undefined ? artifacts : selectableArtifacts(artifacts, season, [value.artifact]);
   const everyone = heroSource === 'all';
+  const stateRules = withState ? rules : undefined;
   const owned = everyone ? heroes : heroes.filter((h) => h.owned);
   const playerTileCount = map.cells.filter((c) => c === TILE.PLAYER).length;
   const isPlayerTile = (tile: number) => map.cells[tile] === TILE.PLAYER;
@@ -220,7 +224,7 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
   return (
     <div>
       {playerTileCount === 0 ? (
-        <p className="error">This map has no player deployment tiles. Paint some in Admin → Maps first.</p>
+        <p className="error" role="alert">This map has no player deployment tiles. Paint some in Admin → Maps first.</p>
       ) : (
         <div className="two-col">
           <div>
@@ -235,7 +239,7 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
                 const hero = value.placed.find((p) => p.tile === index);
                 if (hero) {
                   const state = heroState(value, heroes, hero.hero, everyone);
-                  return [rowName(hero), isSummon(hero) ? '' : stateText(state.rank, state.equipment)].filter(Boolean).join(' · ');
+                  return [rowName(hero), isSummon(hero) || !withState ? '' : stateText(state.rank, state.equipment)].filter(Boolean).join(' · ');
                 }
                 return phantimalAt(value.phantimal, index);
               }}
@@ -250,7 +254,7 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
               onTileDragStart={(tile) => (setSelected(null), setMoving(tile))}
               onTileDragEnd={() => setMoving(null)}
               tileTag={(index) => {
-                if (!stateTags) return null;
+                if (!stateTags || !withState) return null;
                 const hero = value.placed.find((p) => p.tile === index);
                 if (!hero || isSummon(hero)) return null;
                 const state = heroState(value, heroes, hero.hero, everyone);
@@ -264,8 +268,8 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
                 return undefined;
               }}
             />
-            {missingPhantimalPart(value.phantimal) && <p className="error">{missingPhantimalPart(value.phantimal)} still has to be placed: the wedges always stand together.</p>}
-            {message && <p className="error">{message}</p>}
+            {missingPhantimalPart(value.phantimal) && <p className="error" role="alert">{missingPhantimalPart(value.phantimal)} still has to be placed: the wedges always stand together.</p>}
+            {message && <p className="error" role="alert">{message}</p>}
           </div>
           <div className="picker">
             <div className="picker-fixed">
@@ -281,14 +285,14 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
                 ...(value.phantimal ? [{ key: 'phantimal', name: value.phantimal.name, kind: 'phantimal' as const, onRemove: () => change({ ...value, phantimal: null, phantimalChoice: '' }) }] : []),
               ]}
             />
-            {rules && selected && selectedTile !== undefined && anchor && (
+            {stateRules && selected && selectedTile !== undefined && anchor && (
               <HeroStatePopover
                 anchor={anchor}
                 name={selected}
                 tier={heroes.find((h) => h.name === selected)?.tier}
                 rank={selectedState.rank}
                 equipment={selectedState.equipment}
-                rules={rules}
+                rules={stateRules}
                 onChange={(rank, equipment) => change(withHeroState(value, selected, rank, equipment))}
                 onClose={closeState}
               />
@@ -315,7 +319,7 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
             {withAssist && !heroesOnly && (
               <details className="details-panel" open>
                 <summary>Assist hero</summary>
-                <FormationDetails value={value} onChange={onChange} heroes={heroes} owned={owned} unavailable={unavailable} rules={rules} everyone={everyone} heroesOnly={heroesOnly} withAssist={withAssist} />
+                <FormationDetails value={value} onChange={onChange} heroes={heroes} owned={owned} unavailable={unavailable} rules={stateRules} everyone={everyone} heroesOnly={heroesOnly} withAssist={withAssist} />
               </details>
             )}
             </div>

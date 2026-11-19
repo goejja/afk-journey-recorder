@@ -24,11 +24,13 @@ function sideOf(db: Database.Database, player: ImportPlayer | undefined, rules: 
     // an equipment level only where the stars were read and the rank allows it
     const read = tile.stars?.state === 'present' ? tile.stars.level : null;
     const equipmentLevel = rank !== null && read !== null && allowedEquipmentLevels(rank, rules).includes(read) ? read : null;
-    heroes.push({ tile: tile.key, hero: tile.hero, rank, equipmentLevel });
+    heroes.push({ tile: tile.key, hero: tile.hero, rank, equipmentLevel, ...(tile.confident === false ? { unsure: true, candidates: tile.candidates } : {}) });
   }
   const profile = seenId !== null ? (profiles.find((p) => p.id === seenId) ?? null) : match ? (profiles.find((p) => p.id === match.profile.id) ?? null) : null;
-  const unread = (player?.tiles ?? []).filter((t) => t.hero === null && !t.blank && !t.notOwned).map((t) => t.key);
-  return { name: player?.name ?? null, profile, heroes, artifact: player?.artifact ?? null, phantimal: player?.phantimal ?? null, crops: player?.crops ?? null, unread };
+  const unreadTiles = (player?.tiles ?? []).filter((t) => t.hero === null && !t.blank && !t.notOwned);
+  const unread = unreadTiles.map((t) => t.key);
+  const guesses = unreadTiles.filter((t) => t.candidates.length > 0);
+  return { name: player?.name ?? null, profile, heroes, artifact: player?.artifact ?? null, phantimal: player?.phantimal ?? null, crops: player?.crops ?? null, unread, ...(guesses.length > 0 ? { unreadCandidates: Object.fromEntries(guesses.map((t) => [t.key, t.candidates])) } : {}) };
 }
 
 /** A saved fight with the same two sets of heroes in this mode (and the same result, when the picture gave one). */

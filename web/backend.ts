@@ -18,7 +18,7 @@ import { battlesContract } from '../src/shared/contracts/battles.js';
 import { scenariosContract } from '../src/shared/contracts/scenarios.js';
 import { statsContract } from '../src/shared/contracts/stats.js';
 import { counterRuleContract, statsSettingsContract } from '../src/shared/contracts/stats-settings.js';
-import { importFeedbackContract, keptPicturesContract, learnedContract, readerExamplesContract } from '../src/shared/contracts/reader.js';
+import { importFeedbackContract, keptPicturesContract, learnedContract, parkedReadingsContract, readerExamplesContract } from '../src/shared/contracts/reader.js';
 import { rosterImportContract } from '../src/shared/contracts/roster-import.js';
 import { adminContract } from '../src/shared/contracts/admin.js';
 import { imagesContract } from '../src/shared/contracts/images.js';
@@ -68,6 +68,8 @@ function sendJson<T>(url: string, method: string, body: unknown): Promise<T> {
 }
 
 export const learnedLookUrl = (kind: 'rank' | 'unit', id: number) => urlOf(learnedContract.image, { params: { kind, id: String(id) } });
+/** The picture of a parked reading (ADR 0040). */
+export const parkedReadingUrl = (id: number) => urlOf(parkedReadingsContract.image, { params: { id: String(id) } });
 export const readerExampleUrl = (e: Pick<ReaderExample, 'kind' | 'id'>) => urlOf(readerExamplesContract.image, { params: { kind: e.kind, id: String(e.id) } });
 
 /** A query string where a value may be a list, sent as the same name repeated (`mode=Arena&mode=Guild+Duel`); empty values are left out. */
@@ -115,6 +117,9 @@ export const api = {
   deletePhantimal: (name: string) => call(phantimalsContract.remove, { params: { name } }),
 
   readerExamples: () => call(readerExamplesContract.view),
+  parkedReadings: (kind: 'all' | 'difference' | 'unsure', offset: number, limit: number) => call(parkedReadingsContract.list, { query: { ...(kind === 'all' ? {} : { kind }), offset: String(offset), limit: String(limit) } }),
+  confirmParkedReading: (id: number, hero: string) => call(parkedReadingsContract.confirm, { params: { id: String(id) }, body: { hero } }),
+  dismissParkedReading: (id: number) => call(parkedReadingsContract.dismiss, { params: { id: String(id) } }),
   moveReaderExample: (e: Pick<ReaderExample, 'kind' | 'id'>, hero: string) => call(readerExamplesContract.move, { params: { kind: e.kind, id: String(e.id) }, body: { hero } }),
   learned: () => call(learnedContract.view),
   latestReviewRun: () => call(reviewContract.latestRun),

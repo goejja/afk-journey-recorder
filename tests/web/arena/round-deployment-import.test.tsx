@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import type { RoundTeam } from '../../../src/domain/round-deployment.js';
 import { ArenaPage } from '../../../web/arena/ArenaPage.js';
+import { ToastProvider } from '../../../web/ui/Toast.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
 const hero = (name: string) => ({ name, tier: 'S', class: 'Mage', faction: 'Wilder', damageType: 'Magic', imagePath: null, owned: true, rank: 'Mythic+', equipmentLevel: 10 });
@@ -25,12 +26,18 @@ const picture = {
   },
 };
 
+/** What the server answers to the feedback of a save (ADR 0040); 'down' is a server that fails. */
+let feedbackAnswer: { logged: number; looks: number; heroExamples: number; rankLooks: number; parked: number; full: string[] } | 'down';
+const nothingParked = { logged: 2, looks: 0, heroExamples: 0, rankLooks: 0, parked: 0, full: [] };
+const toasts = () => document.querySelector('.toasts')?.textContent;
+
 describe('a Super League battle imported into a Round', () => {
   let requests: { method: string; url: string; body: any }[];
   let stored: { profileId: number; name: string; playerId: string; teams: (RoundTeam | null)[] }[];
 
   beforeEach(() => {
     requests = [];
+    feedbackAnswer = nothingParked;
     stored = [{ profileId: 2, name: 'Luna', playerId: '2222', teams: [{ heroes: [deployedHero('Evie', 38), deployedHero('Fay', 39)], phantimal: null, artifact: null }, null, null, null, null] }];
     vi.stubGlobal('window', Object.assign(window, { confirm: () => true }));
     vi.stubGlobal(
@@ -68,6 +75,7 @@ describe('a Super League battle imported into a Round', () => {
         if (url.startsWith('/api/pvp/battles') && method === 'GET') return Response.json([]);
         if (url === '/api/roster-import?kind=report') return Response.json({ canRead: true, reason: null, busy: false, queue: [picture] });
         if (url.startsWith('/api/roster-import?ids=') && method === 'DELETE') return new Response(null, { status: 204 });
+        if (url === '/api/import-feedback' && method === 'POST') return feedbackAnswer === 'down' ? Response.json({ error: 'Network down' }, { status: 500 }) : Response.json(feedbackAnswer);
         return Response.json({}, { status: 404 });
       }),
     );
@@ -76,7 +84,11 @@ describe('a Super League battle imported into a Round', () => {
 
   async function openForm() {
     const user = userEvent.setup();
-    render(<ArenaPage />);
+    render(
+      <ToastProvider>
+        <ArenaPage />
+      </ToastProvider>,
+    );
     await user.click(await screen.findByRole('button', { name: 'Import from pictures' }));
     await user.selectOptions(await screen.findByLabelText('The reports are from'), 'Super League');
     await waitFor(() => expect((screen.getByLabelText('Tournament') as HTMLSelectElement).value).toBe('2'));
@@ -95,6 +107,46 @@ describe('a Super League battle imported into a Round', () => {
     expect(within(panel).getByText(/Side B has no profile/)).toBeTruthy();
     // the Deployment knows the tiles: the heroes stand where it says
     expect(within(screen.getByRole('list', { name: 'Placed on Side A' })).getByText('Evie')).toBeTruthy();
+  });
+
+  describe('when a read fails', () => {
+    const failing = (isIt: (url: string) => boolean) => {
+      const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+      vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => ((init?.method ?? 'GET') === 'GET' && isIt(url) ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
+    };
+    const savedBattles = (url: string) => url.startsWith('/api/pvp/battles') && url.includes('limit=1000') && !url.includes('tournament');
+    const toWizard = async () => {
+      const user = userEvent.setup();
+      render(<ArenaPage />);
+      await user.click(await screen.findByRole('button', { name: 'Import from pictures' }));
+      await user.selectOptions(await screen.findByLabelText('The reports are from'), 'Super League');
+      await waitFor(() => expect((screen.getByLabelText('Tournament') as HTMLSelectElement).value).toBe('2'));
+      return user;
+    };
+
+    it('says why the Round could not be checked, instead of leaving the batch unsaveable with no reason', async () => {
+      failing(savedBattles);
+      await toWizard();
+      expect((await screen.findByRole('alert')).textContent).toBe('The Round could not be checked: The saved Super League battles could not be read: Network down');
+    });
+
+    it('does not open a battle in the form without the Round Deployments, and says they could not be read', async () => {
+      const user = await toWizard();
+      await screen.findByRole('button', { name: 'Open in the form' });
+      failing((url) => url === '/api/tournaments/2/rounds/Group%20stage/deployments');
+      await user.click(screen.getByRole('button', { name: 'Open in the form' }));
+      expect((await screen.findByRole('alert')).textContent).toBe('The Round Deployments could not be read: Network down');
+      expect(screen.queryByRole('region', { name: 'Round Deployment' })).toBeNull();
+    });
+
+    it('does not open a battle in the form without the roster of a Profile, and names the Profile', async () => {
+      const user = await toWizard();
+      await screen.findByRole('button', { name: 'Open in the form' });
+      failing((url) => url === '/api/heroes?profile=2');
+      await user.click(screen.getByRole('button', { name: 'Open in the form' }));
+      expect((await screen.findByRole('alert')).textContent).toBe('The roster of Luna could not be read: Network down');
+      expect(screen.queryByRole('region', { name: 'Round Deployment' })).toBeNull();
+    });
   });
 
   it('confirms Side B as the Round Deployment of the Profile given to it', async () => {
@@ -175,6 +227,46 @@ describe('a Super League battle imported into a Round', () => {
     await waitFor(() => expect(requests.some((r) => r.method === 'DELETE' && r.url.startsWith('/api/roster-import'))).toBe(true));
     expect(await screen.findByRole('region', { name: 'Import battles from pictures' })).toBeTruthy();
   });
+
+  describe('the toast after a save', () => {
+    const saveFromTheForm = async () => {
+      const user = await openForm();
+      await screen.findByRole('region', { name: 'Round Deployment' });
+      await user.click(screen.getByRole('button', { name: /Save battle/ }));
+      await user.click(await screen.findByRole('button', { name: 'Save 1' }));
+      // the import comes back once the Battle is saved: the save did not wait for the feedback
+      expect(await screen.findByRole('region', { name: 'Import battles from pictures' })).toBeTruthy();
+    };
+
+    it('says how many readings wait in Admin > Reader once the answer comes', async () => {
+      feedbackAnswer = { ...nothingParked, parked: 2 };
+      await saveFromTheForm();
+      await waitFor(() => expect(toasts()).toContain('2 readings to confirm in Admin > Reader'));
+      expect(requests.filter((r) => r.method === 'POST' && r.url === '/api/import-feedback')).toHaveLength(1);
+    });
+
+    it('says which list is full', async () => {
+      feedbackAnswer = { ...nothingParked, full: ['unsure'] };
+      await saveFromTheForm();
+      await waitFor(() => expect(toasts()).toContain('The To confirm list of unsure readings is full'));
+    });
+
+    it('says nothing when nothing was parked', async () => {
+      await saveFromTheForm();
+      await waitFor(() => expect(requests.some((r) => r.url === '/api/import-feedback')).toBe(true));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(toasts()).toBe('');
+    });
+
+    it('says nothing, and still saves, when the feedback could not be sent', async () => {
+      feedbackAnswer = 'down';
+      await saveFromTheForm();
+      await waitFor(() => expect(requests.some((r) => r.url === '/api/import-feedback')).toBe(true));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(toasts()).toBe('');
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+  });
 });
 
 describe('the batch table of a Super League Round', () => {
@@ -220,6 +312,7 @@ describe('the batch table of a Super League Round', () => {
 
   beforeEach(() => {
     requests = [];
+    feedbackAnswer = nothingParked;
     deployments = entries();
     savedFights = [];
     mirrored = false;
@@ -264,6 +357,7 @@ describe('the batch table of a Super League Round', () => {
         if (url.startsWith('/api/pvp/battles') && method === 'GET') return Response.json(savedFights);
         if (url === '/api/roster-import?kind=report') return Response.json({ canRead: true, reason: null, busy: false, queue: (both ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : [1, 2, 3, 4, 5]).map(picture) });
         if (url.startsWith('/api/roster-import?ids=') && method === 'DELETE') return new Response(null, { status: 204 });
+        if (url === '/api/import-feedback' && method === 'POST') return feedbackAnswer === 'down' ? Response.json({ error: 'Network down' }, { status: 500 }) : Response.json(feedbackAnswer);
         return Response.json({}, { status: 404 });
       }),
     );
@@ -272,7 +366,11 @@ describe('the batch table of a Super League Round', () => {
 
   async function openImport() {
     const user = userEvent.setup();
-    render(<ArenaPage />);
+    render(
+      <ToastProvider>
+        <ArenaPage />
+      </ToastProvider>,
+    );
     await user.click(await screen.findByRole('button', { name: 'Import from pictures' }));
     await user.selectOptions(await screen.findByLabelText('The reports are from'), 'Super League');
     await waitFor(() => expect((screen.getByLabelText('Tournament') as HTMLSelectElement).value).toBe('2'));
@@ -304,6 +402,30 @@ describe('the batch table of a Super League Round', () => {
     expect(saved.body.fights[0].opponent.heroes.map((h: any) => [h.hero, h.tile])).toEqual([['B1a', 0], ['B1b', 1]]);
     await waitFor(() => expect(requests.some((r) => r.method === 'DELETE' && r.url === '/api/roster-import?ids=1,2,3,4,5')).toBe(true));
     expect(await screen.findByText(/Saved 1 battle in Season 8, Tournament 2, Group stage/)).toBeTruthy();
+  });
+
+  it('shows one toast for the batch, with the readings parked and the list that is full', async () => {
+    feedbackAnswer = { ...nothingParked, parked: 3, full: ['difference'] };
+    const user = await openImport();
+    const table = await screen.findByRole('region', { name: 'Battles of the Round' });
+    await waitFor(() => expect(within(table).getByText(/1 of 1 battle ready/)).toBeTruthy());
+    await user.click(within(table).getByRole('button', { name: 'Save 1 ready battle' }));
+    expect(await screen.findByText(/Saved 1 battle in Season 8, Tournament 2, Group stage/)).toBeTruthy();
+    await waitFor(() => expect(toasts()).toContain('3 readings to confirm in Admin > Reader. The To confirm list of differences is full: confirm or dismiss some in Admin > Reader'));
+    expect(requests.filter((r) => r.method === 'POST' && r.url === '/api/import-feedback')).toHaveLength(1);
+  });
+
+  it('saves the batch and shows no toast when the feedback could not be sent', async () => {
+    feedbackAnswer = 'down';
+    const user = await openImport();
+    const table = await screen.findByRole('region', { name: 'Battles of the Round' });
+    await waitFor(() => expect(within(table).getByText(/1 of 1 battle ready/)).toBeTruthy());
+    await user.click(within(table).getByRole('button', { name: 'Save 1 ready battle' }));
+    expect(await screen.findByText(/Saved 1 battle in Season 8, Tournament 2, Group stage/)).toBeTruthy();
+    await waitFor(() => expect(requests.some((r) => r.url === '/api/import-feedback')).toBe(true));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(toasts()).toBe('');
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('keeps a battle out of the batch, with the reasons, when a Player has no Round Deployment or a team changed', async () => {

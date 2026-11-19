@@ -6,6 +6,8 @@ import { api, type Attempt, type GameMap } from '../backend.js';
 import { FormationIdBadge } from '../FormationIdField.js';
 import { TagBadges } from '../Tags.js';
 import { UnitsOnMap, type MapUnit } from '../admin/UnitsOnMap.js';
+import { mapColumns } from '../../src/domain/map.js';
+import { useFitWidth } from '../useFitWidth.js';
 import { useLoad } from '../useLoad.js';
 
 /** How many records of a box the panel lists before `Show N older records`. */
@@ -13,6 +15,11 @@ const NEWEST = 5;
 
 /** The map of an auto-battle copy is not known, so it is drawn on this one. */
 const COPY_MAP = 'Open';
+
+/** The tiles of a record's map are as wide as its card allows, between these widths in pixels; the portrait on a tile fills this share of it. */
+const MIN_TILE_WIDTH = 18;
+const MAX_TILE_WIDTH = 40;
+const PORTRAIT_SHARE = 0.77;
 
 export interface BoxRef {
   kind: StageKind;
@@ -39,11 +46,13 @@ interface Props {
 const stateText = (state: BoxState, season: number | null) =>
   state === 'cleared' ? 'Cleared this season' : state === 'older' ? `Cleared in season ${season}` : 'No record';
 
-/** The formation of a record on its stage's map, small, with a portrait on each tile. */
+/** The formation of a record on its stage's map, with a portrait on each tile, drawn as wide as the card it is in. */
 function RecordMap({ attempt, maps }: { attempt: Attempt; maps: GameMap[] }) {
+  const { ref, width } = useFitWidth<HTMLDivElement>(MIN_TILE_WIDTH * 8);
   const copy = attempt.tags.includes(AFK_RANGE_TAG);
   const map = maps.find((m) => m.name === (copy ? COPY_MAP : attempt.stage.mapName));
   if (!map) return null;
+  const tileWidth = Math.min(MAX_TILE_WIDTH, Math.max(MIN_TILE_WIDTH, Math.floor(width / mapColumns(map.rowLengths))));
   const { heroes, phantimal } = attempt.formation;
   const unitAt = (tile: number): MapUnit | undefined => {
     const hero = heroes.find((h) => h.tile === tile);
@@ -51,8 +60,8 @@ function RecordMap({ attempt, maps }: { attempt: Attempt; maps: GameMap[] }) {
     return phantimal?.tile === tile ? { kind: 'phantimal', name: phantimal.name } : undefined;
   };
   return (
-    <div className="record-map">
-      <UnitsOnMap rowLengths={map.rowLengths} cells={map.cells} label={`Formation on ${map.name}`} tileWidth={26} portraitSize={20} unitAt={unitAt} />
+    <div className="record-map" ref={ref}>
+      <UnitsOnMap rowLengths={map.rowLengths} cells={map.cells} label={`Formation on ${map.name}`} tileWidth={tileWidth} portraitSize={Math.round(tileWidth * PORTRAIT_SHARE)} unitAt={unitAt} />
     </div>
   );
 }
@@ -89,37 +98,37 @@ export function BoxPanel({ box, state, newestSeason, maps, version, onEdit, onCl
       )}
       {records.data === undefined && !records.error && <p className="muted">Loading…</p>}
       {records.data && list.length === 0 && <p className="muted">Nothing recorded for this stage yet.</p>}
-      <ul className="attempts" aria-label={`Records of ${heading}`}>
+      <ul className="attempts stage-records" aria-label={`Records of ${heading}`}>
         {shown.map((a) => (
-          <li key={a.id} className="attempt">
+          <li key={a.id} className="attempt stage-card">
             <div className="stage-record">
               <span className="badge" title="The season of the stage">
                 S{a.stage.season}
               </span>
               <span className="muted">{a.createdAt}</span>
-              {a.buffLevel !== null ? <span className="muted">buff {a.buffLevel}</span> : <span />}
-              <span className="tags-cell">
-                <TagBadges tags={a.tags} />
-                <FormationIdBadge code={a.formation.formationId} />
-                {a.note && (
-                  <span className="muted stage-note" title={a.note}>
-                    {a.note}
-                  </span>
-                )}
-              </span>
-              <div className="attempt-actions">
-                <button className="small" onClick={() => onEdit(a)}>
-                  Edit
-                </button>
-                <button className="small" title="Start a new clear from this one, on this season's stage" onClick={() => onClone(a)}>
-                  Clone
-                </button>
-                <button className="danger small" onClick={() => onDelete(a)}>
-                  Delete
-                </button>
-              </div>
+              {a.buffLevel !== null && <span className="muted">buff {a.buffLevel}</span>}
             </div>
             <RecordMap attempt={a} maps={maps} />
+            <div className="tags-cell">
+              <TagBadges tags={a.tags} />
+              <FormationIdBadge code={a.formation.formationId} />
+            </div>
+            {a.note && (
+              <span className="muted stage-note" title={a.note}>
+                {a.note}
+              </span>
+            )}
+            <div className="attempt-actions">
+              <button className="small" onClick={() => onEdit(a)}>
+                Edit
+              </button>
+              <button className="small" title="Start a new clear from this one, on this season's stage" onClick={() => onClone(a)}>
+                Clone
+              </button>
+              <button className="danger small" onClick={() => onDelete(a)}>
+                Delete
+              </button>
+            </div>
           </li>
         ))}
       </ul>

@@ -424,7 +424,7 @@ function DatabaseAdmin() {
     await run(
       () => api.restoreBackup(file),
       undefined,
-      ({ restoredRows, savedAs }) => `Restored ${restoredRows} rows.${savedAs ? ` The previous data is saved as ${savedAs}.` : ''} Reload the page to see them everywhere.`,
+      ({ restoredRows, savedAs, note }) => `Restored ${restoredRows} rows.${savedAs ? ` The previous data is saved as ${savedAs}.` : ''} ${note} Reload the page to see them everywhere.`,
     );
   }
 
@@ -432,8 +432,8 @@ function DatabaseAdmin() {
     <section>
       <h3>Backup and restore</h3>
       <p className="muted">
-        A backup is a copy of the whole database: records, roster, maps, tags and rules. Downloaded images are not in it, they are kept in the images folder
-        and can be downloaded again.
+        A backup is a copy of the whole database: records, roster, maps, tags and rules. No pictures are in it: downloaded images can be downloaded again, but the
+        pictures you confirmed or uploaded (images/custom) exist only in the images folder, so copy that folder too.
       </p>
       {error && (
         <p className="error" role="alert">

@@ -1,14 +1,13 @@
 import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
 import { validateFormation } from '../../domain/formation.js';
-import type { HeroStateRules } from '../../domain/hero-state.js';
 import { AFK_RANGE_TAG, normalizeTags } from '../../domain/tags.js';
 import { allowsPhantimal, isApex, validateStageEnemies, validateStageKey, type StageKind } from '../../domain/stage.js';
 import { dropEmptyBattles } from './battles.js';
 import { anyOf, limitParam, listParam } from '../params.js';
 import { hasAnyTag, loadTags, saveTags } from './tags.js';
-import { fightFormationIdProblem, formationContext, formationHeroNames, insertFormation, loadFormation, loadRoster, replaceFormation, validateSnapshots } from './formations.js';
-import { currentSeason, heroNameSet, mapCells } from '../db-helpers.js';
+import { fightFormationIdProblem, formationContext, insertFormation, loadFormation, replaceFormation } from './formations.js';
+import { currentSeason, heroNameSet, heroNames, mapCells } from '../db-helpers.js';
 import { inTransaction } from '../transaction.js';
 import type { Enemy } from '../../shared/contracts/stages.js';
 import { stagesContract } from '../../shared/contracts/stages.js';
@@ -35,7 +34,7 @@ function rangeTags(given: unknown, first: boolean): unknown {
 const DEFAULT_ATTEMPT_LIMIT = 200;
 
 /** Routes for stages, their Stage Enemies, attempts and the lists the attempt form needs. */
-export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRules): Hono {
+export function stageRoutes(db: Database.Database): Hono {
   const app = new Hono();
 
   const findStage = (id: number) => db.prepare('SELECT * FROM stage WHERE id = ?').get(id) as StageRow | undefined;
@@ -200,8 +199,16 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
 
   // ---- attempts -----------------------------------------------------------------------------
 
-  /** Checks an attempt body. `editing` is the id of the attempt being replaced, whose heroes stay allowed. */
-  function check(body: any, editing?: number): { error: string; status: 400 | 404 } | { stage: StageRow; buffLevel: number | null; note: string | null; tags: string[] | undefined } {
+  /** Why a Stage record's formation may not carry hero state, or null (ADR 0041): the rank and equipment of a hero are not recorded for a stage. */
+  const heroStateProblem = (formation: any): string | null =>
+    (formation?.heroes ?? []).some((h: any) => h?.rank !== undefined || h?.equipmentLevel !== undefined) ||
+    formation?.assistRank !== undefined ||
+    formation?.assistEquipmentLevel !== undefined
+      ? 'A stage record does not keep the rank or equipment of a hero'
+      : null;
+
+  /** Checks an attempt body. Any hero may be placed, since a stage record keeps no hero state. */
+  function check(body: any): { error: string; status: 400 | 404 } | { stage: StageRow; buffLevel: number | null; note: string | null; tags: string[] | undefined } {
     const stage = findStage(Number(body?.stageId));
     if (!stage) return { error: 'Unknown stage', status: 404 as const };
     if (body?.outcome !== undefined) return { error: 'A stage record is a clear and has no outcome', status: 400 as const };
@@ -212,6 +219,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
     }
     const formation = body.formation ?? {};
     const error =
+      heroStateProblem(formation) ??
       validateFormation(
         {
           heroes: formation.heroes,
@@ -219,13 +227,8 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
           assistHero: formation.assistHero,
           artifact: formation.artifact,
         },
-        formationContext(db, loadRoster(db), {
-          cells: cellsOf(stage.map_name)!,
-          phantimalAllowed: allowsPhantimal(stage.kind),
-          season: stage.season,
-          extraHeroes: editing === undefined ? [] : formationHeroNames(db, editing),
-        }),
-      ) ?? validateSnapshots(formation, loadRules()) ?? fightFormationIdProblem(db, formation, false);
+        formationContext(db, new Map(), { cells: cellsOf(stage.map_name)!, phantimalAllowed: allowsPhantimal(stage.kind), season: stage.season, extraHeroes: heroNames(db) }),
+      ) ?? fightFormationIdProblem(db, formation, false);
     if (error) return { error, status: 400 as const };
     const tags = normalizeTags(body.tags);
     if ('error' in tags) return { error: tags.error, status: 400 as const };
@@ -237,7 +240,7 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
   function insertAttempt(body: any, checked: Exclude<ReturnType<typeof check>, { error: string }>): number {
     const attemptId = Number(db.prepare("INSERT INTO attempt (mode, outcome, note, season) VALUES ('Stage', 'Win', ?, ?)").run(checked.note, currentSeason(db)).lastInsertRowid);
     db.prepare('INSERT INTO stage_attempt (attempt_id, stage_id, buff_level) VALUES (?, ?, ?)').run(attemptId, checked.stage.id, checked.buffLevel);
-    insertFormation(db, attemptId, body.formation, loadRoster(db), checked.stage.map_name);
+    insertFormation(db, attemptId, body.formation, new Map(), checked.stage.map_name);
     saveTags(db, attemptId, checked.tags);
     return attemptId;
   }
@@ -287,12 +290,12 @@ export function stageRoutes(db: Database.Database, loadRules: () => HeroStateRul
     const id = Number(params.id);
     if (loadAttempts({ id }).length === 0) return fail(404, 'Unknown attempt');
     const body = given as any;
-    const checked = check(body, id);
+    const checked = check(body);
     if ('error' in checked) return fail(checked.status, checked.error);
     db.transaction(() => {
       db.prepare("UPDATE attempt SET outcome = 'Win', note = ? WHERE id = ?").run(checked.note, id);
       db.prepare('UPDATE stage_attempt SET stage_id = ?, buff_level = ? WHERE attempt_id = ?').run(checked.stage.id, checked.buffLevel, id);
-      replaceFormation(db, id, body.formation, loadRoster(db), checked.stage.map_name);
+      replaceFormation(db, id, body.formation, new Map(), checked.stage.map_name);
       saveTags(db, id, checked.tags);
     })();
     return loadAttempts({ id })[0]!;

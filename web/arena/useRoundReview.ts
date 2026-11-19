@@ -30,6 +30,7 @@ export interface RoundReview {
  */
 export function useRoundReview({ groups, chosen, reuse, onReview }: { groups: ImportGroup[]; chosen: ImportRound | null; reuse: boolean; onReview?: (groups: ImportGroup[], options: BatchOptions) => Promise<RoundReview> }) {
   const [review, setReview] = useState<{ problems: RoundReview['problems'] | null } & Omit<RoundReview, 'problems'>>({ problems: null, info: {}, deployments: [], changes: {} });
+  const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const key = useMemo(
     () => JSON.stringify([chosen?.tournamentId, chosen?.round, reuse, groups.map((g) => [g.key, g.pictures.map((p) => [p.id, p.draft.number, p.draft.sideA.profile?.id ?? null, p.draft.sideB.profile?.id ?? null])])]),
@@ -40,11 +41,16 @@ export function useRoundReview({ groups, chosen, reuse, onReview }: { groups: Im
   latest.current = { groups, chosen, reuse, onReview };
   useEffect(() => {
     const { groups: now, chosen: round, reuse: reusing, onReview: check } = latest.current;
+    setError(null);
     if (!round || !check) return setReview((old) => ({ ...old, problems: null }));
     let current = true;
     check(now, { reuse: reusing, round, groups: now }).then(
       (found) => current && setReview(found),
-      () => current && setReview((old) => ({ ...old, problems: null })),
+      (e: Error) => {
+        if (!current) return;
+        setReview((old) => ({ ...old, problems: null })); // nothing is checked, so nothing can be saved
+        setError(e.message);
+      },
     );
     return () => {
       current = false;
@@ -52,7 +58,7 @@ export function useRoundReview({ groups, chosen, reuse, onReview }: { groups: Im
   }, [key, version]);
 
   const ready = review.problems ? groups.filter((g) => (review.problems![g.key] ?? ['not checked']).length === 0 && coverageNotice(g) === null) : [];
-  return { ...review, ready, recheck: () => setVersion((v) => v + 1) };
+  return { ...review, ready, error, recheck: () => setVersion((v) => v + 1) };
 }
 
 /**

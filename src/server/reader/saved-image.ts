@@ -12,8 +12,8 @@ const IMAGE_TABLES = {
 
 type ImageTable = keyof typeof IMAGE_TABLES;
 
-/** Where a picture came from: a Roster import, a Battle import saved from its form, or `npm run learn:ranks`. */
-export type ImageSource = 'roster' | 'battle' | 'offline';
+/** Where a picture came from: a Roster import, a Battle import saved from its form, a reading the player confirmed in Admin > Reader, or `npm run learn:ranks`. */
+export type ImageSource = 'roster' | 'battle' | 'offline' | 'review';
 
 /**
  * Adds a row for a picture and writes the file it names, `<id>.png` in `dir`. Call it inside a transaction: the row is then undone when

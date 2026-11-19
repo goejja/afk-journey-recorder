@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ARENA_MODES, TEAMS_PER_MODE } from '../../src/domain/arena.js';
 import { api, type ArenaBattle } from '../backend.js';
 import { RecordList, RecordToolbar, useGroupedList, type ListItem as GroupedItem } from '../GroupedList.js';
@@ -9,15 +9,18 @@ import { TeamOverview } from '../stats/TeamOverview.js';
 import { BattleImport, type ImportStart } from '../reader/BattleImport.js';
 import { type Round } from '../../src/domain/tournament.js';
 import { applyTeamChange } from './round-deployment.js';
-import { feedbackOf } from '../reader/battle-import.js';
+import { feedbackOf, type ImportGroup } from '../reader/battle-import.js';
+import { sendFeedback, useParkedToast, type FeedbackAnswer } from '../reader/parked-toast.js';
 import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { useConfirm } from '../ui/Dialog.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { FormationIdBadge } from '../FormationIdField.js';
 import { TagBadges, TagFilter } from '../Tags.js';
 import { toggled } from '../format.js';
-import { useNewest } from '../useLoad.js';
-import { type Reference, toInput, type Clone, cloneOf, savedOfMode, rostersOf, pairOf, loadRoundDeployments, fillSavedDeploymentTiles, cloneFromImport, type Side } from './draft.js';
+import { useLoad } from '../useLoad.js';
+import { ListStatus } from '../ui/ListStatus.js';
+import { afterSaved, told } from '../useSaveRecord.js';
+import { type PatchReference, type Reference, toInput, type Clone, cloneOf, savedOfMode, rostersOf, pairOf, loadRoundDeployments, fillSavedDeploymentTiles, cloneFromImport, type Side } from './draft.js';
 import { ModeChip, Players } from './BoardParts.js';
 import { NewBattles } from './NewBattles.js';
 import { EditBattle } from './EditBattle.js';
@@ -96,8 +99,9 @@ function FightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDelete, o
   );
 }
 
-export function Battles({ reference }: { reference: Reference }) {
-  const [battles, setBattles] = useState<ArenaBattle[]>([]);
+const NO_BATTLES: ArenaBattle[] = [];
+
+export function Battles({ reference, patchReference }: { reference: Reference; patchReference: PatchReference }) {
   const [mode, setMode] = useState<string[]>([]);
   const [tag, setTag] = useState<string[]>([]);
   const [player, setPlayer] = useState('');
@@ -110,30 +114,27 @@ export function Battles({ reference }: { reference: Reference }) {
   const [cloning, setCloning] = useState<Clone | null>(null);
   const [editing, setEditing] = useState<ArenaBattle | null>(null);
   const [editingBattle, setEditingBattle] = useState<{ id: number; clone: Clone; round: Round | null; tournamentId: number | null } | null>(null);
+  // what a plain Save left undone, shown after the form has closed (reload() clears `error`, so it is kept apart)
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (adding || editing || editingBattle) setNotice(null);
+  }, [adding, editing, editingBattle]);
   const [error, setError] = useState<string | null>(null);
   /** The roster sync a batch save offers, as the form does for one side (ADR 0021). */
   const sync = useRosterSync();
   const [limit, setLimit] = useState(PAGE);
   const [shownMaps, setShownMaps] = useState<Set<number>>(new Set()); // battles whose map is open
   const { confirm, dialog } = useConfirm();
+  const reportParked = useParkedToast();
   const toggleMap = (id: number) => setShownMaps((old) => toggled(old, id));
 
-  const newest = useNewest();
-  const reload = useCallback(async () => {
-    const current = newest();
-    try {
-      const loaded = await api.arenaBattles({ limit: String(limit), mode, tag, player: player.trim() });
-      if (!current()) return;
-      setBattles(loaded);
-      setError(null);
-    } catch (e) {
-      if (current()) setError((e as Error).message);
-    }
-  }, [mode, tag, player, limit, newest]);
-
+  const loaded = useLoad(() => api.arenaBattles({ limit: String(limit), mode, tag, player: player.trim() }), [mode, tag, player, limit]);
+  const battles = loaded.data ?? NO_BATTLES;
+  const reload = loaded.reload;
+  // an answer clears what an action here failed to do, as the answer of the list did before
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (loaded.data) setError(null);
+  }, [loaded.data]);
 
   async function remove(battle: ArenaBattle) {
     if (
@@ -175,11 +176,16 @@ export function Battles({ reference }: { reference: Reference }) {
 
   useEffect(() => {
     if (importing || adding) return;
-    api.battleImport().then((state) => setWaiting(state.queue.filter((q) => q.state === 'done' || q.state === 'running' || q.state === 'queued').length), () => setWaiting(0));
+    let live = true; // a read that a later one overtook must not set the count
+    api.battleImport().then(
+      (state) => live && setWaiting(state.queue.filter((q) => q.state === 'done' || q.state === 'running' || q.state === 'queued').length),
+      () => live && setWaiting(0),
+    );
+    return () => void (live = false);
   }, [importing, adding]);
 
   /** Back to the wizard from the form it opened: saved (the next battle that needs a look opens) or not. */
-  const backToImport = async (saved: boolean) => {
+  const backToImport = async (saved: boolean, left?: string | null) => {
     if (!fromImport) return;
     const { start, dismiss } = fromImport;
     if (saved) await api.dismissBattleImport(dismiss).catch(() => undefined);
@@ -188,15 +194,17 @@ export function Battles({ reference }: { reference: Reference }) {
     setCloning(null);
     if (saved) void reload();
     setImporting(true);
+    if (left) setNotice(`Saved. ${left}`);
   };
 
-  const done = () => {
+  const done = (left?: string | null) => {
     setFromImport(null);
     setAdding(false);
     setEditing(null);
     setEditingBattle(null);
     setCloning(null);
     void reload();
+    if (left) setNotice(`Saved. ${left}`);
   };
 
   const renderItem = (item: ListItem) =>
@@ -270,6 +278,11 @@ export function Battles({ reference }: { reference: Reference }) {
   if (importing)
     return (
       <>
+      {notice && (
+        <p className="error" role="alert">
+          {notice}
+        </p>
+      )}
       <BattleImport
         start={fromImport?.start}
         onClose={() => (setFromImport(null), setImporting(false))}
@@ -284,7 +297,7 @@ export function Battles({ reference }: { reference: Reference }) {
           },
         }}
         onProfileCreated={(profile) => {
-          reference.profiles = [...reference.profiles, profile];
+          patchReference((old) => ({ profiles: [...old.profiles, profile] }));
         }}
         onReview={async (groups, options) => {
           const saved = await savedOfMode();
@@ -313,6 +326,8 @@ export function Battles({ reference }: { reference: Reference }) {
           const rosters = await rostersOf(ready);
           const done: string[] = [];
           const errors: string[] = [];
+          const sends: Promise<FeedbackAnswer | null>[] = [];
+          const who = (group: ImportGroup) => `${group.pictures[0]!.draft.sideA.name ?? '?'} against ${group.pictures[0]!.draft.sideB.name ?? '?'}`;
           for (const group of ready) {
             try {
               const clone = cloneFromImport(reference, group, saved, options.reuse, options.groups, options.round, deployments, rosters);
@@ -322,25 +337,31 @@ export function Battles({ reference }: { reference: Reference }) {
               if (options.round && filled.length !== TEAMS_PER_MODE[group.mode]) throw new Error(`only ${filled.length} of ${TEAMS_PER_MODE[group.mode]} fights have a team`);
               const result = await api.createArenaBattleGroup(group.mode, filled.map(({ d, index }) => ({ ...toInput(group.mode, d), position: index + 1 })), { formationId: '', opponentFormationId: '' }, { tournamentId: options.round.tournamentId, round: options.round.round });
               done.push(group.key);
+              // The Battle is saved from here on, so a step that fails is told after "saved" and never makes the Battle a failed one.
+              const left: (string | null)[] = [];
               // the tiles the Battle was saved with go to the confirmed Round Deployment teams that had none (ADR 0021)
-              await fillSavedDeploymentTiles(options.round, clone.drafts, clone.profiles ?? { A: null, B: null }, deployments).catch(() => undefined);
+              left.push(await afterSaved(() => fillSavedDeploymentTiles(options.round, clone.drafts, clone.profiles ?? { A: null, B: null }, deployments), 'The Round Deployment could not be given the tiles'));
               // offer the roster update of each side, as the form does after a save
-              await syncSavedBattle(clone, result.fights.map((fight) => fight.id)).catch(() => undefined);
-              // what the pictures said against what was kept, and the pictures themselves (ADR 0016); a failure here changes nothing
+              left.push(await afterSaved(() => syncSavedBattle(clone, result.fights.map((fight) => fight.id))));
+              // what the pictures said against what was kept (ADR 0016): reported outside the app, a failure changes nothing and stays silent
               const feedback = feedbackOf(filled.map(({ d }) => d));
-              if (feedback.length > 0) void api.sendImportFeedback(group.mode, feedback).catch(() => undefined);
+              if (feedback.length > 0) sends.push(sendFeedback(group.mode, feedback));
               const pictures = filled.flatMap(({ d }, i) => (d.imported?.picture && result.fights[i] ? [{ attemptId: result.fights[i]!.id, ...d.imported.picture }] : []));
-              if (pictures.length > 0) void pictures.reduce((all, p) => all.then(() => api.keepPicture(p.attemptId, p.label, p.data)).then(() => undefined), Promise.resolve()).catch(() => undefined);
+              if (pictures.length > 0) left.push(await afterSaved(() => pictures.reduce((all, p) => all.then(() => api.keepPicture(p.attemptId, p.label, p.data)).then(() => undefined), Promise.resolve()), 'The pictures could not be kept'));
+              const problems = told(left);
+              if (problems) errors.push(`${who(group)}: saved. ${problems}`);
             } catch (e) {
-              errors.push(`${group.pictures[0]!.draft.sideA.name ?? '?'} against ${group.pictures[0]!.draft.sideB.name ?? '?'}: ${(e as Error).message}`);
+              errors.push(`${who(group)}: ${(e as Error).message}`);
             }
           }
+          // one toast for the whole batch, once every answer is in; the batch does not wait for it
+          reportParked(sends);
           if (done.length > 0) void reload();
           return { saved: done, errors };
         }}
         onOpen={async (group, options) => {
           // the saved fights of the mode, to put a known player's heroes where they stood
-          const saved = group.mode === 'Super League' && options.round ? await savedOfMode() : await api.arenaBattles({ mode: [group.mode], limit: '1000' }).catch(() => []);
+          const saved = await savedOfMode(group.mode === 'Super League' && options.round ? 'Super League' : group.mode);
           const deployments = options.round ? await loadRoundDeployments(options.round, reference.profiles, saved) : [];
           const rosters = await rostersOf([group]);
           setFromImport({ start: { mode: group.mode, tournamentId: options.round?.tournamentId ?? null, round: options.round?.round ?? null, openNext: false }, dismiss: options.dismiss });
@@ -368,15 +389,16 @@ export function Battles({ reference }: { reference: Reference }) {
     return (
       <NewBattles
         reference={reference}
+        patchReference={patchReference}
         initial={cloning}
-        onSaved={fromImport ? () => void backToImport(true) : done}
+        onSaved={fromImport ? (left) => void backToImport(true, left) : done}
         onRecorded={() => void reload()}
         onCancel={fromImport ? () => void backToImport(false) : () => (setAdding(false), setCloning(null))}
         cancelLabel={fromImport ? 'Back to the import' : undefined}
       />
     );
-  if (editingBattle) return <NewBattles key={`battle-${editingBattle.id}`} reference={reference} initial={editingBattle.clone} editing={editingBattle.id} savedRound={editingBattle.tournamentId != null && editingBattle.round ? { tournamentId: editingBattle.tournamentId, round: editingBattle.round } : null} onSaved={done} onRecorded={() => undefined} onCancel={() => setEditingBattle(null)} />;
-  if (editing) return <EditBattle key={editing.id} battle={editing} reference={reference} onSaved={done} onCancel={() => setEditing(null)} />;
+  if (editingBattle) return <NewBattles key={`battle-${editingBattle.id}`} reference={reference} patchReference={patchReference} initial={editingBattle.clone} editing={editingBattle.id} savedRound={editingBattle.tournamentId != null && editingBattle.round ? { tournamentId: editingBattle.tournamentId, round: editingBattle.round } : null} onSaved={done} onRecorded={() => undefined} onCancel={() => setEditingBattle(null)} />;
+  if (editing) return <EditBattle key={editing.id} battle={editing} reference={reference} patchReference={patchReference} onSaved={done} onCancel={() => setEditing(null)} />;
 
   return (
     <div>
@@ -392,16 +414,23 @@ export function Battles({ reference }: { reference: Reference }) {
           <input type="search" value={player} placeholder="Name or Player ID" onChange={(e) => setPlayer(e.target.value)} />
         </label>
       </RecordToolbar>
-      {error && (
+      {(error ?? loaded.error) && (
         <p className="error" role="alert">
-          {error}
+          {error ?? loaded.error}
         </p>
       )}
-      <RecordList list={list} label="Battles" battle="battle" fight="fight" renderItem={renderItem} />
+      {notice && (
+        <p className="error" role="alert">
+          {notice}
+        </p>
+      )}
+      <div className={loaded.loading && loaded.data ? 'refreshing' : undefined} aria-busy={loaded.loading}>
+        <RecordList list={list} label="Battles" battle="battle" fight="fight" renderItem={renderItem} />
+      </div>
       {battles.length >= limit && (
         <button onClick={() => setLimit((old) => old + PAGE)}>Show older battles</button>
       )}
-      {battles.length === 0 && <p className="muted">No battles recorded yet.</p>}
+      <ListStatus loaded={loaded.data !== undefined} failed={loaded.error !== null} empty={battles.length === 0} filtered={mode.length > 0 || tag.length > 0 || player.trim() !== ''} none="No battles recorded yet." noMatch="No battles match these filters." />
       {dialog}
     </div>
   );

@@ -32,3 +32,22 @@ describe('the Profile a picture’s player name resolves to', () => {
     expect(sideA('Nobody').profile).toBeNull();
   });
 });
+
+describe('what the Agent was unsure of (ADR 0040)', () => {
+  const tile = (key: string, hero: string | null, over: object = {}) => ({ key, crop: '0.a', index: 0, hero, candidates: [] as string[], rank: null, confident: true, rankConfident: false, notOwned: false, stars: null, ...over });
+  const draft = (tiles: ReturnType<typeof tile>[]) => draftOf(db, rules, 'Arena', [{ name: 'Me', tiles }, player('Other')], null).sideA;
+
+  it('marks a hero it named without being sure, and keeps the guesses for a tile it could not name', () => {
+    const side = draft([tile('a', 'Evie'), tile('b', 'Zed', { confident: false }), tile('c', null, { candidates: ['Fay', 'Nara'] }), tile('d', null)]);
+    expect(side.heroes).toEqual([
+      { tile: 'a', hero: 'Evie', rank: null, equipmentLevel: null },
+      { tile: 'b', hero: 'Zed', rank: null, equipmentLevel: null, unsure: true, candidates: [] },
+    ]);
+    expect(side.unread).toEqual(['c', 'd']);
+    expect(side.unreadCandidates).toEqual({ c: ['Fay', 'Nara'] });
+  });
+
+  it('says nothing of guesses when there are none', () => {
+    expect(draft([tile('a', null)]).unreadCandidates).toBeUndefined();
+  });
+});

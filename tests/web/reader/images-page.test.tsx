@@ -46,6 +46,28 @@ describe('ImagesPage', () => {
     expect(screen.getByText('Fay')).toBeTruthy();
   });
 
+  it('says Loading… until the first answer, and only then that there is nothing to show', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    let answer!: () => void;
+    const held = new Promise<void>((resolve) => (answer = resolve));
+    units = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => ((init?.method ?? 'GET') === 'GET' ? (await held, base(url, init)) : base(url, init))));
+    render(<ImagesPage />);
+    expect(screen.getByText('Loading…')).toBeTruthy();
+    expect(screen.queryByText('Nothing to show.')).toBeNull();
+    answer();
+    expect(await screen.findByText('Nothing to show.')).toBeTruthy();
+  });
+
+  it('says that no unit matches a search, not that there is nothing to show', async () => {
+    const user = userEvent.setup();
+    render(<ImagesPage />);
+    await screen.findByText('Fay');
+    await user.type(screen.getByLabelText('Search'), 'zzz');
+    expect(screen.getByText('No image matches these filters.')).toBeTruthy();
+    expect(screen.queryByText('Nothing to show.')).toBeNull();
+  });
+
   it('uploads an image for a unit and refreshes the list', async () => {
     const user = userEvent.setup();
     render(<ImagesPage />);

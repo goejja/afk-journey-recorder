@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { MIN_EXAMPLES, rankFeatures, readRank, type RankExample } from '../../src/vision/rank-read.js';
+import { FEATURES_VERSION, MIN_EXAMPLES, rankFeatures, readRank, type RankExample } from '../../src/vision/rank-read.js';
 
 /** A tile picture: a top of one colour with a band of another, like a frame with an ornament, over a plain body. */
 const tile = (top: [number, number, number], band: [number, number, number], shift = 0) =>
@@ -86,5 +86,19 @@ describe('readRank', () => {
       expect(readRank(await rankFeatures(await tileOf([235, 160, 50], 80)), known)?.rank).toBe('Epic');
       expect(readRank(await rankFeatures(await tileOf([200, 50, 45], 150)), known)?.rank).toBe('Legendary');
     });
+  });
+});
+
+describe('rankFeatures', () => {
+  // The vectors of Rank Looks are stored with FEATURES_VERSION (rank_look_feature). If this fails, the extractor now gives other numbers for
+  // the same picture: raise FEATURES_VERSION, then update the numbers here, so that stored vectors are made again and never compared with new ones.
+  it(`gives the numbers that version ${FEATURES_VERSION} of the extractor stands for`, async () => {
+    const features = await rankFeatures(await tile([250, 200, 0], [120, 60, 160]));
+    const weighted = features.reduce((sum, v, i) => sum + v * ((i % 17) + 1), 0);
+    const sum = features.reduce((a, v) => a + v, 0);
+    expect(features.length).toBe(1943);
+    // within 1%, so that a new version of the image library rounding a pixel differently does not fail it, and a changed window or weight does
+    expect(Math.abs(sum - 1229.14) / 1229.14).toBeLessThan(0.01);
+    expect(Math.abs(weighted - 11071.7) / 11071.7).toBeLessThan(0.01);
   });
 });

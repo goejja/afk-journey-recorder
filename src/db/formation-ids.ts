@@ -42,13 +42,45 @@ const recordCount = (db: Database.Database, code: string): number =>
     .pluck()
     .get({ code }) as number;
 
-function entryOf(db: Database.Database, row: { code: string; deployment: string }): FormationIdEntry {
-  return { code: row.code, deployment: JSON.parse(row.deployment) as Deployment, maps: mapsOf(db, row.code), records: recordCount(db, row.code) };
-}
+/** The same count as `recordCount` for every code at once: a record is counted once however many of its columns name the code. */
+const recordCounts = (db: Database.Database): Map<string, number> =>
+  new Map(
+    (
+      db
+        .prepare(
+          `SELECT code, count(*) AS records FROM (
+             SELECT formation_id AS code, 'f' AS kind, attempt_id AS id FROM formation WHERE formation_id IS NOT NULL
+             UNION SELECT opp_formation_id, 'f', attempt_id FROM arena_attempt WHERE opp_formation_id IS NOT NULL
+             UNION SELECT formation_id, 'b', id FROM battle WHERE formation_id IS NOT NULL
+             UNION SELECT opp_formation_id, 'b', id FROM battle WHERE opp_formation_id IS NOT NULL)
+           GROUP BY code`,
+        )
+        .all() as { code: string; records: number }[]
+    ).map((r) => [r.code, r.records]),
+  );
+
+const allMaps = (db: Database.Database): Map<string, string[]> => {
+  const byCode = new Map<string, string[]>();
+  for (const r of db.prepare('SELECT code, map_name AS map FROM formation_id_map ORDER BY rowid').all() as { code: string; map: string }[]) byCode.set(r.code, [...(byCode.get(r.code) ?? []), r.map]);
+  return byCode;
+};
 
 /** Every code of the library, in alphabetical order. */
 export function listFormationIds(db: Database.Database): FormationIdEntry[] {
-  return (db.prepare('SELECT code, deployment FROM formation_id ORDER BY code').all() as { code: string; deployment: string }[]).map((r) => entryOf(db, r));
+  const counts = recordCounts(db);
+  const maps = allMaps(db);
+  return (db.prepare('SELECT code, deployment FROM formation_id ORDER BY code').all() as { code: string; deployment: string }[]).map((r) => ({
+    code: r.code,
+    deployment: JSON.parse(r.deployment) as Deployment,
+    maps: maps.get(r.code) ?? [],
+    records: counts.get(r.code) ?? 0,
+  }));
+}
+
+/** One code of the library, or undefined when it is not stored. */
+export function getFormationId(db: Database.Database, code: string): FormationIdEntry | undefined {
+  const row = db.prepare('SELECT code, deployment FROM formation_id WHERE code = ?').get(code) as { code: string; deployment: string } | undefined;
+  return row && { code: row.code, deployment: JSON.parse(row.deployment) as Deployment, maps: mapsOf(db, row.code), records: recordCount(db, row.code) };
 }
 
 /** The stored codes that cover every team of `placed` with the same units on the same tiles, as they are or all turned upside down. */
@@ -108,10 +140,11 @@ export function deleteFormationId(db: Database.Database, code: string): number {
 
 /** An Artifact was renamed: the stored Deployments name it as plain text, so they follow. */
 export function renameArtifactInFormationIds(db: Database.Database, from: string, to: string): void {
-  for (const entry of listFormationIds(db)) {
-    if (!entry.deployment.teams.some((t) => t?.artifact === from)) continue;
-    const teams = entry.deployment.teams.map((t) => (t?.artifact === from ? { ...t, artifact: to } : t));
-    db.prepare('UPDATE formation_id SET deployment = ? WHERE code = ?').run(JSON.stringify({ teams }), entry.code);
+  for (const row of db.prepare('SELECT code, deployment FROM formation_id').all() as { code: string; deployment: string }[]) {
+    const deployment = JSON.parse(row.deployment) as Deployment;
+    if (!deployment.teams.some((t) => t?.artifact === from)) continue;
+    const teams = deployment.teams.map((t) => (t?.artifact === from ? { ...t, artifact: to } : t));
+    db.prepare('UPDATE formation_id SET deployment = ? WHERE code = ?').run(JSON.stringify({ teams }), row.code);
   }
 }
 

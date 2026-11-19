@@ -8,5 +8,5 @@ export const adminContract = {
    * Replaces every record with the ones in an uploaded backup. The current data is first saved next to the database, so a wrong
    * restore can be undone.
    */
-  restore: endpoint({ method: 'POST', path: '/api/admin/restore', body: Upload, response: z.object({ restoredRows: z.number(), savedAs: z.string().nullable() }) }),
+  restore: endpoint({ method: 'POST', path: '/api/admin/restore', body: Upload, response: z.object({ restoredRows: z.number(), savedAs: z.string().nullable(), note: z.string() }) }),
 };

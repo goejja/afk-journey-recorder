@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { matchFiles } from '../../src/domain/image-match.js';
 import { api, type ImageSource } from '../backend.js';
 import { CropEditor } from './CropEditor.js';
 import { bumpImageVersion, Portrait, type ImageKind } from '../Portrait.js';
-import { useNewest } from '../useLoad.js';
+import { useLoad } from '../useLoad.js';
+import { ListStatus } from '../ui/ListStatus.js';
 
 const KINDS: { kind: ImageKind; label: string }[] = [
   { kind: 'hero', label: 'Heroes' },
@@ -15,31 +16,23 @@ const KINDS: { kind: ImageKind; label: string }[] = [
 
 const SOURCE_LABEL: Record<ImageSource, string> = { custom: 'your image', imported: 'imported', none: 'no image' };
 
+const NO_UNITS: { name: string; source: ImageSource }[] = [];
+
 export function ImagesPage() {
   const [kind, setKind] = useState<ImageKind>('hero');
-  const [units, setUnits] = useState<{ name: string; source: ImageSource }[]>([]);
   const [search, setSearch] = useState('');
   const [missingOnly, setMissingOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
   const [cropping, setCropping] = useState<{ name: string; file: File } | null>(null);
 
-  const newest = useNewest();
-  const reload = useCallback(async () => {
-    const current = newest();
-    try {
-      const loaded = await api.images(kind);
-      if (!current()) return;
-      setUnits(loaded);
-      setError(null);
-    } catch (e) {
-      if (current()) setError((e as Error).message);
-    }
-  }, [kind, newest]);
-
+  const loaded = useLoad(() => api.images(kind), [kind]);
+  const units = loaded.data ?? NO_UNITS;
+  const reload = loaded.reload;
+  // an answer clears what an action here failed to do, as the answer of the list did before
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (loaded.data) setError(null);
+  }, [loaded.data]);
 
   async function change(action: () => Promise<void>) {
     try {
@@ -83,9 +76,9 @@ export function ImagesPage() {
       <div className="toolbar">
         <span className="muted">{missing} of {units.length} have none</span>
       </div>
-      {error && (
+      {(error ?? loaded.error) && (
         <p className="error" role="alert">
-          {error}
+          {error ?? loaded.error}
         </p>
       )}
       <div className="filters">
@@ -132,7 +125,7 @@ export function ImagesPage() {
         />
       )}
 
-      <div className="grid">
+      <div className={`grid${loaded.loading && loaded.data ? ' refreshing' : ''}`} aria-busy={loaded.loading}>
         {visible.map((u) => (
           <article key={u.name} className="card owned">
             <div className="card-main static">
@@ -176,7 +169,7 @@ export function ImagesPage() {
           </article>
         ))}
       </div>
-      {visible.length === 0 && <p className="muted">Nothing to show.</p>}
+      <ListStatus loaded={loaded.data !== undefined} failed={loaded.error !== null} empty={visible.length === 0} filtered={search !== '' || missingOnly} none="Nothing to show." noMatch="No image matches these filters." />
     </section>
   );
 }

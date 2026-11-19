@@ -8,6 +8,7 @@ import { lookExamples, SAME_TILE_DISTANCE } from './look-examples.js';
 import { heroNameSet } from '../db-helpers.js';
 import { importFeedbackContract } from '../../shared/contracts/reader.js';
 import { fail, serve } from '../contract.js';
+import { parkable, prepareParking, saveParked } from './parked-readings.js';
 import { removeFiles, saveImage } from './saved-image.js';
 
 /** The most looks kept of one artifact or phantimal: more would only fill the Agent's reference sheets. */
@@ -56,6 +57,9 @@ export function compareReadings(read: SideReading, final: SideReading): ReadingR
 export interface TileCrop {
   hero: string | null;
   png: Buffer;
+  /** The Agent was not sure of this hero, and what else it might be (ADR 0040). */
+  unsure?: boolean;
+  candidates?: string[];
 }
 
 /**
@@ -115,7 +119,7 @@ export function importFeedbackRoutes(db: Database.Database, options: { imagesDir
     if (!Array.isArray(body?.sides) || body.sides.length > 20) return fail(400, 'Send the sides that were read');
     const artifactNames = new Set(db.prepare('SELECT name FROM artifact').pluck().all() as string[]);
     const phantimalNames = new Set(db.prepare('SELECT name FROM phantimal').pluck().all() as string[]);
-    const sides: { read: SideReading; final: SideReading; crops: { artifact: Buffer | null; phantimal: Buffer | null }; tiles: TileCrop[]; skipRank: Set<string> }[] = [];
+    const sides: { read: SideReading; final: SideReading; side: 'A' | 'B'; crops: { artifact: Buffer | null; phantimal: Buffer | null }; tiles: TileCrop[]; skipRank: Set<string> }[] = [];
     for (const given of body.sides) {
       const read = sideReading(given?.read);
       const final = sideReading(given?.final);
@@ -127,10 +131,10 @@ export function importFeedbackRoutes(db: Database.Database, options: { imagesDir
       const tiles: TileCrop[] = [];
       for (const t of Array.isArray(given?.crops?.tiles) ? given.crops.tiles.slice(0, 10) : []) {
         const png = crop(t?.png);
-        if (png) tiles.push({ hero: typeof t.hero === 'string' ? t.hero : null, png });
+        if (png) tiles.push({ hero: typeof t.hero === 'string' ? t.hero : null, png, unsure: t.unsure === true, candidates: Array.isArray(t.candidates) ? t.candidates.filter((c: unknown): c is string => typeof c === 'string').slice(0, 5) : [] });
       }
       const skipRank = new Set<string>(Array.isArray(given?.skipRank) ? given.skipRank.filter((h: unknown): h is string => typeof h === 'string') : []);
-      sides.push({ read, final, crops: { artifact: crop(given?.crops?.artifact), phantimal: crop(given?.crops?.phantimal) }, tiles, skipRank });
+      sides.push({ read, final, side: given?.side === 'B' ? 'B' : 'A', crops: { artifact: crop(given?.crops?.artifact), phantimal: crop(given?.crops?.phantimal) }, tiles, skipRank });
     }
 
     let logged = 0;
@@ -188,6 +192,8 @@ export function importFeedbackRoutes(db: Database.Database, options: { imagesDir
         rankSaves.push({ rank, png });
       }
     }
+    // what the corrections left unpaired, and the readings the Agent was not sure of, wait for the player to confirm (ADR 0040)
+    const parking = await prepareParking(db, sides.flatMap((s) => parkable(s.read, s.final, s.tiles, s.side)), heroNames);
     const root = join(resolve(options.imagesDir ?? 'images'), 'custom');
     // the crops are decoded by sharp before they are written, so the file is a real PNG whatever was sent; an unreadable crop is a look not kept
     const lookPictures: { kind: 'artifact' | 'phantimal'; name: string; png: Buffer }[] = [];
@@ -205,13 +211,14 @@ export function importFeedbackRoutes(db: Database.Database, options: { imagesDir
         for (const save of heroSaves) saveImage(db, 'hero_example', { hero_name: save.hero }, join(root, 'hero-example'), save.png, written, 'battle');
         for (const save of rankSaves) saveImage(db, 'rank_look', { rank: save.rank }, join(root, 'rank-look'), save.png, written, 'battle');
         for (const save of lookPictures) saveImage(db, 'unit_look', { kind: save.kind, name: save.name }, lookDir, save.png, written, 'battle');
+        saveParked(db, mode, parking.saves, join(root, 'parked-reading'), written);
       })();
     } catch (e) {
       removeFiles(written);
       throw e;
     }
     looks = lookPictures.length;
-    return { logged, looks, heroExamples: heroSaves.length, rankLooks: rankSaves.length };
+    return { logged, looks, heroExamples: heroSaves.length, rankLooks: rankSaves.length, parked: parking.saves.length, full: parking.full };
   });
 
   return app;

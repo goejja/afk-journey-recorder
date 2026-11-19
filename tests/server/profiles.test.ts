@@ -83,6 +83,34 @@ describe('profiles API', () => {
     expect(db.prepare('SELECT count(*) FROM roster WHERE profile_id = ?').pluck().get(friend.id)).toBe(0);
   });
 
+  it('moves the Round Deployments of the merged profile, the newer set of a Round both have winning whole', async () => {
+    const friend = await json(send('POST', '/api/profiles', { name: 'Friend' }));
+    const tournament = Number(db.prepare('INSERT INTO tournament (season, number) VALUES (1, 1)').run().lastInsertRowid);
+    const put = (profile: number, round: string, team: number, at: string) =>
+      db.prepare('INSERT INTO round_deployment (tournament_id, round, profile_id, team, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(tournament, round, profile, team, JSON.stringify({ heroes: [] }), at);
+    put(friend.id, 'Group stage', 1, '2026-01-01 10:00:00'); // only the merged profile has it: moves
+    put(friend.id, 'Group stage', 2, '2026-01-01 10:00:00');
+    put(1, 'Swiss stage', 1, '2026-01-01 10:00:00'); // both have it, the merged profile's is newer: its teams 1 and 2 replace the target's 1 and 3
+    put(1, 'Swiss stage', 3, '2026-01-01 10:00:00');
+    put(friend.id, 'Swiss stage', 1, '2026-02-01 10:00:00');
+    put(friend.id, 'Swiss stage', 2, '2026-02-01 10:00:00');
+    put(1, 'Top 48', 1, '2026-02-01 10:00:00'); // both have it, the target's is newer: kept as it is
+    put(friend.id, 'Top 48', 2, '2026-01-01 10:00:00');
+    put(1, 'Top 16', 1, '2026-01-01 10:00:00'); // the same time: the target's is kept
+    put(friend.id, 'Top 16', 2, '2026-01-01 10:00:00');
+
+    expect((await send('POST', `/api/profiles/${friend.id}/merge`, { into: 'Me' })).status).toBe(200);
+    expect(db.prepare('SELECT round, team FROM round_deployment WHERE profile_id = 1 ORDER BY round, team').all()).toEqual([
+      { round: 'Group stage', team: 1 },
+      { round: 'Group stage', team: 2 },
+      { round: 'Swiss stage', team: 1 },
+      { round: 'Swiss stage', team: 2 },
+      { round: 'Top 16', team: 1 },
+      { round: 'Top 48', team: 1 },
+    ]);
+    expect(db.prepare('SELECT count(*) FROM round_deployment WHERE profile_id <> 1').pluck().get()).toBe(0);
+  });
+
   it('gives the default to the profile merged into when the default is merged away', async () => {
     const friend = await json(send('POST', '/api/profiles', { name: 'Friend' }));
     const merged = await json(send('POST', '/api/profiles/1/merge', { into: friend.id }));
@@ -151,14 +179,17 @@ describe('a roster per profile', () => {
     expect(await owned()).toEqual([['A', 'Mythic']]); // the other profile is untouched
   });
 
-  it('has the forms check ownership against the default profile', async () => {
+  it('has the Dream Hunt form check ownership against the default profile, and the Stage form take any hero', async () => {
     const friend = await json(send('POST', '/api/profiles', { name: 'Friend' }));
     await send('PUT', `/api/roster/B?profile=${friend.id}`, { rank: 'Mythic', equipmentLevel: null });
     await send('PUT', '/api/roster/A', { rank: 'Mythic', equipmentLevel: null });
+    db.prepare("INSERT INTO boss (name, class) VALUES ('King Croaker', 'Mage')").run();
+    const fight = (hero: string) => ({ boss: 'King Croaker', mapName: 'Open', outcome: 'Win', timeSeconds: 90, formation: { heroes: [{ tile: 38, hero }], phantimal: null, assistHero: null, artifact: null } });
+    expect((await send('POST', '/api/dream-hunt/attempts', fight('A'))).status).toBe(201);
+    expect((await send('POST', '/api/dream-hunt/attempts', fight('B'))).status).toBe(400); // B is only in Friend's roster
     const stage = await json(send('POST', '/api/stages', { season: 8, kind: 'Normal', number: 1, mapName: 'Open' }));
-    const body = (hero: string) => ({ stageId: stage.id, formation: { heroes: [{ tile: 38, hero }], phantimal: null, assistHero: null, artifact: null} });
-    expect((await send('POST', '/api/attempts', body('A'))).status).toBe(201);
-    expect((await send('POST', '/api/attempts', body('B'))).status).toBe(400); // B is only in Friend's roster
+    const record = (hero: string) => ({ stageId: stage.id, formation: { heroes: [{ tile: 38, hero }], phantimal: null, assistHero: null, artifact: null } });
+    expect((await send('POST', '/api/attempts', record('B'))).status).toBe(201); // a stage record keeps no hero state, so any hero will do
   });
 });
 

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { kindOfLaneId, laneKey } from '../../src/domain/stage-grid.js';
 import type { StageKind } from '../../src/domain/stage.js';
 
@@ -33,13 +33,14 @@ const with_ = (list: string[], key: string) => [...without(list, key), key];
 /** The page state, read from the address when the page opens and written back whenever the owner changes it. Plain `#stages` is the defaults. */
 export function usePageState() {
   const [state, setState] = useState<PageState>(read);
-  const change = useCallback((next: (old: PageState) => PageState) => {
-    setState((old) => {
-      const updated = next(old);
-      write(updated);
-      return updated;
-    });
-  }, []);
+  // Written from an effect, not from the updater, which React may run twice; what was read from the address is not written back.
+  const written = useRef(state);
+  useEffect(() => {
+    if (written.current === state) return;
+    written.current = state;
+    write(state);
+  }, [state]);
+  const change = useCallback((next: (old: PageState) => PageState) => setState(next), []);
   const choosePhase = useCallback((phase: number) => change((old) => ({ ...old, phase })), [change]);
   /** Sets a lane open or closed by hand, whatever the rules say. */
   const setLane = useCallback(

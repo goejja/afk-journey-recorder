@@ -15,6 +15,13 @@ export const HERO_MAX_DISTANCE = 0.06;
 /** How much closer the best hero's closest example must be than the closest example of any other hero, as a share of that distance. */
 export const HERO_MARGIN = 0.25;
 
+/**
+ * The version of what `heroFeatures` computes. Vectors are stored with it (`hero_example_feature`, `hero_look_feature`), so a change to the
+ * extractor, its region, size or weights must raise it, or the stored vectors would be compared with new ones. `tests/vision/hero-read.test.ts`
+ * fails when the output for a fixed picture changes.
+ */
+export const HERO_FEATURES_VERSION = 1;
+
 export type Features = Float32Array;
 
 /** The character art of a tile picture (the PNG of a tile cut with its frame top) as a small grid of colours. */

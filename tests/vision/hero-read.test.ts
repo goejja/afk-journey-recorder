@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { heroFeatures, readHero, type HeroExample } from '../../src/vision/hero-read.js';
+import { HERO_FEATURES_VERSION, heroFeatures, readHero, type HeroExample } from '../../src/vision/hero-read.js';
 
 /** A tile picture: a plain frame around a character of one colour with a spot of another, in the middle where the hero reader looks. */
 const tile = (body: [number, number, number], spot: [number, number, number], frame: [number, number, number] = [200, 200, 200]) =>
@@ -33,5 +33,20 @@ describe('readHero', () => {
   it('is not sure when two heroes look alike to it', async () => {
     const known = [await example('Evie', [10, 20, 30], [250, 250, 0]), await example('Thador', [10, 20, 32], [250, 250, 0])];
     expect(readHero(await heroFeatures(await tile([10, 20, 31], [250, 250, 0])), known)?.confident).toBe(false);
+  });
+});
+
+describe('heroFeatures', () => {
+  // The vectors of hero examples and Hero Looks are stored with HERO_FEATURES_VERSION (hero_example_feature, hero_look_feature). If this fails,
+  // the extractor now gives other numbers for the same picture: raise HERO_FEATURES_VERSION, then update the numbers here, so that stored
+  // vectors are made again and never compared with new ones.
+  it(`gives the numbers that version ${HERO_FEATURES_VERSION} of the extractor stands for`, async () => {
+    const features = await heroFeatures(await tile([10, 20, 30], [250, 250, 0]));
+    const weighted = features.reduce((sum, v, i) => sum + v * ((i % 17) + 1), 0);
+    const sum = features.reduce((a, v) => a + v, 0);
+    expect(features.length).toBe(1728);
+    // within 1%, so that a new version of the image library rounding a pixel differently does not fail it, and a changed window or weight does
+    expect(Math.abs(sum - 343.4) / 343.4).toBeLessThan(0.01);
+    expect(Math.abs(weighted - 3047.8) / 3047.8).toBeLessThan(0.01);
   });
 });

@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 import { summarizeCompositions, type DreamHuntRun } from '../domain/dream-hunt.js';
 import { listOf, MAX_ROWS, placeholders, seasonsOf, type StatFilters } from './filters.js';
 
-/** Every past attempt on one stage, newest first, with the formations used. */
+/** Every past attempt on one stage, newest first, with the formations used: the heroes by name, with no rank or equipment, since a Stage record keeps none (ADR 0041). */
 export function stageHistory(db: Database.Database, key: { season: number; kind: string; number: number; phase?: number }) {
   const stage = db
     .prepare('SELECT id, map_name AS map FROM stage WHERE season = ? AND kind = ? AND number = ? AND phase = ?')
@@ -10,7 +10,7 @@ export function stageHistory(db: Database.Database, key: { season: number; kind:
   if (!stage) return { stage: null, enemies: [], attempts: [] };
   const enemies = db.prepare('SELECT enemy_name AS enemy, hero_name AS hero, count FROM stage_enemy WHERE stage_id = ? ORDER BY rowid').all(stage.id);
   const heroesOf = db.prepare(
-    `SELECT fh.hero_name AS name, max(fh.rank) AS rank, max(fh.equipment_level) AS equipment FROM formation f JOIN formation_hero fh ON fh.formation_id = f.id
+    `SELECT fh.hero_name AS name FROM formation f JOIN formation_hero fh ON fh.formation_id = f.id
      WHERE f.attempt_id = ? GROUP BY fh.hero_name ORDER BY min(fh.tile)`,
   );
   const artifactOf = db.prepare('SELECT artifact FROM formation WHERE attempt_id = ?');

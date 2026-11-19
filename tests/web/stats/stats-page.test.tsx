@@ -133,6 +133,17 @@ describe('Statistics page', () => {
     await waitFor(() => expect(requests.some((u) => u.startsWith('/api/stats/players') && u.includes('mode=Arena&mode=Guild+Duel'))).toBe(true));
   });
 
+  it('says when the seasons or the Players to choose from could not be read, apart from the report', async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/seasons' ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
+    const user = userEvent.setup();
+    render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Heroes' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('The seasons to choose from could not be read: Network down');
+    await screen.findByText('Fay'); // the report loaded and cleared its own error, the message stays
+    expect(screen.getByRole('alert').textContent).toMatch(/seasons to choose from/);
+  });
+
   it('filters by the season the records were played in, offering the seasons that have records, in every view but the overview', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);

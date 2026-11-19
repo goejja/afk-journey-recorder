@@ -22,12 +22,19 @@ export function useRoundChoice(mode: ArenaMode, restore: ImportStart | undefined
 
   // only when the wizard opens: `restore` is where it stood when it was closed, not a value to follow
   const [before] = useState(() => restore ?? lastChoices());
+  const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
-    api.tournaments().then((all) => {
-      setTournaments(all);
-      pickTournament(all, before.tournamentId ?? null, before.round && all.some((t) => t.id === before.tournamentId) ? before.round : null);
-    }, () => undefined);
-    api.seasons().then((all) => setSeason(all.find((s) => s.current)?.number ?? all[0]?.number ?? null), () => undefined);
+    let live = true;
+    Promise.all([api.tournaments(), api.seasons()]).then(
+      ([all, seasons]) => {
+        if (!live) return;
+        setTournaments(all);
+        pickTournament(all, before.tournamentId ?? null, before.round && all.some((t) => t.id === before.tournamentId) ? before.round : null);
+        setSeason(seasons.find((s) => s.current)?.number ?? seasons[0]?.number ?? null);
+      },
+      (e: Error) => live && setProblem(`The Tournaments and Seasons could not be read: ${e.message}`),
+    );
+    return () => void (live = false);
   }, [before, pickTournament]);
 
   useEffect(() => rememberChoices({ mode, tournamentId, round }), [mode, tournamentId, round]);
@@ -47,5 +54,6 @@ export function useRoundChoice(mode: ArenaMode, restore: ImportStart | undefined
       setAdding(null);
     });
 
-  return { tournaments, tournamentId, round, setRound, pickTournament: (id: number) => pickTournament(tournaments, id), adding, setAdding, startAdding, addTournament, chosen, warnings };
+  // Told only for Super League: the other modes have no Tournament to be missing. Without them a Super League batch has none to be saved in.
+  return { problem: mode === 'Super League' ? problem : null, tournaments, tournamentId, round, setRound, pickTournament: (id: number) => pickTournament(tournaments, id), adding, setAdding, startAdding, addTournament, chosen, warnings };
 }

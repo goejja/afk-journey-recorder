@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../../src/db/open.js';
 import { TILE, TILE_COUNT } from '../../src/domain/map.js';
+import { dropObjectsOfMigrationsFrom26 } from '../support/rewind.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
 
@@ -26,6 +27,7 @@ function before() {
     return attempt;
   };
   const reopen = () => {
+    dropObjectsOfMigrationsFrom26(db); // made by migrations 26 and 27, which run again below
     db.pragma('user_version = 24');
     db.close();
     return openDb(path);
