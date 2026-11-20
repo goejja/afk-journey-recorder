@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { recordOfHash } from '../../src/domain/record-link.js';
 import { api } from '../backend.js';
 import { useReference } from '../hooks/load.js';
 import { BestTeams } from './BestTeams.js';
@@ -23,7 +24,7 @@ const VIEWS: { key: View; label: string }[] = [
 ];
 
 export function DreamHuntPage() {
-  const [view, setView] = useState<View>('week');
+  const [view, setView] = useState<View>(() => (recordOfHash(window.location.hash) === null ? 'week' : 'fights')); // a link to a record opens the fights
   const [full, setFull] = useState(false);
   const loaded = useReference({ bosses: api.bosses, rules: api.bossRules, maps: api.maps, heroes: api.heroes, artifacts: api.artifacts, heroRules: api.rules, defaults: api.defaults });
   const reference = loaded.data ?? null;

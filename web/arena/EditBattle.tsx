@@ -1,13 +1,10 @@
 import { useState } from 'react';
 import { useAction } from '../hooks/action.js';
-import { useNewest } from '../hooks/load.js';
 import { api, type ArenaBattle } from '../backend.js';
 import { SideProfileBar } from './BattleEditor.js';
-import { withRosterStates } from '../FormationEditor.js';
-import { withRosterOpponent } from './OpponentEditor.js';
+import { useSideProfiles } from './useSideProfiles.js';
 import { RecordShell } from '../RecordShell.js';
-import { useProfileRosters } from '../reader/useProfileRosters.js';
-import { type PatchReference, type Reference, draftFromBattle, toInput, profileByPlayerId, type Side } from './draft.js';
+import { type PatchReference, type Reference, draftFromBattle, toInput, profileByPlayerId } from './draft.js';
 import { ArenaIdentity, WinnerField, Board, FightFormationIds, UnionLevels } from './BoardParts.js';
 
 export function EditBattle({ battle, reference, patchReference, onSaved, onCancel }: { battle: ArenaBattle; reference: Reference; patchReference: PatchReference; onSaved: () => void; onCancel: () => void }) {
@@ -15,45 +12,15 @@ export function EditBattle({ battle, reference, patchReference, onSaved, onCance
   const [draft, setDraft] = useState(() => draftFromBattle(battle));
   const { error, busy, setError, run } = useAction();
   // As in a new battle: the profile of each side, found from its Player ID; choosing one sets the side's Player ID (the recorded states stay).
-  const [chosenProfile, setChosenProfile] = useState<Record<Side, number | null>>(() => ({
-    A: profileByPlayerId(reference.profiles, battle.playerIdA),
-    B: profileByPlayerId(reference.profiles, battle.playerIdB),
-  }));
-  const [profileRoster, setProfileRoster] = useProfileRosters(chosenProfile);
-  const newestA = useNewest();
-  const newestB = useNewest();
-  const newestRoster = { A: newestA, B: newestB };
-
-  async function chooseProfile(side: Side, id: number | null) {
-    const current = newestRoster[side](); // a roster that arrives after another profile was chosen for this side, or None, is dropped
-    const after = reference.profiles.find((p) => p.id === id);
-    setChosenProfile((old) => ({ ...old, [side]: id }));
-    const key = side === 'A' ? 'playerIdA' : 'playerIdB';
-    setDraft((old) => ({ ...old, [key]: after?.playerId ?? null }));
-    if (id === null) return setProfileRoster((old) => ({ ...old, [side]: null }));
-    try {
-      const roster = await api.heroes(id);
-      if (!current()) return;
-      setProfileRoster((old) => ({ ...old, [side]: roster }));
-      // A saved record keeps the states it recorded (ADR 0001): only heroes with none take the profile's.
-      setDraft((old) => (side === 'A' ? { ...old, formation: withRosterStates(old.formation, roster, false) } : { ...old, opponent: withRosterOpponent(old.opponent, roster, false) }));
-      setError(null);
-    } catch (e) {
-      if (current()) setError((e as Error).message);
-    }
-  }
-
-  async function givePlayerId(side: Side, playerId: string) {
-    const profile = reference.profiles.find((p) => p.id === chosenProfile[side]);
-    if (!profile) return;
-    await run(
-      () => api.updateProfile(profile.id, { playerId }),
-      (updated) => {
-        patchReference((old) => ({ profiles: old.profiles.map((p) => (p.id === updated.id ? updated : p)) }));
-        setDraft((old) => ({ ...old, [side === 'A' ? 'playerIdA' : 'playerIdB']: updated.playerId }));
-      },
-    );
-  }
+  const { profileRoster, barProps } = useSideProfiles({
+    profiles: reference.profiles,
+    patchReference,
+    opening: { A: profileByPlayerId(reference.profiles, battle.playerIdA), B: profileByPlayerId(reference.profiles, battle.playerIdB) },
+    update: setDraft,
+    overwrite: false,
+    run,
+    onError: setError,
+  });
 
   async function save() {
     await run(() => api.updateArenaBattle(battle.id, toInput(mode, draft)), onSaved);
@@ -70,12 +37,7 @@ export function EditBattle({ battle, reference, patchReference, onSaved, onCance
       onTags={(tags) => setDraft({ ...draft, tags })}
       fields={
         <>
-          <SideProfileBar
-            profiles={reference.profiles}
-            sideProfiles={chosenProfile}
-            onSideProfile={(side, id) => void chooseProfile(side, id)}
-            onSetPlayerId={(side, playerId) => void givePlayerId(side, playerId)}
-          />
+          <SideProfileBar {...barProps} />
           <UnionLevels mode={mode} draft={draft} onChange={setDraft} />
         </>
       }

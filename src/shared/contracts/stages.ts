@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { StageAttemptInput, StageRangeInput } from '../api.js';
-import { endpoint } from '../contract.js';
+import { endpoint, queryText as text, queryTexts as texts } from '../contract.js';
 import { FormationJson } from './formation.js';
 
 export const StageKind = z.enum(['Normal', 'Phantisomal', 'Apex Normal', 'Apex Phantisomal']);
@@ -62,8 +62,6 @@ const ChangeKindBody = z.custom<{ season: number; phase: number; kind: StageKind
 const AttemptBody = z.custom<StageAttemptInput>();
 const RangeBody = z.custom<StageRangeInput>();
 
-const text = z.string().optional();
-const texts = z.union([z.string(), z.array(z.string())]).optional();
 
 export const stagesContract = {
   enemies: endpoint({ method: 'GET', path: '/api/enemies', response: z.array(Enemy) }),
@@ -84,6 +82,8 @@ export const stagesContract = {
     query: z.object({ stageId: text, season: text, phase: text, kind: texts, number: text, tag: texts, limit: text }),
     response: z.array(Attempt),
   }),
+  /** One attempt by its id, for a link to it (the Phantimal check). */
+  attempt: endpoint({ method: 'GET', path: '/api/attempts/:id', response: Attempt }),
   createAttempt: endpoint({ method: 'POST', path: '/api/attempts', body: AttemptBody, response: Attempt, status: 201 }),
   /** The same formation cleared the stages `from` to `to` in auto-battle: one attempt per stage, saved together or not at all. */
   createRange: endpoint({ method: 'POST', path: '/api/attempts/range', body: RangeBody, response: z.object({ attempts: z.array(Attempt) }), status: 201 }),

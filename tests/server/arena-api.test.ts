@@ -35,6 +35,16 @@ const battle = (mine: string[], extra: object = {}) => ({
 });
 
 describe('arena battles', () => {
+  it('reads one fight by its id, whatever its age, and says when it is gone', async () => {
+    const saved = await json(send('POST', '/api/pvp/battles', battle(['A', 'B'], { mode: 'Guild Duel' })));
+    await json(send('POST', '/api/pvp/battles', battle(['C'])));
+    expect(await json(send('GET', `/api/pvp/battles/${saved.id}`))).toMatchObject({ id: saved.id, mode: 'Guild Duel' });
+    const gone = await send('GET', '/api/pvp/battles/9999');
+    expect(gone.status).toBe(404);
+    expect((await gone.json()).error).toBe('Record 9999 no longer exists');
+    expect((await send('GET', '/api/pvp/battles/abc')).status).toBe(404);
+  });
+
   it('records a standalone battle with an opponent whose rank and artifact are unknown', async () => {
     const response = await send('POST', '/api/pvp/battles', battle(['A', 'B'], { mode: 'Supreme Arena', rule: 'Berserk' }));
     expect(response.status).toBe(201);

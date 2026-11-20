@@ -72,6 +72,10 @@ export const PvpHintBodySchema = z.object(
   { error: 'A PVP hint needs a tier and a role, or neither' },
 );
 
+/** The player's mark for the placement check of ranged damage dealers: `back` always expects the hero at the back, `free` never checks it, null leaves it to its range and Role. */
+export const BACK_MARKS = ['back', 'free'] as const;
+export const BackMarkBodySchema = z.object({ mark: z.enum(BACK_MARKS, { error: `The mark must be one of ${BACK_MARKS.join(', ')}` }).nullable() }, { error: 'A mark needs a value, or null to remove it' });
+
 /** What a hero's range, energy and mechanic tags are set to (ADR 0037); both lists empty and no range or season removes the row. */
 export const HeroAttributesBodySchema = z.object(
   {

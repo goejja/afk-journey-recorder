@@ -1,12 +1,12 @@
 import type Database from 'better-sqlite3';
-import { statSync, unlinkSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { statSync } from 'node:fs';
 import { Hono } from 'hono';
 import { planThinning, THINNING_FLOOR, type ThinningPicture, type ThinningSource } from '../../domain/thinning.js';
 import type { Features } from '../../vision/rank-read.js';
 import { reviewContract } from '../../shared/contracts/review.js';
 import { fail, serve } from '../contract.js';
 import { wrongReadings } from '../reader/learned.js';
+import { learnedPicturesRoot, pictureDir, picturePath, removeLooks } from '../reader/learned-pictures.js';
 import { rankFeaturesFor, rankMeasure } from '../reader/rank-looks.js';
 import { loadThinningSettings } from './thinning-settings.js';
 
@@ -15,7 +15,7 @@ type RankPicture = ThinningPicture & { features: Features };
 /** The Thinning of the learnt pictures (ADR 0031): which near-identical ones add nothing to the readers, proposed and never removed here. */
 export function reviewThinningRoutes(db: Database.Database, options: { imagesDir?: string } = {}): Hono {
   const app = new Hono();
-  const root = join(resolve(options.imagesDir ?? 'images'), 'custom');
+  const root = learnedPicturesRoot(options.imagesDir);
 
   /** The Rank Looks as they are now, with a key that changes when a row or a picture file does. */
   const rankPictures = async (): Promise<{ key: string; pictures: RankPicture[] }> => {
@@ -23,11 +23,11 @@ export function reviewThinningRoutes(db: Database.Database, options: { imagesDir
     const pictures: RankPicture[] = [];
     const stamps: string[] = [];
     // a picture that is missing or cannot be read is left out; the findings of the review name it
-    const { features } = await rankFeaturesFor(db, rows, join(root, 'rank-look'));
+    const { features } = await rankFeaturesFor(db, rows, pictureDir(root, 'rank_look'));
     for (const r of rows) {
       const found = features.get(r.id);
       if (!found) continue;
-      const { size, mtimeMs } = statSync(join(root, 'rank-look', r.file));
+      const { size, mtimeMs } = statSync(picturePath(root, 'rank_look', r.file));
       stamps.push(`${r.id}:${r.rank}:${r.source}:${size}:${mtimeMs}`);
       pictures.push({ id: r.id, group: r.rank, source: r.source, flagged: false, features: found });
     }
@@ -92,16 +92,7 @@ export function reviewThinningRoutes(db: Database.Database, options: { imagesDir
     // the proposal tried the removals in order, so a few of them may be harmless only together: the ticked set must itself leave the reader no worse
     if (proposal.wrong(new Set(body.ids)) > proposal.baseline) return fail(409, 'Removing only these would make the rank reader name more wrong ranks. Tick the whole group.');
     const rows = body.ids.map((id) => db.prepare('SELECT id, file FROM rank_look WHERE id = ?').get(id) as { id: number; file: string });
-    db.transaction(() => {
-      for (const r of rows) db.prepare('DELETE FROM rank_look WHERE id = ?').run(r.id);
-    })();
-    for (const r of rows) {
-      try {
-        unlinkSync(join(root, 'rank-look', r.file));
-      } catch {
-        // not there
-      }
-    }
+    removeLooks(db, root, 'rank_look', rows);
     return { deleted: rows.length };
   });
 

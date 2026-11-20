@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { openDb } from '../src/db/open.js';
 import { checkProposal, type ReadAs, type ReaderTally } from '../src/import/rank-learning.js';
 import { harvestRankLooks } from '../src/server/reader/rank-harvest.js';
 import { lookExamples } from '../src/server/reader/look-examples.js';
+import { learnedPicturesRoot } from '../src/server/reader/learned-pictures.js';
 import { removeFiles, saveImage } from '../src/server/reader/saved-image.js';
 
 const USAGE = `Proposes Rank Looks from the kept battle report pictures (ADR 0026): each tile is named by the local hero reader and paired with the rank of the saved record, leaving out ranks a roster may have filled in. It reports how the rank reader does on all looks, each read from the others, before and after the proposed looks. Without --apply nothing changes; --apply saves the looks unless the reader would do worse with them.
@@ -57,7 +57,7 @@ else {
   const written: string[] = [];
   try {
     db.transaction(() => {
-      for (const look of harvest.proposed) saveImage(db, 'rank_look', { rank: look.rank }, join(resolve(values.images!), 'custom', 'rank-look'), look.png, written, 'offline');
+      for (const look of harvest.proposed) saveImage(db, learnedPicturesRoot(values.images!), 'rank_look', { rank: look.rank }, look.png, written, 'offline');
     })();
     console.log(`\nSaved ${harvest.proposed.length} Rank Looks.`);
   } catch (e) {

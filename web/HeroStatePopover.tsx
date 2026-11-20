@@ -1,6 +1,5 @@
 import { resonanceColour, weaponLabel, weaponStars } from '../src/domain/exclusive-weapon.js';
-import { allowedEquipmentLevels, equipmentForRank } from '../src/domain/hero-state.js';
-import type { Rules } from './backend.js';
+import { allowedEquipmentLevels, equipmentForRank, type HeroStateRules } from '../src/domain/hero-state.js';
 import { RankText } from './RankText.js';
 import { EquipmentOptions, RankOptions } from './ui/HeroStateOptions.js';
 import { Popover } from './ui/Popover.js';
@@ -8,15 +7,16 @@ import { Popover } from './ui/Popover.js';
 /**
  * The rank and equipment of the hero clicked on the map, as two lists side by side next to its tile. It stays open after a pick, since
  * a new rank often moves the equipment too, and closes when the person presses anywhere else. Rank and equipment are the strings a
- * record keeps: '' is no rank or no equipment.
+ * record keeps: '' is no rank or no equipment. `unknown` is the entry that sets no rank ("Rank unknown" by default); `null` offers none.
  */
-export function HeroStatePopover({ anchor, name, tier, rank, equipment, rules, onChange, onClose }: {
+export function HeroStatePopover({ anchor, name, tier, rank, equipment, rules, unknown = 'Rank unknown', onChange, onClose }: {
   anchor: HTMLElement;
   name: string;
   tier?: string | null;
   rank: string;
   equipment: string;
-  rules: Rules;
+  rules: HeroStateRules;
+  unknown?: string | null;
   onChange: (rank: string, equipment: string) => void;
   onClose: () => void;
 }) {
@@ -28,7 +28,7 @@ export function HeroStatePopover({ anchor, name, tier, rank, equipment, rules, o
       <div className="popover-columns">
         <div className="popover-column" role="group" aria-label={`Rank of ${name}`}>
           <span className="popover-head">Rank</span>
-          <RankOptions tier={tier ?? null} rank={current} rules={rules} unknown="Rank unknown" onPick={(next) => set(next, equipmentForRank(level, next, rules))} />
+          <RankOptions tier={tier ?? null} rank={current} rules={rules} unknown={unknown ?? undefined} onPick={(next) => set(next, equipmentForRank(level, next, rules))} />
         </div>
         <div className="popover-column" role="group" aria-label={`Equipment of ${name}`}>
           <span className="popover-head">Equipment</span>

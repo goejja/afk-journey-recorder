@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { DEFAULT_PLAYER_ID_SQL } from '../db/profiles.js';
 import { ARENA_MODES } from '../domain/arena.js';
 
 export interface Filters {
@@ -63,7 +64,7 @@ export function whereFor(filters: StatFilters, params: unknown[]): string {
   if (maps.length) (clauses.push(`EXISTS (SELECT 1 FROM v_side mp WHERE mp.attempt_id = x.attempt_id AND mp.side = x.side AND mp.map_name IN (${placeholders(maps)}))`), params.push(...maps));
   const seasons = seasonsOf(filters.playedIn);
   if (seasons.length) (clauses.push(`EXISTS (SELECT 1 FROM attempt sn WHERE sn.id = x.attempt_id AND sn.season IN (${placeholders(seasons.map(String))}))`), params.push(...seasons));
-  if (filters.excludeDefault) clauses.push(`NOT EXISTS (SELECT 1 FROM attempt_player p JOIN profile pr ON pr.player_id = p.player_id AND pr.is_default = 1 WHERE p.attempt_id = x.attempt_id AND p.side = x.side)`);
+  if (filters.excludeDefault) clauses.push(`NOT EXISTS (SELECT 1 FROM attempt_player p WHERE p.attempt_id = x.attempt_id AND p.side = x.side AND p.player_id IN (${DEFAULT_PLAYER_ID_SQL}))`);
   if (filters.before !== undefined) (clauses.push('x.attempt_id < ?'), params.push(filters.before));
   if (filters.except !== undefined) (clauses.push('x.attempt_id <> ?'), params.push(filters.except));
   return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';

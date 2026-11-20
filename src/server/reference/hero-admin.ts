@@ -25,11 +25,13 @@ interface HeroRow {
   attr_season: number | null;
   attr_set_on: string | null;
   attr_source: 'external' | 'manual' | null;
+  back_mark: 1 | 0 | null;
 }
 
 const SELECT_HERO = `SELECT h.name, h.tier, h.class, h.faction, h.damage_type, h.source, p.pvp_tier, p.pvp_role, p.set_on AS pvp_set_on, p.source AS pvp_source,
-                             a.range AS attr_range, a.energy AS attr_energy, a.mechanics AS attr_mechanics, a.released_season AS attr_season, a.set_on AS attr_set_on, a.source AS attr_source
-                      FROM hero h LEFT JOIN hero_pvp_hint p ON p.hero = h.name LEFT JOIN hero_attribute a ON a.hero = h.name`;
+                             a.range AS attr_range, a.energy AS attr_energy, a.mechanics AS attr_mechanics, a.released_season AS attr_season, a.set_on AS attr_set_on, a.source AS attr_source,
+                             m.stands_back AS back_mark
+                      FROM hero h LEFT JOIN hero_pvp_hint p ON p.hero = h.name LEFT JOIN hero_attribute a ON a.hero = h.name LEFT JOIN hero_back_mark m ON m.hero = h.name`;
 
 /** Routes of Admin > Units > Heroes: the standard heroes' information and the units they bring. Images are the Images tab's. */
 export function heroAdminRoutes(db: Database.Database): Hono {
@@ -51,6 +53,7 @@ export function heroAdminRoutes(db: Database.Database): Hono {
     pvpRole: row.pvp_role,
     pvpSetOn: row.pvp_set_on,
     pvpSource: row.pvp_source,
+    backMark: row.back_mark === null ? null : row.back_mark === 1 ? 'back' : 'free',
     attributes:
       row.attr_set_on === null
         ? null
@@ -75,7 +78,7 @@ export function heroAdminRoutes(db: Database.Database): Hono {
                              UNION SELECT attempt_id FROM arena_opponent_hero WHERE hero_name = ?)`,
     );
     const scenarios = count('SELECT count(DISTINCT scenario_id) FROM scenario_hero WHERE hero_name = ?');
-    const deployments = deploymentsNaming(db, name);
+    const deployments = deploymentsNaming(db, 'hero', name);
     return {
       records,
       scenarios,
@@ -214,6 +217,20 @@ export function heroAdminRoutes(db: Database.Database): Hono {
     return toJson(find(current.name)!);
   });
 
+  // The player's mark for the placement check of ranged damage dealers (#221): the player's judgement, so it is kept apart from `hero` and from the outside hints.
+  serve(app, heroesContract.saveBackMark, ({ params, body }) => {
+    const current = find(params.name);
+    if (!current) return fail(404, 'Unknown hero');
+    if (body.mark === null) db.prepare('DELETE FROM hero_back_mark WHERE hero = ?').run(current.name);
+    else {
+      db.prepare(
+        `INSERT INTO hero_back_mark (hero, stands_back, set_on) VALUES (?, ?, date('now', 'localtime'))
+         ON CONFLICT (hero) DO UPDATE SET stands_back = excluded.stands_back, set_on = excluded.set_on`,
+      ).run(current.name, body.mark === 'back' ? 1 : 0);
+    }
+    return toJson(find(current.name)!);
+  });
+
   // Placement Rules (ADR 0036). Deleting a hero deletes its rules.
   interface RuleRow { id: number; hero: string; relation: PlacementRule['relation']; effect: PlacementRule['effect']; wants_role: PlacementRule['wantsRole']; note: string; source: PlacementRule['source']; enabled: number }
   const ruleJson = (r: RuleRow): PlacementRule => ({ id: r.id, hero: r.hero, relation: r.relation, effect: r.effect, wantsRole: r.wants_role, note: r.note, source: r.source, enabled: r.enabled === 1 });
@@ -265,6 +282,7 @@ export function heroAdminRoutes(db: Database.Database): Hono {
       db.prepare('DELETE FROM hero_summon WHERE hero = ?').run(name);
       db.prepare('DELETE FROM hero_pvp_hint WHERE hero = ?').run(name);
       db.prepare('DELETE FROM hero_attribute WHERE hero = ?').run(name);
+      db.prepare('DELETE FROM hero_back_mark WHERE hero = ?').run(name);
       db.prepare('DELETE FROM placement_rule WHERE hero = ?').run(name);
       db.prepare('DELETE FROM hero WHERE name = ?').run(name);
     })();

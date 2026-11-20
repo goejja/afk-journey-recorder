@@ -31,7 +31,7 @@ const json = async (response: Response | Promise<Response>) => (await response).
 describe('profile migration', () => {
 
   it('starts every new database with one default profile', () => {
-    expect(profiles(db)).toEqual([{ name: 'Me', playerId: null, isDefault: true, heroes: 0 }]);
+    expect(profiles(db)).toEqual([{ name: 'Me', playerId: null, isDefault: true, heroCount: 0 }]);
   });
 });
 
@@ -236,8 +236,8 @@ describe('profiles in the query layer', () => {
     expect((roster(db, 'Friend') as any[]).map((r) => r.hero)).toEqual(['B']);
     expect(() => roster(db, 'Nobody')).toThrow(/Unknown profile/);
     expect(profiles(db)).toEqual([
-      { name: 'Me', playerId: null, isDefault: true, heroes: 1 },
-      { name: 'Friend', playerId: '222', isDefault: false, heroes: 1 },
+      { name: 'Me', playerId: null, isDefault: true, heroCount: 1 },
+      { name: 'Friend', playerId: '222', isDefault: false, heroCount: 1 },
     ]);
   });
 

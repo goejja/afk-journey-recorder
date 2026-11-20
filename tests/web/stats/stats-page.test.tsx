@@ -59,6 +59,31 @@ beforeEach(() => {
         ]);
       }
       if (url.startsWith('/api/stats/trios')) return Response.json([{ heroA: 'Evie', heroB: 'Fay', heroC: 'Zed', games: 4, wins: 3, winRate: 0.75 }]);
+      if (url === '/api/stats/faction-mismatches') {
+        return Response.json([
+          { attemptId: 31, side: 'A', mode: 'Stage', mapName: 'Open', phantimal: 'Gervan', problem: 'Normal stage never holds a Phantimal' },
+          { attemptId: 30, side: 'B', mode: 'Guild Duel', mapName: 'Duel', phantimal: 'Gervan', problem: 'Gervan needs 3 Lightbearer heroes; this team has 1' },
+          { attemptId: 29, side: 'A', mode: 'Dream Hunt', mapName: 'Open', phantimal: 'Gervan', problem: 'Dream Hunt never holds a Phantimal' },
+          { attemptId: 28, side: 'A', mode: '', mapName: null, phantimal: 'Gervan', problem: 'unknown' },
+        ]);
+      }
+      if (url === '/api/stats/dunlingr-check') {
+        return Response.json({
+          rows: [{ attemptId: 38, side: 'A', mode: 'Arena', mapName: 'Open', tile: 40, farthest: 'Tarn', role: 'Tank', tiedWith: ['Ula'] }, { attemptId: 37, side: 'B', mode: 'Arena', mapName: 'Open', tile: 2, farthest: 'Vim', role: null, tiedWith: [] }],
+          records: 4,
+          boosted: 2,
+          onBoostTile: 1,
+        });
+      }
+      if (url === '/api/stats/back-check') {
+        return Response.json({
+          rows: [
+            { attemptId: 40, side: 'A', mode: 'Dream Hunt', mapName: 'Open', hero: 'Senea', tile: 40, gameRow: 3, behind: ['Alna', 'Fay'], gamesInRow: 12, winsInRow: 9 },
+            { attemptId: 39, side: 'B', mode: 'Guild Duel', mapName: 'Duel', hero: 'Senea', tile: 2, gameRow: 5, behind: ['Zed'], gamesInRow: 2, winsInRow: 0 },
+          ],
+          onBoostTile: 3,
+        });
+      }
       if (url.startsWith('/api/stats/pairs')) return Response.json([{ heroA: 'Evie', heroB: 'Fay', games: 6, wins: 5, winRate: 0.833 }]);
       return Response.json({}, { status: 404 });
     }),
@@ -328,5 +353,76 @@ describe('Statistics page', () => {
     render(<StatsPage />);
     await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
     expect(await screen.findByText('83%')).toBeTruthy();
+  });
+});
+
+describe('the Phantimal check', () => {
+  it('links the id of each record to its page, in a new tab, and leaves the id of a mode without a page plain', async () => {
+    const user = userEvent.setup();
+    render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Phantimal check' }));
+    const table = within(await screen.findByRole('table', { name: 'Phantimal check' }));
+    const link = (id: string) => table.getByRole('link', { name: id }) as HTMLAnchorElement;
+    expect(link('31').getAttribute('href')).toBe('#stages?record=31');
+    expect(link('30').getAttribute('href')).toBe('#arena?record=30');
+    expect(link('29').getAttribute('href')).toBe('#dreamHunt?record=29');
+    expect(link('31').target).toBe('_blank');
+    expect(link('31').rel).toContain('noopener');
+    expect(table.queryByRole('link', { name: '28' })).toBeNull();
+    expect(table.getByText('28')).toBeTruthy();
+  });
+});
+
+describe('the placement check', () => {
+  it('lists the records with a hero behind a hero that stands at the back, links each and calls a small sample anecdote', async () => {
+    const user = userEvent.setup();
+    render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Placement check' }));
+    const table = within(await screen.findByRole('table', { name: 'Placement check' }));
+    expect((table.getByRole('link', { name: '40' }) as HTMLAnchorElement).getAttribute('href')).toBe('#dreamHunt?record=40');
+    expect((table.getByRole('link', { name: '39' }) as HTMLAnchorElement).getAttribute('href')).toBe('#arena?record=39');
+    const first = within(table.getByRole('row', { name: /Dream Hunt/ }));
+    expect(first.getByText('Alna, Fay')).toBeTruthy();
+    expect(first.getByText('12 games, 75% won')).toBeTruthy();
+    expect(within(table.getByRole('row', { name: /Guild Duel/ })).getByText('2 games (anecdote)')).toBeTruthy();
+    expect(screen.getByText('3 heroes stand on a Boost tile of their map and are left out: placed there on purpose.')).toBeTruthy();
+    expect(screen.queryByLabelText('Played in season')).toBeNull(); // the list has no filters
+  });
+
+  it('lists the records where the farthest hero from Dunlingr has the wrong role, with the context and a link', async () => {
+    const user = userEvent.setup();
+    render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Placement check' }));
+    const table = within(await screen.findByRole('table', { name: 'Dunlingr check' }));
+    expect((table.getByRole('link', { name: '38' }) as HTMLAnchorElement).getAttribute('href')).toBe('#arena?record=38');
+    expect(within(table.getByRole('row', { name: /Tarn/ })).getByText('Tank')).toBeTruthy();
+    expect(table.getByText('(as far as Ula)')).toBeTruthy();
+    expect(within(table.getByRole('row', { name: /Vim/ })).getByText('role unknown')).toBeTruthy();
+    expect(screen.getByText(/In 4 PvP records with Dunlingr, a Damage dealer or a Support stood farthest in 2 \(50%, anecdote\)\. 1 record with Dunlingr on a Boost tile left out\./)).toBeTruthy();
+  });
+
+  it('shows no Dunlingr list when he stands in no record', async () => {
+    const before = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/stats/dunlingr-check' ? Response.json({ rows: [], records: 0, boosted: 0, onBoostTile: 0 }) : before(url, init))));
+    const user = userEvent.setup();
+    render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Placement check' }));
+    await screen.findByRole('table', { name: 'Placement check' });
+    expect(screen.queryByText(/Dunlingr’s farthest ally/)).toBeNull();
+  });
+
+  it('says so when nothing is listed, and why when it cannot be read', async () => {
+    const before = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/stats/back-check' ? Response.json({ rows: [], onBoostTile: 1 }) : before(url, init))));
+    const user = userEvent.setup();
+    const { unmount } = render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Placement check' }));
+    expect(await screen.findByText(/has only heroes of its own kind behind it/)).toBeTruthy();
+    expect(screen.getByText('1 hero stands on a Boost tile of its map and is left out: placed there on purpose.')).toBeTruthy();
+    unmount();
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/stats/back-check' ? Response.json({ error: 'No' }, { status: 500 }) : before(url, init))));
+    render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Placement check' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('No');
   });
 });

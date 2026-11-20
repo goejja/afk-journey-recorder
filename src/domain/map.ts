@@ -22,13 +22,8 @@ export const TILE_LABELS: Record<TileType, string> = {
   [TILE.STONE_WALL]: 'Stone wall (indestructible)',
 };
 
-/** The order a click steps through when editing a tile. */
+/** Every kind of tile, in the order the map editor lists them. */
 export const TILE_CYCLE: TileType[] = [TILE.PLAYER, TILE.ENEMY, TILE.WOOD_WALL, TILE.STONE_WALL, TILE.OPEN];
-
-export function nextTile(current: number): TileType {
-  const index = TILE_CYCLE.indexOf(current as TileType);
-  return TILE_CYCLE[(index + 1) % TILE_CYCLE.length]!;
-}
 
 function isTileType(value: unknown): value is TileType {
   return TILE_CYCLE.includes(value as TileType);
@@ -37,7 +32,15 @@ function isTileType(value: unknown): value is TileType {
 const TAGS_MESSAGE = `Tags must be a list of: ${MAP_TAGS.join(', ')}`;
 const TILES_MESSAGE = `A map has exactly ${TILE_COUNT} tiles`;
 
-/** What a map is created or changed with: a name (trimmed), the kinds of fight it is for, and its tiles. */
+const BOOST_MESSAGE = 'A Boost tile must be a player or enemy deployment tile of the map, listed once';
+
+/** Whether a tile is one a Boost tile can be: a player or an enemy deployment tile. */
+export const isDeploymentTile = (tile: number | undefined): boolean => tile === TILE.PLAYER || tile === TILE.ENEMY;
+
+/**
+ * What a map is created or changed with: a name (trimmed), the kinds of fight it is for, its tiles, and its Boost tiles (#220): the
+ * numbers of deployment tiles that boost the unit standing on them, for that side only. A map with none leaves them out.
+ */
 export const MapBodySchema = z.object(
   {
     name: z.string({ error: 'A map needs a name' }).trim().min(1, 'A map needs a name'),
@@ -50,9 +53,13 @@ export const MapBodySchema = z.object(
       .length(TILE_COUNT, TILES_MESSAGE)
       .refine((cells) => cells.every(isTileType), 'A map may only contain open, player, enemy, wood wall and stone wall tiles')
       .transform((cells) => cells as number[]),
+    boostTiles: z.array(z.number({ error: BOOST_MESSAGE }).int(BOOST_MESSAGE), { error: BOOST_MESSAGE }).default([]),
   },
   { error: 'A map needs a name' },
-);
+).superRefine((map, context) => {
+  const valid = new Set(map.boostTiles).size === map.boostTiles.length && map.boostTiles.every((tile) => isDeploymentTile(map.cells[tile]));
+  if (!valid) context.addIssue({ code: 'custom', message: BOOST_MESSAGE, path: ['boostTiles'] });
+});
 
 /** A side of a tile: two corners on the lattice described at `zoneEdges`, smaller corner first. */
 export type Segment = [[number, number], [number, number]];

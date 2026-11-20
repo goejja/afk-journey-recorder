@@ -26,6 +26,19 @@ export const ARTIFACT_ONCE_MODES: readonly ArenaMode[] = ['Supreme Arena', 'Supe
 /** How many teams (and so battles) one contest of each mode has. */
 export const TEAMS_PER_MODE: Record<ArenaMode, number> = { Arena: 1, 'Supreme Arena': 3, 'Super League': 5, 'Guild Duel': 3, 'Treasure Rush': 1 };
 
+/**
+ * How many teams the Team Generator offers for each mode: the fixed count of the modes that have one (`min` equals `max`), and for
+ * Treasure Rush 1 to 5, since its fights are random among the formations the players hold and the count follows the league division.
+ * `TEAMS_PER_MODE` stays the count a record has (one team a side in Treasure Rush).
+ */
+export const GENERATED_TEAMS: Record<ArenaMode, { min: number; max: number; initial: number }> = {
+  Arena: { min: 1, max: 1, initial: 1 },
+  'Supreme Arena': { min: 3, max: 3, initial: 3 },
+  'Super League': { min: 5, max: 5, initial: 5 },
+  'Guild Duel': { min: 3, max: 3, initial: 3 },
+  'Treasure Rush': { min: 1, max: 5, initial: 1 },
+};
+
 /** The modes fought on one map only: the map is not chosen, and any other is refused. */
 export const FIXED_MAP: Partial<Record<ArenaMode, string>> = { 'Treasure Rush': 'Arena I' };
 

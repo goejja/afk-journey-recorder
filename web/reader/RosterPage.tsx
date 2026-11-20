@@ -20,6 +20,7 @@ const NO_HEROES: Hero[] = [];
 export function RosterPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
+  const [profileSearch, setProfileSearch] = useState('');
   const [faction, setFaction] = useState<string[]>([]);
   const [heroClass, setHeroClass] = useState<string[]>([]);
   const [tier, setTier] = useState<string[]>([]);
@@ -73,6 +74,10 @@ export function RosterPage() {
       if (wasOwned !== (saved !== null)) setProfiles((old) => old.map((p) => (p.id === profileId ? { ...p, heroCount: p.heroCount + (saved !== null ? 1 : -1) } : p)));
     });
 
+  const shownProfiles = useMemo(() => {
+    const wanted = profileSearch.trim().toLowerCase();
+    return profiles.filter((p) => wanted === '' || p.name.toLowerCase().includes(wanted) || (p.playerId ?? '').toLowerCase().includes(wanted));
+  }, [profiles, profileSearch]);
   const factions = useMemo(() => distinct(heroes.map((h) => h.faction)), [heroes]);
   const classes = useMemo(() => distinct(heroes.map((h) => h.class)), [heroes]);
   const visible = heroes.filter((h) => heroMatches(h, { search, faction, heroClass, tier }) && (!ownedOnly || h.owned));
@@ -112,7 +117,40 @@ export function RosterPage() {
   return (
     <>
       <MasterDetail
-        header={
+        sidebarLabel="Profiles"
+        sidebarHeader={
+          <div className="profile-sidebar-actions">
+            <button className="profile-new" onClick={() => setForm(form === 'new' ? null : 'new')}>New profile</button>
+            <button className="profile-new" onClick={() => setForm(form === 'import' ? null : 'import')} aria-expanded={form === 'import'} title="Read the heroes of a screenshot of the game">
+              Import from a picture
+            </button>
+            <input placeholder="Search profiles" aria-label="Search profiles" value={profileSearch} onChange={(e) => setProfileSearch(e.target.value)} />
+          </div>
+        }
+        sidebar={
+          <ul className="profile-list" aria-label="Profiles">
+            {shownProfiles.map((p) => (
+              <li key={p.id}>
+                <button
+                  className={p.id === selected?.id ? 'profile active' : 'profile'}
+                  aria-current={p.id === selected?.id}
+                  title={`${p.name}: ${p.heroCount} heroes${p.playerId ? ` · ID ${p.playerId}` : ''}`}
+                  onClick={() => (setSelectedId(p.id), setForm(null))}
+                >
+                  <span className="profile-name">
+                    {p.isDefault && <span title="Default profile" aria-label="Default"><Icon name="star" /> </span>}
+                    {p.name}
+                  </span>
+                  <span className="muted profile-meta">
+                    {p.heroCount} heroes{p.playerId ? ` · ID ${p.playerId}` : ''}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {profiles.length > 0 && shownProfiles.length === 0 && <li className="muted">No profile matches.</li>}
+          </ul>
+        }
+        detailHeader={
           <>
             {error && (
               <Notice kind="error">
@@ -120,7 +158,7 @@ export function RosterPage() {
               </Notice>
             )}
             {selected && (
-              <div className="panel roster-top-panel">
+              <div className="roster-head">
                 <div className="toolbar roster-profile-toolbar">
                   <h2>
                     {selected.name} <span className="muted">{ownedCount} / {heroes.length} owned{selected.playerId ? ` · ID ${selected.playerId}` : ''}</span>
@@ -153,37 +191,6 @@ export function RosterPage() {
               </div>
             )}
           </>
-        }
-        sidebarLabel="Profiles"
-        sidebarHeader={
-          <div className="profile-sidebar-actions">
-            <button className="profile-new" onClick={() => setForm(form === 'new' ? null : 'new')}>New profile</button>
-            <button className="profile-new" onClick={() => setForm(form === 'import' ? null : 'import')} aria-expanded={form === 'import'} title="Read the heroes of a screenshot of the game">
-              Import from a picture
-            </button>
-          </div>
-        }
-        sidebar={
-          <ul className="profile-list" aria-label="Profiles">
-            {profiles.map((p) => (
-              <li key={p.id}>
-                <button
-                  className={p.id === selected?.id ? 'profile active' : 'profile'}
-                  aria-current={p.id === selected?.id}
-                  title={`${p.name}: ${p.heroCount} heroes${p.playerId ? ` · ID ${p.playerId}` : ''}`}
-                  onClick={() => (setSelectedId(p.id), setForm(null))}
-                >
-                  <span className="profile-name">
-                    {p.isDefault && <span title="Default profile" aria-label="Default"><Icon name="star" /> </span>}
-                    {p.name}
-                  </span>
-                  <span className="muted profile-meta">
-                    {p.heroCount} heroes{p.playerId ? ` · ID ${p.playerId}` : ''}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
         }
         detailLabel={selected ? `Heroes of ${selected.name}` : 'Profile details'}
         detailKey={`${selected?.id ?? 'none'}:${form ?? ''}`}

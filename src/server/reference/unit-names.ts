@@ -33,17 +33,12 @@ export function unitNameProblem(taken: TakenNames, name: string): string | null 
   return null;
 }
 
-/** How many saved rows put a name on the board: `"hero":"<name>"` in the JSON of Formation IDs and Round Deployments. */
-export function deploymentsNaming(db: Database.Database, name: string): number {
-  const needle = `"hero":${JSON.stringify(name)}`;
-  const ids = db.prepare('SELECT count(*) FROM formation_id WHERE instr(deployment, ?) > 0').pluck().get(needle) as number;
-  const rounds = db.prepare('SELECT count(*) FROM round_deployment WHERE instr(content, ?) > 0').pluck().get(needle) as number;
-  return ids + rounds;
-}
-
-/** The same for a part name: `"part":"<part>"`. */
-export function deploymentsNamingPart(db: Database.Database, part: string): number {
-  const needle = `"part":${JSON.stringify(part)}`;
+/**
+ * How many saved rows put a name on the board: `"hero":"<name>"` (`field` is `hero`, a hero, a phantimal or a summon) or `"part":"<name>"`
+ * (`field` is `part`, the second part of a unit) in the JSON of Formation IDs and Round Deployments.
+ */
+export function deploymentsNaming(db: Database.Database, field: 'hero' | 'part', name: string): number {
+  const needle = `"${field}":${JSON.stringify(name)}`;
   const ids = db.prepare('SELECT count(*) FROM formation_id WHERE instr(deployment, ?) > 0').pluck().get(needle) as number;
   const rounds = db.prepare('SELECT count(*) FROM round_deployment WHERE instr(content, ?) > 0').pluck().get(needle) as number;
   return ids + rounds;

@@ -1,16 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mapColumns, MapBodySchema, nextTile, ROW_LENGTHS, TILE, TILE_COUNT, zoneEdges } from '../../src/domain/map.js';
+import { mapColumns, MapBodySchema, ROW_LENGTHS, TILE, TILE_COUNT, zoneEdges } from '../../src/domain/map.js';
 import { problemWith } from '../../src/domain/schema.js';
 
 const cells = Array(TILE_COUNT).fill(TILE.OPEN);
-
-describe('nextTile', () => {
-  it('cycles player, enemy, wood wall, stone wall, open, then back to player', () => {
-    const seen = [TILE.OPEN as number];
-    for (let i = 0; i < 5; i++) seen.push(nextTile(seen.at(-1)!));
-    expect(seen).toEqual([0, 1, -1, -2, -3, 0]);
-  });
-});
 
 describe('the map body schema', () => {
   it('accepts a well-formed map', () => {

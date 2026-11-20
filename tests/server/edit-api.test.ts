@@ -33,6 +33,17 @@ const team = (names: string[], extra: object = {}) => ({
 });
 
 describe('editing a stage attempt', () => {
+  it('reads one attempt by its id, with its stage, and says when it is gone', async () => {
+    const stage = await json(send('POST', '/api/stages', { season: 8, phase: 2, kind: 'Apex Normal', number: 10, mapName: 'Open' }));
+    await json(send('POST', '/api/attempts', { stageId: stage.id, formation: team(['C']) }));
+    const created = await json(send('POST', '/api/attempts', { stageId: stage.id, formation: team(['A', 'B']) }));
+    expect(await json(send('GET', `/api/attempts/${created.id}`))).toMatchObject({ id: created.id, stage: { phase: 2, kind: 'Apex Normal', number: 10 } });
+    const gone = await send('GET', '/api/attempts/9999');
+    expect(gone.status).toBe(404);
+    expect((await gone.json()).error).toBe('Record 9999 no longer exists');
+    expect((await send('GET', '/api/attempts/abc')).status).toBe(404);
+  });
+
   it('changes the heroes and note, and keeps no hero state', async () => {
     const stage = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 10, mapName: 'Open' }));
     const created = await json(send('POST', '/api/attempts', { stageId: stage.id, formation: team(['A', 'B']) }));

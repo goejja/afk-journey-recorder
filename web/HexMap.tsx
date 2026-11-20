@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { mapColumns, nextTile, ROW_OFFSETS, TILE, TILE_CYCLE, TILE_LABELS, zoneEdges, type TileType } from '../src/domain/map.js';
+import { mapColumns, ROW_OFFSETS, TILE, TILE_CYCLE, TILE_LABELS, zoneEdges, type TileType } from '../src/domain/map.js';
 
 const DEFAULT_TILE_WIDTH = 52;
 
@@ -21,9 +21,7 @@ const TILE_STYLE: Record<TileType, { className: string; glyph: string }> = {
 interface HexMapProps {
   rowLengths: number[];
   cells: number[];
-  /** When set, clicking a tile asks for the next tile type at that index (map editing). */
-  onChange?: (index: number, tile: TileType) => void;
-  /** When set, clicking a clickable tile reports its index instead (placing units). */
+  /** When set, clicking a clickable tile reports its index and its button: placing units, or editing a tile of the map. */
   onTileClick?: (index: number, button: HTMLButtonElement) => void;
   /** With onTileClick: which tiles accept clicks. Defaults to all. */
   isClickable?: (index: number, tile: number) => boolean;
@@ -45,6 +43,8 @@ interface HexMapProps {
   /** Artifact slots drawn as tiles of the grid: Side A's left of the bottom row, Side B's right of the top row. */
   slotA?: ReactNode;
   slotB?: ReactNode;
+  /** The numbers of the Boost tiles (#220): deployment tiles that boost the unit on them, drawn with a star and a gold edge. */
+  boostTiles?: number[];
   /** Accessible name of the whole map, needed when a page shows more than one. */
   label?: string;
   /** Width of a tile in pixels, to draw a small or a large map; defaults to 52. The map is as wide as its furthest row. */
@@ -78,8 +78,8 @@ function ZoneOutlines({ rowLengths, cells, size }: { rowLengths: number[]; cells
 /** Where a tile of the grid sits: its row, and its offset in tiles from the left edge. */
 const slotStyle = (size: Dimensions, row: number, offset: number) => ({ left: offset * size.width, top: 8 + row * (size.height - size.overlap), width: size.width, height: size.height });
 
-/** Draws a map as staggered hex rows; clicking a tile steps it through the tile types. */
-export function HexMap({ rowLengths, cells, onChange, onTileClick, isClickable, renderTile, tileTag, tileClassName, tileTitle, canDrop, onTileDrop, canDrag, onTileDragStart, onTileDragEnd, slotA, slotB, label, tileWidth }: HexMapProps) {
+/** Draws a map as staggered hex rows. */
+export function HexMap({ rowLengths, cells, onTileClick, isClickable, renderTile, tileTag, tileClassName, tileTitle, canDrop, onTileDrop, canDrag, onTileDragStart, onTileDragEnd, slotA, slotB, boostTiles, label, tileWidth }: HexMapProps) {
   const size = dimensions(tileWidth ?? DEFAULT_TILE_WIDTH);
   let index = 0;
   return (
@@ -97,9 +97,10 @@ export function HexMap({ rowLengths, cells, onChange, onTileClick, isClickable, 
               const style = TILE_STYLE[tile as TileType] ?? TILE_STYLE[TILE.OPEN];
               const tileLabel = TILE_LABELS[tile as TileType] ?? 'Unknown';
               const tileIndex = start + offset;
-              const interactive = onTileClick ? (isClickable?.(tileIndex, tile) ?? true) : Boolean(onChange);
+              const interactive = onTileClick ? (isClickable?.(tileIndex, tile) ?? true) : false;
               const content = renderTile?.(tileIndex, tile);
               const tip = tileTitle?.(tileIndex, tile);
+              const boosted = boostTiles?.includes(tileIndex) === true;
               return (
                 <span
                   key={offset}
@@ -116,10 +117,10 @@ export function HexMap({ rowLengths, cells, onChange, onTileClick, isClickable, 
                 >
                   <button
                     type="button"
-                    className={`hex ${style.className}${tileClassName?.(tileIndex, tile) ? ` ${tileClassName(tileIndex, tile)}` : ''}`}
+                    className={`hex ${style.className}${boosted ? ' tile-boost' : ''}${tileClassName?.(tileIndex, tile) ? ` ${tileClassName(tileIndex, tile)}` : ''}`}
                     style={{ width: size.width, height: size.height }}
-                    title={tip ? undefined : interactive ? `${tileLabel} (click to change)` : tileLabel}
-                    aria-label={`Tile ${tileIndex + 1}: ${tileLabel}`}
+                    title={tip ? undefined : interactive ? `${tileLabel}${boosted ? ', Boost' : ''} (click to change)` : `${tileLabel}${boosted ? ', Boost' : ''}`}
+                    aria-label={`Tile ${tileIndex + 1}: ${tileLabel}${boosted ? ', Boost' : ''}`}
                     disabled={!interactive}
                     draggable={interactive && Boolean(canDrag?.(tileIndex, tile))}
                     onDragStart={(e) => {
@@ -128,9 +129,9 @@ export function HexMap({ rowLengths, cells, onChange, onTileClick, isClickable, 
                       onTileDragStart?.(tileIndex);
                     }}
                     onDragEnd={() => onTileDragEnd?.()}
-                    onClick={(e) => (onTileClick ? onTileClick(tileIndex, e.currentTarget) : onChange?.(tileIndex, nextTile(tile)))}
+                    onClick={(e) => onTileClick?.(tileIndex, e.currentTarget)}
                   >
-                    {content ?? style.glyph}
+                    {content ?? `${style.glyph}${boosted ? '★' : ''}`}
                   </button>
                   {tileTag?.(tileIndex, tile)}
                   {tip && (
@@ -151,7 +152,17 @@ export function HexMap({ rowLengths, cells, onChange, onTileClick, isClickable, 
   );
 }
 
-export function Legend() {
+/** A tile type as the small hexagon of the legend, with its letter and, for a Boost tile, the star on its lighter colour. */
+export function TileSwatch({ tile, boosted = false }: { tile: TileType; boosted?: boolean }) {
+  return (
+    <span className={`swatch ${TILE_STYLE[tile].className}${boosted ? ' tile-boost' : ''}`} aria-hidden="true">
+      {TILE_STYLE[tile].glyph}
+      {boosted ? '★' : ''}
+    </span>
+  );
+}
+
+export function Legend({ boost = false }: { boost?: boolean }) {
   return (
     <ul className="legend">
       {TILE_CYCLE.map((tile) => (
@@ -159,6 +170,11 @@ export function Legend() {
           <span className={`swatch ${TILE_STYLE[tile].className}`}>{TILE_STYLE[tile].glyph}</span> {TILE_LABELS[tile]}
         </li>
       ))}
+      {boost && (
+        <li>
+          <TileSwatch tile={TILE.PLAYER} boosted /> <TileSwatch tile={TILE.ENEMY} boosted /> Boost tile (a deployment tile that boosts its unit)
+        </li>
+      )}
     </ul>
   );
 }

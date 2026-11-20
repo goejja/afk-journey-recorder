@@ -715,6 +715,8 @@ export interface ReviewFinding {
   new?: boolean;
   /** The record the finding links to; a record is history and never changed by the review. */
   recordId?: number;
+  /** The mode of that record, which names the page that opens it. */
+  mode?: string;
   /** For a Rank Look: the rank it is filed under and the rank the others read it as. */
   filedUnder?: string;
   readAs?: string;
@@ -789,6 +791,52 @@ export interface LayoutHint {
   betterRows: { row: number; games: number; winRate: number; players: number }[];
   /** The hint as a sentence, with its source and sample, ready to quote. */
   text: string;
+}
+
+/** A record where a hero the player expects at the back of its side has a hero behind it that is not expected there (#221). */
+export interface BackCheckRow {
+  attemptId: number;
+  side: 'A' | 'B';
+  mode: string;
+  mapName: string | null;
+  hero: string;
+  tile: number;
+  /** The game row the hero stands in, counted from the back edge of its side (1 = back). */
+  gameRow: number;
+  /** The heroes standing behind it that are not expected at the back, rearmost first. */
+  behind: string[];
+  /** How many sides the hero stood in that game row, and how many of them won: context only. */
+  gamesInRow: number;
+  winsInRow: number;
+}
+
+/** The placement check: the rows, and how many heroes would have been listed but stand on a Boost tile of their map (#220), which puts them there on purpose. */
+export interface BackCheck {
+  rows: BackCheckRow[];
+  onBoostTile: number;
+}
+
+/** A record where the hero farthest from Dunlingr is not a Damage dealer or a Support by Prydwen's Role (#222). */
+export interface DunlingrCheckRow {
+  attemptId: number;
+  side: 'A' | 'B';
+  mode: string;
+  mapName: string | null;
+  /** Dunlingr's tile. */
+  tile: number;
+  /** The hero farthest from him, and its Prydwen Role (null: unknown). */
+  farthest: string;
+  role: string | null;
+  /** The other heroes as far from him as the farthest one: the pick between them is a guess. */
+  tiedWith: string[];
+}
+
+/** The Dunlingr check: the rows, how many of his PvP sides have a hero farthest from him and how many of those have the right Role (context), and how many rows stand out on a Boost tile (#220). */
+export interface DunlingrCheck {
+  rows: DunlingrCheckRow[];
+  records: number;
+  boosted: number;
+  onBoostTile: number;
 }
 
 /** A hero's own record against its Prydwen tier hint (ADR 0036): the default profile's PvP sides only, a pointer and not a result. */

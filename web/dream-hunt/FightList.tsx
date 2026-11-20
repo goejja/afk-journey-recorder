@@ -6,6 +6,7 @@ import { FightRow } from '../records/FightRow.js';
 import { GroupCard } from '../records/GroupCard.js';
 import { RecordListView } from '../records/RecordListView.js';
 import { useRecordList } from '../records/useRecordList.js';
+import { useLinkedRecord } from '../records/linked-record.js';
 import { Portrait } from '../Portrait.js';
 import { timeShare } from './ThisWeek.js';
 import { TeamOverview } from '../stats/TeamOverview.js';
@@ -148,6 +149,7 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
     deps: [boss, tag],
     formOpen: adding || editing !== null || editingDay !== null,
   });
+  const linkError = useLinkedRecord(api.dreamHuntAttempt, (fight) => (setAdding(false), setEditing(fight)), adding || editing !== null || editingDay !== null);
   const { confirmRun, dialog } = useConfirmActions(run);
   const fights = useMemo(() => (loaded.data ?? NO_FIGHTS).slice(0, limit), [loaded.data, limit]);
   const older = (loaded.data?.length ?? 0) > limit;
@@ -294,7 +296,7 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
       <RecordListView
         list={list}
         loaded={loaded}
-        error={error}
+        error={error ?? linkError}
         notice={notice}
         label="Boss fights"
         battle="day"

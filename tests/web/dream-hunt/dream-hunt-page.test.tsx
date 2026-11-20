@@ -618,3 +618,32 @@ describe('Fights, older than the list', () => {
     expect(screen.queryByRole('button', { name: 'Show older fights' })).toBeNull();
   });
 });
+
+describe('a link to a record', () => {
+  const linked = { id: 5, createdAt: '2026-01-05 10:00:00', season: 8, outcome: 'Win', note: null, boss: 'King Croaker', mapName: 'Open', timeSeconds: 60, bossRule: null, tags: [], battleId: null, battlePosition: null, battleFormationId: null, formation };
+  afterEach(() => window.history.replaceState(null, '', '#dreamHunt'));
+  const withRecord = (answer: () => Response) => {
+    const before = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/dream-hunt/attempts/5' || url === '/api/dream-hunt/attempts/99' ? answer() : before(url, init))));
+  };
+
+  it('starts on the fights and opens the edit form of the record the address names, then takes it out of the address when the form closes', async () => {
+    window.history.replaceState(null, '', '#dreamHunt?record=5');
+    withRecord(() => Response.json(linked));
+    const user = userEvent.setup();
+    render(<DreamHuntPage />);
+    expect(await screen.findByRole('heading', { name: 'Edit boss fight' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByRole('tab', { name: 'Fights', selected: true })).toBeTruthy();
+    expect(window.location.hash).toBe('#dreamHunt');
+  });
+
+  it('says the record is gone and drops the id from the address', async () => {
+    window.history.replaceState(null, '', '#dreamHunt?record=99');
+    withRecord(() => Response.json({ error: 'Record 99 no longer exists' }, { status: 404 }));
+    render(<DreamHuntPage />);
+    expect((await screen.findByRole('alert')).textContent).toContain('Record 99 no longer exists');
+    expect(screen.queryByRole('heading', { name: 'Edit boss fight' })).toBeNull();
+    await waitFor(() => expect(window.location.hash).toBe('#dreamHunt')); // the address is cleaned in an effect after the message shows
+  });
+});

@@ -12,6 +12,7 @@ import { limitParam } from '../params.js';
 import type { SideReading, TileCrop } from './import-feedback.js';
 import { lookExamples, SAME_TILE_DISTANCE } from './look-examples.js';
 import { removeFiles, saveImage } from './saved-image.js';
+import { learnedPicturesRoot, removeFile } from './learned-pictures.js';
 
 /** The most readings kept of each kind. A full kind parks no more and drops nothing; a crop is about 32 KB, so the queue stays under 7 MB. */
 export const PARK_CAPS: Record<ParkKind, number> = { difference: 150, unsure: 50 };
@@ -112,7 +113,7 @@ interface Row {
 /** The review of the readings that were parked: the list with their pictures, confirming one as a hero example, and putting one aside. */
 export function parkedReadingRoutes(db: Database.Database, options: { imagesDir?: string } = {}): Hono {
   const app = new Hono();
-  const root = join(resolve(options.imagesDir ?? 'images'), 'custom');
+  const root = learnedPicturesRoot(options.imagesDir);
   const dir = join(root, 'parked-reading');
 
   const rows = () => db.prepare('SELECT id, kind, side, mode, read_hero AS readHero, kept_hero AS keptHero, candidates, file, created_at AS createdAt FROM parked_reading ORDER BY id').all() as Row[];
@@ -164,7 +165,7 @@ export function parkedReadingRoutes(db: Database.Database, options: { imagesDir?
     const written: string[] = [];
     try {
       db.transaction(() => {
-        if (!alike) saveImage(db, 'hero_example', { hero_name: hero }, join(root, 'hero-example'), png, written, 'review');
+        if (!alike) saveImage(db, root, 'hero_example', { hero_name: hero }, png, written, 'review');
         db.prepare('DELETE FROM parked_reading WHERE id = ?').run(id);
       })();
     } catch (e) {
@@ -180,11 +181,7 @@ export function parkedReadingRoutes(db: Database.Database, options: { imagesDir?
     const row = db.prepare('SELECT file FROM parked_reading WHERE id = ?').get(id) as { file: string } | undefined;
     if (!row) return fail(404, 'No such parked reading');
     forget([id]);
-    try {
-      unlinkSync(join(dir, row.file));
-    } catch {
-      // already gone
-    }
+    removeFile(join(dir, row.file)); // one already gone is nothing to undo
   });
 
   return app;

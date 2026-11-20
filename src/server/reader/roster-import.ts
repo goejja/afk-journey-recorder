@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { defaultProfileId } from '../../db/profiles.js';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
@@ -34,6 +35,7 @@ import { knownTiles, readPlayers, withKnownTiles } from './roster-import-tiles.j
 import { lookExamples, SAME_TILE_DISTANCE } from './look-examples.js';
 import { imageType } from '../image-type.js';
 import { removeFiles, saveImage } from './saved-image.js';
+import { learnedPicturesRoot } from './learned-pictures.js';
 import { MAX_PROFILE_NAME_LENGTH } from '../../domain/profile.js';
 import { draftOf } from '../records/battle-draft.js';
 import type { AgentRunner } from '../agent/scenario-run.js';
@@ -344,7 +346,7 @@ export function rosterImportRoutes(
    */
   function likelyHeroes(current: ImportJob, strips: { id: string }[]): { strips: string[]; heroes: string[] } | null {
     const target = current.targets.get(0);
-    const profileId = current.screen === 'hall' ? (target?.kind === 'profile' ? target.id : null) : ['battle', 'report', 'recap'].includes(current.screen) ? (db.prepare('SELECT id FROM profile WHERE is_default = 1').pluck().get() as number | undefined) ?? null : null;
+    const profileId = current.screen === 'hall' ? (target?.kind === 'profile' ? target.id : null) : ['battle', 'report', 'recap'].includes(current.screen) ? defaultProfileId(db) : null;
     if (profileId === null) return null;
     const ids = current.screen === 'hall' ? strips.map((s) => s.id) : strips.filter((s) => s.id === 'ally').map((s) => s.id);
     const heroes = db.prepare('SELECT hero_name FROM roster WHERE profile_id = ? ORDER BY hero_name').pluck().all(profileId) as string[];
@@ -602,9 +604,7 @@ export function rosterImportRoutes(
         heroSaves.push({ hero: change.hero, tile: change.tile! });
       }
     }
-    const heroExampleDir = join(resolve(imagesDir), 'custom', 'hero-example');
-    const rankLookDir = join(resolve(imagesDir), 'custom', 'rank-look');
-    const lookDir = join(resolve(imagesDir), 'custom', 'look');
+    const picturesRoot = learnedPicturesRoot(imagesDir);
     /** What the Agent and the readers said of the tile, next to what the player applied: rows for `import_reading`. */
     const logReading = (job: ImportJob, change: { hero: string; rank: string; equipmentLevel: number | null; tile: string | null }) => {
       const tile = change.tile === null ? undefined : job.players.flatMap((p) => p.tiles).find((t) => t.key === change.tile);
@@ -634,20 +634,20 @@ export function rosterImportRoutes(
           logReading(found, change);
         }
         for (const look of item.looks) {
-          saveImage(db, 'hero_look', { hero_name: look.hero }, lookDir, found.tiles.get(look.key)!, written, 'roster');
+          saveImage(db, picturesRoot, 'hero_look', { hero_name: look.hero }, found.tiles.get(look.key)!, written, 'roster');
         }
         for (const change of item.changes) {
           const index = heroSaves.findIndex((h) => h.tile === change.tile && h.hero === change.hero);
           if (index < 0) continue;
           const [save] = heroSaves.splice(index, 1);
-          saveImage(db, 'hero_example', { hero_name: save!.hero }, heroExampleDir, found.tiles.get(save!.tile)!, written, 'roster');
+          saveImage(db, picturesRoot, 'hero_example', { hero_name: save!.hero }, found.tiles.get(save!.tile)!, written, 'roster');
         }
         let savedRankLooks = 0;
         for (const change of item.changes) {
           const index = rankLooks.findIndex((r) => r.tile === change.tile && r.rank === change.rank);
           if (index < 0) continue;
           const [look] = rankLooks.splice(index, 1);
-          saveImage(db, 'rank_look', { rank: look!.rank }, rankLookDir, found.tiles.get(look!.tile)!, written, 'roster');
+          saveImage(db, picturesRoot, 'rank_look', { rank: look!.rank }, found.tiles.get(look!.tile)!, written, 'roster');
           savedRankLooks++;
         }
         results.push({ profileId, created, changed: item.changes.length, looks: item.looks.length, rankLooks: savedRankLooks });

@@ -1,10 +1,12 @@
 import type Database from 'better-sqlite3';
-import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { defaultPlayerId, defaultProfileId } from '../../db/profiles.js';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { Hono } from 'hono';
 import { loadReviewRun, latestReviewRunId } from '../../query/review-run.js';
 import { factionMismatches } from '../../query/faction-mismatches.js';
 import { MIN_EXAMPLES, readRank, type Features } from '../../vision/rank-read.js';
+import { LEARNED_PICTURES, learnedPicturesRoot, PICTURE_TABLES, pictureDir, removeFile } from '../reader/learned-pictures.js';
 import { rankFeaturesFor, rankMeasure } from '../reader/rank-looks.js';
 import { reviewContract } from '../../shared/contracts/review.js';
 import { fail, serve } from '../contract.js';
@@ -32,6 +34,8 @@ interface Finding {
   new?: boolean;
   /** The record the finding links to, when it is about one; a record is history and is never changed by the review. */
   recordId?: number;
+  /** The mode of that record, which names the page that opens it. */
+  mode?: string;
   /** For a Rank Look: the rank it is filed under and the rank the others read it as, to offer moving it. */
   filedUnder?: string;
   readAs?: string;
@@ -40,19 +44,13 @@ interface Finding {
 /** The Reader review's findings (ADR 0031), found by code from the readers' data and never fixed here. */
 export function reviewFindingsRoutes(db: Database.Database, options: { imagesDir?: string } = {}): Hono {
   const app = new Hono();
-  const root = join(resolve(options.imagesDir ?? 'images'), 'custom');
+  const root = learnedPicturesRoot(options.imagesDir);
 
   // the folders of learned pictures and the table whose rows reference their files; other folders hold pictures kept for a purpose
-  const LEARNED_FOLDERS = [
-    { folder: 'rank-look', table: 'rank_look' },
-    { folder: 'hero-example', table: 'hero_example' },
-    { folder: 'look', table: 'hero_look' },
-    { folder: 'unit-look', table: 'unit_look' },
-  ] as const;
-
   const unreferencedFiles = (): Finding[] =>
-    LEARNED_FOLDERS.flatMap(({ folder, table }) => {
-      const dir = join(root, folder);
+    PICTURE_TABLES.flatMap((table) => {
+      const folder = LEARNED_PICTURES[table].folder;
+      const dir = pictureDir(root, table);
       if (!existsSync(dir)) return [];
       const referenced = new Set(db.prepare(`SELECT file FROM ${table}`).pluck().all() as string[]);
       return readdirSync(dir)
@@ -112,6 +110,8 @@ export function reviewFindingsRoutes(db: Database.Database, options: { imagesDir
     factionMismatches(db).map((m) => ({
       code: 'record-phantimal-faction',
       subject: String(m.attemptId),
+      recordId: m.attemptId,
+      mode: m.mode,
       message: `Record ${m.attemptId} (${m.mode}, side ${m.side}): ${m.problem}. Check the Phantimal in the record.`,
     }));
 
@@ -123,17 +123,17 @@ export function reviewFindingsRoutes(db: Database.Database, options: { imagesDir
   const rosterBelowRecord = (): Finding[] => {
     const position = new Map((db.prepare('SELECT name, position FROM rank').all() as { name: string; position: number }[]).map((r) => [r.name, r.position]));
     const rosterRank = new Map(
-      (db.prepare('SELECT hero_name AS hero, rank FROM roster WHERE profile_id = (SELECT id FROM profile WHERE is_default = 1) AND rank IS NOT NULL').all() as { hero: string; rank: string }[]).map((r) => [r.hero, r.rank]),
+      (db.prepare('SELECT hero_name AS hero, rank FROM roster WHERE profile_id = ? AND rank IS NOT NULL').all(defaultProfileId(db)) as { hero: string; rank: string }[]).map((r) => [r.hero, r.rank]),
     );
     const records = db
       .prepare(
         `SELECT fh.hero_name AS hero, fh.rank AS rank, a.id AS recordId
          FROM attempt a JOIN formation f ON f.attempt_id = a.id JOIN formation_hero fh ON fh.formation_id = f.id
          WHERE fh.rank IS NOT NULL
-           AND (a.mode != 'Arena' OR EXISTS (SELECT 1 FROM attempt_player ap WHERE ap.attempt_id = a.id AND ap.side = 'A' AND ap.player_id = (SELECT player_id FROM profile WHERE is_default = 1)))
+           AND (a.mode != 'Arena' OR EXISTS (SELECT 1 FROM attempt_player ap WHERE ap.attempt_id = a.id AND ap.side = 'A' AND ap.player_id = ?))
          ORDER BY a.created_at, a.id`,
       )
-      .all() as { hero: string; rank: string; recordId: number }[];
+      .all(defaultPlayerId(db)) as { hero: string; rank: string; recordId: number }[];
     const latest = new Map(records.map((r) => [r.hero, r]));
     return [...latest.values()].flatMap((r) => {
       const now = rosterRank.get(r.hero);
@@ -150,11 +150,7 @@ export function reviewFindingsRoutes(db: Database.Database, options: { imagesDir
     // every file is tried: one that cannot be removed must not leave the others standing, and one that is gone already is as good as removed
     const kept: string[] = [];
     for (const file of files) {
-      try {
-        unlinkSync(join(root, file));
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') kept.push(file);
-      }
+      if (removeFile(join(root, file)) === 'failed') kept.push(file);
     }
     if (kept.length > 0) return fail(500, `Removed ${files.length - kept.length} of ${files.length} files. Could not remove: ${kept.join(', ')}`);
     return { deleted: files.length };

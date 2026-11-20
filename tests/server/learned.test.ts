@@ -81,16 +81,16 @@ describe('the learned review', () => {
 
   it('serves the picture of a look', async () => {
     const id = await rankLook('Supreme+', await tile(BROWN, [200, 150, 90]));
-    const response = await app.request(`/api/admin/learned/rank/${id}/image`);
+    const response = await app.request(`/api/admin/pictures/rank_look/${id}/image`);
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('image/png');
-    expect((await app.request('/api/admin/learned/rank/999/image')).status).toBe(404);
-    expect((await app.request(`/api/admin/learned/hero/${id}/image`)).status).toBe(404);
+    expect((await app.request('/api/admin/pictures/rank_look/999/image')).status).toBe(404);
+    expect((await app.request(`/api/admin/pictures/hero/${id}/image`)).status).toBe(404);
   });
 
   it('lets the browser keep a picture of a look and answers 304 while the file is unchanged, and the picture again once it is replaced', async () => {
     const id = await rankLook('Supreme+', await tile(BROWN, [200, 150, 90]));
-    const url = `/api/admin/learned/rank/${id}/image`;
+    const url = `/api/admin/pictures/rank_look/${id}/image`;
     const first = await app.request(url);
     const etag = first.headers.get('etag');
     expect(etag).toBeTruthy();
@@ -108,28 +108,28 @@ describe('the learned review', () => {
     for (let i = 0; i < 3; i++) await rankLook('Paragon 4', await tile(GOLD, [255, 255, 255], i));
     for (let i = 0; i < 3; i++) await rankLook('Supreme+', await tile(BROWN, [200, 150, 90], i));
     const wrong = await rankLook('Supreme+', await tile(GOLD, [255, 255, 255], 5));
-    const response = await send('PATCH', `/api/admin/learned/rank/${wrong}`, { rank: 'Paragon 4' });
+    const response = await send('PATCH', `/api/admin/pictures/rank_look/${wrong}`, { value: 'Paragon 4' });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ wrongBefore: 1, wrongAfter: 0 });
     expect(db.prepare('SELECT rank FROM rank_look WHERE id = ?').pluck().get(wrong)).toBe('Paragon 4');
-    expect((await send('PATCH', `/api/admin/learned/rank/${wrong}`, { rank: 'Nonsense' })).status).toBe(400);
-    expect((await send('PATCH', '/api/admin/learned/rank/999', { rank: 'Paragon 4' })).status).toBe(404);
+    expect((await send('PATCH', `/api/admin/pictures/rank_look/${wrong}`, { value: 'Nonsense' })).status).toBe(400);
+    expect((await send('PATCH', '/api/admin/pictures/rank_look/999', { value: 'Paragon 4' })).status).toBe(404);
   });
 
   it('moves a Unit Look to another artifact of the same kind only', async () => {
     const id = await unitLook('artifact', 'Arc Burst');
-    expect((await send('PATCH', `/api/admin/learned/unit/${id}`, { name: 'Awakening' })).status).toBe(204);
+    expect((await send('PATCH', `/api/admin/pictures/unit_look/${id}`, { value: 'Awakening' })).status).toBe(200); // a look that is not a Rank Look answers null
     expect(db.prepare('SELECT name FROM unit_look WHERE id = ?').pluck().get(id)).toBe('Awakening');
-    expect((await send('PATCH', `/api/admin/learned/unit/${id}`, { name: 'Orson' })).status).toBe(400);
+    expect((await send('PATCH', `/api/admin/pictures/unit_look/${id}`, { value: 'Orson' })).status).toBe(400);
   });
 
   it('deletes a look with its picture, only when asked for from the app', async () => {
     const id = await rankLook('Supreme+', await tile(BROWN, [200, 150, 90]));
     const file = join(images, 'custom', 'rank-look', `${id}.png`);
-    expect((await app.request(`/api/admin/learned/rank/${id}`, { method: 'DELETE' })).status).toBe(400);
-    expect((await send('DELETE', `/api/admin/learned/rank/${id}`)).status).toBe(204);
+    expect((await app.request(`/api/admin/pictures/rank_look/${id}`, { method: 'DELETE' })).status).toBe(400);
+    expect((await send('DELETE', `/api/admin/pictures/rank_look/${id}`)).status).toBe(204);
     expect(existsSync(file)).toBe(false);
-    expect((await send('DELETE', `/api/admin/learned/rank/${id}`)).status).toBe(404);
+    expect((await send('DELETE', `/api/admin/pictures/rank_look/${id}`)).status).toBe(404);
   });
 
   it('deletes every look of one source in every table, and leaves the others', async () => {
@@ -138,23 +138,31 @@ describe('the learned review', () => {
     await unitLook('artifact', 'Arc Burst', 'offline');
     db.prepare("INSERT INTO hero (name) VALUES ('Evie')").run();
     db.prepare("INSERT INTO hero_example (hero_name, file, source) VALUES ('Evie', 'x', 'offline'), ('Evie', 'y', NULL)").run();
-    const response = await send('DELETE', '/api/admin/learned/source/offline');
+    const response = await send('DELETE', '/api/admin/pictures/by-source/offline');
     expect(await response.json()).toEqual({ deleted: 3 });
     expect(db.prepare('SELECT id FROM rank_look').pluck().all()).toEqual([keep]);
     expect(existsSync(join(images, 'custom', 'rank-look', `${gone}.png`))).toBe(false);
     expect(db.prepare('SELECT count(*) FROM unit_look').pluck().get()).toBe(0);
     expect(db.prepare('SELECT count(*) FROM hero_example').pluck().get()).toBe(1);
-    expect((await send('DELETE', '/api/admin/learned/source/everything')).status).toBe(400);
+    expect((await send('DELETE', '/api/admin/pictures/by-source/everything')).status).toBe(400);
   });
 });
 
 describe('moving a hero tile', () => {
+  it('answers 404 to every route for a name that is not one of the four tables, whatever the prototype has', async () => {
+    for (const table of ['constructor', 'toString', 'hero', 'rank']) {
+      expect((await app.request(`/api/admin/pictures/${table}/1/image`)).status).toBe(404);
+      expect((await send('PATCH', `/api/admin/pictures/${table}/1`, { value: 'x' })).status).toBe(404);
+      expect((await send('DELETE', `/api/admin/pictures/${table}/1`)).status).toBe(404);
+    }
+  });
+
   it('files a hero Example or Look under another hero', async () => {
     db.prepare("INSERT INTO hero (name) VALUES ('Evie'), ('Fay')").run();
     const id = Number(db.prepare("INSERT INTO hero_example (hero_name, file) VALUES ('Evie', 'x')").run().lastInsertRowid);
-    expect((await send('PATCH', `/api/admin/reader/example/${id}`, { hero: 'Fay' })).status).toBe(204);
+    expect((await send('PATCH', `/api/admin/pictures/hero_example/${id}`, { value: 'Fay' })).status).toBe(200);
     expect(db.prepare('SELECT hero_name FROM hero_example WHERE id = ?').pluck().get(id)).toBe('Fay');
-    expect((await send('PATCH', `/api/admin/reader/example/${id}`, { hero: 'Nobody' })).status).toBe(400);
-    expect((await send('PATCH', '/api/admin/reader/example/999', { hero: 'Fay' })).status).toBe(404);
+    expect((await send('PATCH', `/api/admin/pictures/hero_example/${id}`, { value: 'Nobody' })).status).toBe(400);
+    expect((await send('PATCH', '/api/admin/pictures/hero_example/999', { value: 'Fay' })).status).toBe(404);
   });
 });

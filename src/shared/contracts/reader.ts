@@ -2,23 +2,26 @@ import { z } from 'zod';
 import type { ArenaMode, LearnedView, ParkedList, ReaderView } from '../api.js';
 import { Binary, endpoint } from '../contract.js';
 
-// The learned pictures and reader examples the Admin review looks at (ADR 0012). The bodies are typed, not checked by the schema: the
-// handlers check them and keep their own messages.
+// The learned pictures and reader examples the Admin review looks at (ADR 0012): one view of each, and one set of routes for the pictures
+// themselves. The bodies are typed, not checked by the schema: the handlers check them and keep their own messages.
 export const learnedContract = {
   view: endpoint({ method: 'GET', path: '/api/admin/learned', response: z.custom<LearnedView>() }),
-  image: endpoint({ method: 'GET', path: '/api/admin/learned/:kind/:id/image', response: Binary }),
-  /** Moves a Rank Look to another rank; answers how many looks the rank reader names wrong before and after. */
-  moveRank: endpoint({ method: 'PATCH', path: '/api/admin/learned/rank/:id', body: z.custom<{ rank: string }>(), response: z.object({ wrongBefore: z.number(), wrongAfter: z.number() }) }),
-  moveUnit: endpoint({ method: 'PATCH', path: '/api/admin/learned/unit/:id', body: z.custom<{ name: string }>(), response: z.undefined(), status: 204 }),
-  remove: endpoint({ method: 'DELETE', path: '/api/admin/learned/:kind/:id', response: z.undefined(), status: 204 }),
-  removeSource: endpoint({ method: 'DELETE', path: '/api/admin/learned/source/:source', response: z.object({ deleted: z.number() }) }),
 };
 
 export const readerExamplesContract = {
   view: endpoint({ method: 'GET', path: '/api/admin/reader', response: z.custom<ReaderView>() }),
-  image: endpoint({ method: 'GET', path: '/api/admin/reader/:kind/:id/image', response: Binary }),
-  move: endpoint({ method: 'PATCH', path: '/api/admin/reader/:kind/:id', body: z.custom<{ hero: string }>(), response: z.undefined(), status: 204 }),
-  remove: endpoint({ method: 'DELETE', path: '/api/admin/reader/:kind/:id', response: z.undefined(), status: 204 }),
+};
+
+/** What a learned picture is moved to: the hero of an example or look, the rank of a Rank Look, the artifact or phantimal of a Unit Look. */
+const MoveBody = z.object({ value: z.string({ error: 'Send the new value as text' }) }, { error: 'Send the new value as text' });
+
+/** The pictures of the four learned tables (`hero_example`, `hero_look`, `rank_look`, `unit_look`), by table name. */
+export const learnedPicturesContract = {
+  image: endpoint({ method: 'GET', path: '/api/admin/pictures/:table/:id/image', response: Binary }),
+  /** Moves a picture to another hero, rank or name; a Rank Look answers how many looks the rank reader names wrong before and after, the others answer null. */
+  move: endpoint({ method: 'PATCH', path: '/api/admin/pictures/:table/:id', body: MoveBody, response: z.object({ wrongBefore: z.number(), wrongAfter: z.number() }).nullable() }),
+  remove: endpoint({ method: 'DELETE', path: '/api/admin/pictures/:table/:id', response: z.undefined(), status: 204 }),
+  removeSource: endpoint({ method: 'DELETE', path: '/api/admin/pictures/by-source/:source', response: z.object({ deleted: z.number() }) }),
 };
 
 export const DATA_URL = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/;

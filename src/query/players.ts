@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { DEFAULT_PLAYER_ID_SQL } from '../db/profiles.js';
 import { listOf, MAX_ROWS, placeholders, seasonsOf, type StatFilters } from './filters.js';
 import { FORMATIONS_PER_PLAYER, sideFormations, tally } from './formations.js';
 
@@ -13,7 +14,7 @@ export function playerStats(db: Database.Database, filters: { mode?: string | st
   if (modes.length) (clauses.push(`s.mode IN (${placeholders(modes)})`), params.push(...modes));
   const seasons = seasonsOf(filters.playedIn);
   if (seasons.length) (clauses.push(`s.attempt_id IN (SELECT id FROM attempt WHERE season IN (${placeholders(seasons.map(String))}))`), params.push(...seasons));
-  if (filters.excludeDefault) clauses.push('p.player_id NOT IN (SELECT player_id FROM profile WHERE is_default = 1 AND player_id IS NOT NULL)');
+  if (filters.excludeDefault) clauses.push(`p.player_id NOT IN (${DEFAULT_PLAYER_ID_SQL})`);
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const players = db
     .prepare(

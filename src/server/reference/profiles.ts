@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
-import { findProfile } from '../../db/profiles.js';
+import { findProfile, listProfiles, setDefaultProfile } from '../../db/profiles.js';
 import { ensureStartingHeroes } from '../../db/starting-heroes.js';
 import { foldName } from '../../domain/name-match.js';
 import { profilesContract, type Profile } from '../../shared/contracts/profiles.js';
@@ -16,13 +16,7 @@ export function profileRoutes(db: Database.Database): Hono {
   const seenOwner = (folded: string) =>
     db.prepare('SELECT profile_id AS profileId, name FROM profile_name WHERE folded = ?').get(folded) as { profileId: number; name: string } | undefined;
   const list = (): Profile[] =>
-    db
-      .prepare(
-        `SELECT p.id, p.name, p.player_id AS playerId, p.is_default = 1 AS isDefault, (SELECT count(*) FROM roster r WHERE r.profile_id = p.id) AS heroCount
-         FROM profile p ORDER BY p.is_default DESC, p.name`,
-      )
-      .all()
-      .map((p) => ({ ...(p as Omit<Profile, 'isDefault' | 'seenNames'>), isDefault: (p as { isDefault: number }).isDefault === 1, seenNames: namesOf((p as { id: number }).id) }));
+    listProfiles(db).map((p) => ({ ...p, seenNames: namesOf(p.id) }));
   const nameTaken = (name: string, exceptId?: number) =>
     db.prepare('SELECT 1 FROM profile WHERE name = ? AND id IS NOT ?').get(name, exceptId ?? null) !== undefined;
 
@@ -83,10 +77,7 @@ export function profileRoutes(db: Database.Database): Hono {
   serve(app, profilesContract.setDefault, ({ params }) => {
     const profile = findProfile(db, Number(params.id));
     if (!profile) return fail(404, 'Unknown profile');
-    db.transaction(() => {
-      db.prepare('UPDATE profile SET is_default = 0 WHERE is_default = 1').run();
-      db.prepare('UPDATE profile SET is_default = 1 WHERE id = ?').run(profile.id);
-    })();
+    setDefaultProfile(db, profile.id);
     return list();
   });
 
@@ -125,10 +116,7 @@ export function profileRoutes(db: Database.Database): Hono {
       db.prepare('DELETE FROM profile WHERE id = ?').run(source.id);
       // after the delete, so the Player ID and the default are free to move
       if (!target.playerId && source.playerId) db.prepare('UPDATE profile SET player_id = ? WHERE id = ?').run(source.playerId, target.id);
-      if (source.isDefault) {
-        db.prepare('UPDATE profile SET is_default = 0 WHERE is_default = 1').run();
-        db.prepare('UPDATE profile SET is_default = 1 WHERE id = ?').run(target.id);
-      }
+      if (source.isDefault) setDefaultProfile(db, target.id);
     })();
     return list();
   });

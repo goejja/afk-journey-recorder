@@ -194,6 +194,11 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
     return withWholeBattles(db, listed, (id) => loadBattles({ id })[0]);
   });
 
+  serve(app, arenaContract.get, ({ params }) => {
+    const id = Number(params.id);
+    return (Number.isInteger(id) ? loadBattles({ id })[0] : undefined) ?? fail(404, `Record ${params.id} no longer exists`);
+  });
+
   /** Checks the teams of a battle body: their numbers, each fight, that no hero is on two teams, the Formation IDs, and the Tournament and Round. */
   function checkGroup(mode: ArenaMode, body: any, fights: any[]):
     | { error: string; status: 400 }

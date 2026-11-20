@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { defaultProfileId } from '../../db/profiles.js';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import sharp from 'sharp';
@@ -36,10 +37,10 @@ function rosterRanks(db: Database.Database, attemptId: number, side: 'A' | 'B'):
   const profile = db
     .prepare(
       `SELECT p.id FROM attempt_player ap JOIN profile p ON p.player_id = ap.player_id COLLATE NOCASE WHERE ap.attempt_id = ? AND ap.side = ?
-       UNION ALL SELECT id FROM profile WHERE is_default = 1 AND ? = 'A' AND NOT EXISTS (SELECT 1 FROM attempt_player WHERE attempt_id = ? AND side = 'A')`,
+       UNION ALL SELECT ? WHERE ? = 'A' AND NOT EXISTS (SELECT 1 FROM attempt_player WHERE attempt_id = ? AND side = 'A')`,
     )
     .pluck()
-    .get(attemptId, side, side, attemptId) as number | undefined;
+    .get(attemptId, side, defaultProfileId(db), side, attemptId) as number | undefined;
   if (profile === undefined) return new Map();
   return new Map((db.prepare('SELECT hero_name AS hero, rank FROM roster WHERE profile_id = ? AND rank IS NOT NULL').all(profile) as { hero: string; rank: string }[]).map((r) => [r.hero, r.rank]));
 }

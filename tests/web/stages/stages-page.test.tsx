@@ -153,7 +153,7 @@ describe('StagesPage', () => {
     expect(document.querySelector('.tile-tag')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Choose assist hero' }));
     await user.click(within(screen.getByRole('list', { name: 'Assist heroes' })).getByRole('button', { name: 'Fay' }));
-    expect(screen.queryByRole('button', { name: /^Rank of Fay/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Rank and equipment of Fay/ })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Choose artifact' }));
     await user.click(within(screen.getByRole('list', { name: 'Artifacts' })).getByRole('button', { name: 'Bladestorm' }));
     await user.click(screen.getByRole('button', { name: 'Done' }));
@@ -538,5 +538,36 @@ describe('StagesPage', () => {
     await user.click(form.getByRole('button', { name: 'Make Phantisomal' }));
     expect((await form.findByRole('status')).textContent).toBe('3 stages and 5 attempts are now Phantisomal.');
     expect(requests.find((r) => r.url === '/api/stages/change-kind')!.body).toMatchObject({ phase: 0, kind: 'Normal', newKind: 'Phantisomal', from: 100, to: 102 });
+  });
+});
+
+describe('a link to a record', () => {
+  const stage = { id: 8, season: 8, phase: 2, kind: 'Apex Normal', number: 40, mapName: 'Open', attemptCount: 1, enemies: [] };
+  const withRecord = (answer: () => Response) => {
+    const before = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/attempts/5' || url === '/api/attempts/99' ? answer() : before(url, init))));
+  };
+
+  it('opens the edit form of the attempt the address names, and leaves the grid at its stage with the id out of the address', async () => {
+    window.history.replaceState(null, '', '#stages?record=5');
+    gridBoxes = [box('Apex Normal', 40, 'cleared', 2)];
+    withRecord(() => Response.json(record(5, { stage })));
+    const user = userEvent.setup();
+    render(<StagesPage />);
+    expect(await screen.findByRole('heading', { name: 'Edit attempt' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByRole('tab', { name: 'Phase 2', selected: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Apex Normal stage 40/, pressed: true })).toBeTruthy();
+    expect(window.location.hash).not.toContain('record');
+    expect(window.location.hash).toContain('phase=2');
+  });
+
+  it('says the record is gone and drops the id from the address', async () => {
+    window.history.replaceState(null, '', '#stages?record=99');
+    withRecord(() => Response.json({ error: 'Record 99 no longer exists' }, { status: 404 }));
+    render(<StagesPage />);
+    expect((await screen.findByRole('alert')).textContent).toContain('Record 99 no longer exists');
+    expect(screen.queryByRole('heading', { name: 'Edit attempt' })).toBeNull();
+    await waitFor(() => expect(window.location.hash).toBe('#stages')); // the address is cleaned in an effect after the message shows
   });
 });

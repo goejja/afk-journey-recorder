@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { BattleFormationIds, DreamHuntAttempt, DreamHuntInput, FinderResult, Leaderboard } from '../api.js';
-import { endpoint } from '../contract.js';
+import { endpoint, queryText as text, queryTexts as texts } from '../contract.js';
 
 export const Boss = z.object({ name: z.string(), class: z.string().nullable(), damageType: z.string().nullable(), attempts: z.number() });
 export type Boss = z.infer<typeof Boss>;
@@ -16,8 +16,6 @@ const DayBody = z.custom<{ fights: DreamHuntInput[] } & BattleFormationIds>();
 const Fight = z.custom<DreamHuntAttempt>();
 const Day = z.object({ id: z.number(), fights: z.array(Fight) });
 
-const text = z.string().optional();
-const texts = z.union([z.string(), z.array(z.string())]).optional();
 
 export const dreamHuntContract = {
   bosses: endpoint({ method: 'GET', path: '/api/bosses', response: z.array(Boss) }),

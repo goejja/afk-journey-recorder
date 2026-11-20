@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useReducer, useState, type Dispatch } from 'react';
-import { allowedEquipmentLevels, allowedRanks, equipmentForRank } from '../../src/domain/hero-state.js';
 import { api, rosterImportTileUrl, type Hero, type ImportApplySection, type ImportJob, type ImportRow, type ImportScreen, type ImportSection, type Profile, type RosterImportState, type Rules } from '../backend.js';
 import { heroStateText } from '../format.js';
 import { useJobChange } from '../jobs/JobsProvider.js';
 import { Portrait } from '../Portrait.js';
-import { weaponOptionText } from '../WeaponStars.js';
+import { HeroStateButtons } from '../ui/HeroStateButtons.js';
 import { Notice } from '../ui/Notice.js';
 
 const SCREENS: { value: ImportScreen; label: string }[] = [
@@ -485,16 +484,13 @@ function SectionReview(props: {
               <th>Tile</th>
               <th>Hero</th>
               <th>Now</th>
-              <th>Rank</th>
-              <th>Equipment</th>
+              <th>Rank and equipment</th>
               <th>Check</th>
             </tr>
           </thead>
           <tbody>
             {section.rows.map((row) => {
               const state = props.effective(row);
-              const levels = allowedEquipmentLevels(state.rank, rules);
-              const ranks = [...allowedRanks(props.tierOf(row.hero), rules.ranks)].reverse();
               return (
                 <tr key={row.tile}>
                   <td>
@@ -517,32 +513,14 @@ function SectionReview(props: {
                   </td>
                   <td>{row.direction === 'new' ? <span className="muted">new</span> : heroStateText(row.from)}</td>
                   <td>
-                    <select
-                      className="small"
-                      aria-label={`Rank of ${row.hero}`}
-                      value={state.rank ?? NONE}
-                      onChange={(e) => edit(row.tile, { rank: e.target.value, level: equipmentForRank(state.level, e.target.value, rules) })}
-                    >
-                      {ranks.map((r) => (
-                        <option key={r}>{r}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <select
-                      className="small"
-                      aria-label={`Equipment of ${row.hero}`}
-                      disabled={levels.length === 0}
-                      value={state.level ?? NONE}
-                      onChange={(e) => edit(row.tile, { level: e.target.value === NONE ? null : Number(e.target.value) })}
-                    >
-                      <option value={NONE}>None</option>
-                      {[...levels].reverse().map((l) => (
-                        <option key={l} value={l}>
-                          {weaponOptionText(l)}
-                        </option>
-                      ))}
-                    </select>
+                    <HeroStateButtons
+                      name={row.hero}
+                      tier={props.tierOf(row.hero)}
+                      rank={state.rank}
+                      level={state.level}
+                      rules={rules}
+                      onChange={(rank, level) => edit(row.tile, { rank: rank ?? undefined, level })}
+                    />
                   </td>
                   <td>
                     {row.check.map((c) => (

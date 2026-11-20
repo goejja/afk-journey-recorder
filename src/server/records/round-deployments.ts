@@ -30,7 +30,7 @@ export function roundDeploymentRoutes(db: Database.Database): Hono {
 
   /** The reason a list of teams cannot be stored, or null. */
   const checkTeams = (given: unknown): string | null => {
-    if (!Array.isArray(given)) return 'The teams must be a list of 5 teams';
+    if (!Array.isArray(given)) return `The teams must be a list of ${TEAMS_IN_ROUND} teams`;
     const teams = given as RoundDeployment;
     const malformed = teams.some((t) => t !== null && (typeof t !== 'object' || !Array.isArray(t.heroes) || t.heroes.some((h) => h === null || typeof h !== 'object') || (t.seenAs !== undefined && !Array.isArray(t.seenAs))));
     if (malformed) return 'Each team is null or has a list of heroes';

@@ -59,11 +59,11 @@ beforeEach(() => {
       }
       if (url.startsWith('/api/heroes')) return Response.json(['Evie', 'Fay', 'Lily May', 'Nara', 'Zed'].map((name) => ({ name, faction: 'Lightbearer', class: 'Warrior', tier: 'S', owned: true, rank: null, equipmentLevel: null })));
       if (url === '/api/admin/learned') return Response.json(learned);
-      if (url.startsWith('/api/admin/learned/rank/') && method === 'PATCH') return Response.json({ wrongBefore: 3, wrongAfter: 1 });
-      if (url.startsWith('/api/admin/learned/')) return method === 'DELETE' ? Response.json({ deleted: 1 }) : new Response(null, { status: 204 });
-      if (method === 'PATCH') return new Response(null, { status: 204 });
+      if (url.startsWith('/api/admin/pictures/rank_look/') && method === 'PATCH') return Response.json({ wrongBefore: 3, wrongAfter: 1 });
+      if (url.startsWith('/api/admin/pictures/by-source/') || url.startsWith('/api/admin/pictures/unit_look/') || url.startsWith('/api/admin/pictures/rank_look/')) return method === 'DELETE' ? Response.json({ deleted: 1 }) : Response.json(null);
+      if (method === 'PATCH') return Response.json(null);
       if (method === 'DELETE') {
-        view = { ...view, heroes: view.heroes.map((h) => ({ ...h, examples: h.examples.filter((e: any) => `/api/admin/reader/${e.kind}/${e.id}` !== url) })).filter((h) => h.examples.length > 0) };
+        view = { ...view, heroes: view.heroes.map((h) => ({ ...h, examples: h.examples.filter((e: any) => `/api/admin/pictures/${e.kind === 'example' ? 'hero_example' : 'hero_look'}/${e.id}` !== url) })).filter((h) => h.examples.length > 0) };
         return new Response(null, { status: 204 });
       }
       return Response.json(view);
@@ -104,7 +104,7 @@ describe('ReaderPage', () => {
     await screen.findByRole('article', { name: 'Lily May' });
     await user.click(screen.getByRole('button', { name: 'Delete example 3 of Lily May' }));
     await waitFor(() => expect(screen.queryByRole('article', { name: 'Lily May' })).toBeNull());
-    expect(requests.find((r) => r.method === 'DELETE')).toEqual({ method: 'DELETE', url: '/api/admin/reader/example/3', action: 'app' });
+    expect(requests.find((r) => r.method === 'DELETE')).toEqual({ method: 'DELETE', url: '/api/admin/pictures/hero_example/3', action: 'app' });
   });
 
   it('moves a tile to another hero', async () => {
@@ -113,7 +113,7 @@ describe('ReaderPage', () => {
     await user.click(await screen.findByRole('tab', { name: 'Heroes' }));
     await screen.findByRole('article', { name: 'Lily May' });
     await user.selectOptions(screen.getByLabelText('Move example 3 of Lily May'), 'Evie');
-    await waitFor(() => expect(requests.find((r) => r.method === 'PATCH')).toEqual({ method: 'PATCH', url: '/api/admin/reader/example/3', action: 'app' }));
+    await waitFor(() => expect(requests.find((r) => r.method === 'PATCH')).toEqual({ method: 'PATCH', url: '/api/admin/pictures/hero_example/3', action: 'app' }));
   });
 
   it('shows how the readings did and where the pictures came from, and deletes a whole source after asking', async () => {
@@ -125,9 +125,9 @@ describe('ReaderPage', () => {
     expect(within(summary).getByText('learn:ranks')).toBeTruthy();
     expect(within(summary).getByText('1 pictures')).toBeTruthy();
     await user.click(within(summary).getByRole('button', { name: 'Delete all from learn:ranks' }));
-    expect(requests.some((r) => r.url === '/api/admin/learned/source/offline')).toBe(false);
+    expect(requests.some((r) => r.url === '/api/admin/pictures/by-source/offline')).toBe(false);
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
-    await waitFor(() => expect(requests).toContainEqual({ method: 'DELETE', url: '/api/admin/learned/source/offline', action: 'app' }));
+    await waitFor(() => expect(requests).toContainEqual({ method: 'DELETE', url: '/api/admin/pictures/by-source/offline', action: 'app' }));
   });
 
   it('shows the Rank Looks by rank, says which rank is not readable yet, and moves a look with its effect', async () => {
@@ -139,7 +139,7 @@ describe('ReaderPage', () => {
     expect(screen.getByText('Looks like Paragon 4')).toBeTruthy();
     await user.selectOptions(screen.getByLabelText('Move rank look 8 of Supreme+'), 'Paragon 4');
     expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('3 wrong ranks before and 1 after'));
-    expect(requests).toContainEqual({ method: 'PATCH', url: '/api/admin/learned/rank/8', action: 'app' });
+    expect(requests).toContainEqual({ method: 'PATCH', url: '/api/admin/pictures/rank_look/8', action: 'app' });
     await user.click(screen.getByLabelText('Looks like another rank'));
     expect(screen.queryByRole('article', { name: 'Paragon 3' })).toBeNull();
   });
@@ -150,7 +150,7 @@ describe('ReaderPage', () => {
     await user.click(await screen.findByRole('tab', { name: 'Artifacts and phantimals' }));
     await screen.findByRole('article', { name: 'Artifact Arc Burst' });
     await user.click(screen.getByRole('button', { name: 'Delete crop 4 of Arc Burst' }));
-    await waitFor(() => expect(requests).toContainEqual({ method: 'DELETE', url: '/api/admin/learned/unit/4', action: 'app' }));
+    await waitFor(() => expect(requests).toContainEqual({ method: 'DELETE', url: '/api/admin/pictures/unit_look/4', action: 'app' }));
   });
 
   describe('To confirm', () => {

@@ -57,6 +57,47 @@ describe('maps API', () => {
     expect(restored.cells[0]).toBe(TILE.OPEN);
   });
 
+  describe('Boost tiles', () => {
+    // Arena I has player deployment tiles 40 to 44 and no enemy tile
+    const save = (boostTiles: unknown, cells = (list().then((m) => m[0].cells) as Promise<number[]>)) => cells.then((c) => send('PUT', '/api/maps/Arena%20I', { name: 'Arena I', tags: ['Arena'], cells: c, boostTiles }));
+
+    it('starts with none, and a map created without the list has none', async () => {
+      expect((await list())[0].boostTiles).toEqual([]);
+      await send('POST', '/api/maps', { name: 'Field', tags: ['Stage'], cells: open });
+      expect((await get('Field')).boostTiles).toEqual([]);
+    });
+
+    it('keeps the Boost tiles of a map, sorted, as the player\'s own edit, and keeps them in a copy', async () => {
+      const response = await save([44, 41]);
+      expect(await response.json()).toMatchObject({ source: 'manual', boostTiles: [41, 44], canRestore: false });
+      await send('POST', '/api/maps/Arena%20I/duplicate', { name: 'Copy' });
+      expect((await get('Copy')).boostTiles).toEqual([41, 44]);
+      expect((await (await save([])).json()).boostTiles).toEqual([]);
+    });
+
+    it('refuses a Boost tile that is not a deployment tile, one listed twice and one off the map', async () => {
+      for (const bad of [[3], [41, 41], [45], [-1], [1.5], ['41']]) {
+        const response = await save(bad);
+        expect(response.status).toBe(400);
+        expect(((await response.json()) as { error: string }).error).toContain('A Boost tile must be a player or enemy deployment tile');
+      }
+      expect((await get('Arena I')).boostTiles).toEqual([]);
+    });
+
+    it('refuses a Boost tile on a tile that the same edit makes a wall', async () => {
+      const cells = (await list())[0].cells.slice() as number[];
+      cells[41] = TILE.WOOD_WALL;
+      expect((await save([41], Promise.resolve(cells))).status).toBe(400);
+    });
+
+    it('keeps the marks when the imported original is restored, except on a tile that is no longer a deployment tile', async () => {
+      const cells = (await list())[0].cells.slice() as number[];
+      cells[3] = TILE.ENEMY; // the player turned a tile into an enemy deployment tile and marked it
+      await save([3, 41], Promise.resolve(cells));
+      expect((await (await send('POST', '/api/maps/Arena%20I/restore')).json())).toMatchObject({ source: 'import', boostTiles: [41] });
+    });
+  });
+
   it('leaves an import untouched when saved without changes', async () => {
     const current = await get('Arena I');
     const response = await send('PUT', '/api/maps/Arena%20I', { name: 'Arena I', tags: current.tags, cells: current.cells });

@@ -160,6 +160,7 @@ export function HeroAdminPage() {
         })
       ).name,
     );
+  const markBack = (mark: HeroAdmin['backMark']) => run(async () => (await api.saveBackMark(current!.name, mark)).name);
   const save = () => run(async () => (current ? await api.saveAdminHero(current.name, toBody(draft)) : await api.createHero(toBody(draft))).name);
   const remove = async () => {
     if (await confirmDelete(`Delete the hero "${current!.name}"?`)) {
@@ -334,6 +335,23 @@ export function HeroAdminPage() {
                     ? `${current.attributes.source === 'external' ? 'Copied from an outside source' : 'Set by you'} on ${current.attributes.setOn}. `
                     : 'None yet. '}
                   Facts about the hero, not a result of your battles: they place a hero on the Lean side of the board and are in no score or sample size. Saving them leaves the hero as imported.
+                </p>
+              </>
+            )}
+
+            {current && (
+              <>
+                <h3>Placement check</h3>
+                <div className="filters">
+                  <select aria-label="Stands at the back" value={current.backMark ?? ''} disabled={busy} onChange={(e) => void markBack((e.target.value || null) as HeroAdmin['backMark'])}>
+                    <option value="">By range and role</option>
+                    <option value="back">Always stands at the back</option>
+                    <option value="free">Never checked</option>
+                  </select>
+                </div>
+                <p className="muted">
+                  The placement check in Statistics lists records where a hero that stands at the back has another hero behind it. By default that is a Damage dealer (Prydwen's role) with range 5 or more and no Placement Rule toward the front; your choice here adds a hero or removes it. It is your own judgement and
+                  not a result of your battles. It saves at once.
                 </p>
               </>
             )}

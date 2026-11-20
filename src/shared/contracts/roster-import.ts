@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { BattleDraft } from '../api.js';
-import { Binary, endpoint, Upload } from '../contract.js';
+import { Binary, endpoint, Upload, queryText as text } from '../contract.js';
 
 // The Roster and Battle import: pictures of the game's screens that an agent reads, queued and reviewed before anything is saved.
 
@@ -133,7 +133,6 @@ const ChooseBody = z.object({ tile: z.string({ error: 'Unknown tile' }), hero: z
 /** The sections to apply; each is checked one by one against the import, the profiles and the rules. */
 const ApplyBody = z.object({ sections: z.array(z.unknown(), { error: 'Send the sections to apply' }) }, { error: 'Send the sections to apply' });
 
-const text = z.string().optional();
 
 export const rosterImportContract = {
   /** The pictures of one kind of import: a Roster import's, or with `kind=report` a Battle import's (they share the queue but not the review). */

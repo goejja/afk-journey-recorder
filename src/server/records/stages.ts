@@ -374,6 +374,11 @@ export function stageRoutes(db: Database.Database): Hono {
     );
   });
 
+  serve(app, stagesContract.attempt, ({ params }) => {
+    const id = Number(params.id);
+    return (Number.isInteger(id) ? loadAttempts({ id })[0] : undefined) ?? fail(404, `Record ${params.id} no longer exists`);
+  });
+
   serve(app, stagesContract.removeAttempt, ({ params }) => {
     db.transaction(() => {
       db.prepare('DELETE FROM attempt WHERE id = ?').run(Number(params.id));

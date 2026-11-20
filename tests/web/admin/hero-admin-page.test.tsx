@@ -81,6 +81,18 @@ describe('HeroAdminPage', () => {
     delete (items[0] as { attributes?: unknown }).attributes;
   });
 
+  it('saves the mark for the placement check at once, and says what it does', async () => {
+    const user = userEvent.setup();
+    render(<HeroAdminPage />);
+    await user.click(await screen.findByRole('button', { name: /Alna/ }));
+    const mark = (await screen.findByLabelText('Stands at the back')) as HTMLSelectElement;
+    expect(mark.value).toBe('');
+    await user.selectOptions(mark, 'Always stands at the back');
+    await waitFor(() => expect(requests.find((r) => r.url === '/api/admin/heroes/Alna/back-mark')?.body).toEqual({ mark: 'back' }));
+    await user.selectOptions(mark, 'By range and role');
+    await waitFor(() => expect(requests.filter((r) => r.url === '/api/admin/heroes/Alna/back-mark').at(-1)?.body).toEqual({ mark: null }));
+  });
+
   it('creates a hero with its four pieces of information and a summon', async () => {
     const user = userEvent.setup();
     render(<HeroAdminPage />);

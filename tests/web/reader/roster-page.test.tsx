@@ -55,6 +55,33 @@ describe('Roster page', () => {
     expect(screen.getByRole('heading', { name: /Me/ })).toBeTruthy();
   });
 
+  it('searches the profiles by name or Player ID, says when none matches, and keeps the profile on show', async () => {
+    const user = userEvent.setup();
+    render(<RosterPage />);
+    const list = within(await screen.findByRole('list', { name: 'Profiles' }));
+    await waitFor(() => expect(list.getAllByRole('listitem')).toHaveLength(2));
+    const search = screen.getByRole('textbox', { name: 'Search profiles' });
+    await user.type(search, 'FRI');
+    expect(list.getAllByRole('listitem').map((li) => li.textContent)).toEqual([expect.stringContaining('Friend')]);
+    await user.clear(search);
+    await user.type(search, '1234');
+    expect(list.getAllByRole('listitem').map((li) => li.textContent)).toEqual([expect.stringContaining('Friend')]);
+    await user.clear(search);
+    await user.type(search, 'nobody');
+    expect(list.getAllByRole('listitem').map((li) => li.textContent)).toEqual(['No profile matches.']);
+    expect(screen.getByRole('heading', { name: /Me/ })).toBeTruthy(); // the profile on show stays on show
+    await waitFor(() => expect(owned()).toEqual(['Evie']));
+  });
+
+  it('keeps the profile bar with the hero filters in the heading of the heroes, not above the profile list', async () => {
+    render(<RosterPage />);
+    await screen.findByRole('list', { name: 'Profiles' });
+    const heroes = await screen.findByRole('region', { name: 'Heroes of Me' });
+    expect(within(heroes).getByRole('heading', { name: /Me/ })).toBeTruthy();
+    expect(within(heroes).getByPlaceholderText('Search heroes')).toBeTruthy();
+    expect(within(screen.getByRole('complementary', { name: 'Profiles' })).queryByPlaceholderText('Search heroes')).toBeNull();
+  });
+
   it('shows another profile’s heroes when it is picked, and edits that profile’s roster', async () => {
     const user = userEvent.setup();
     render(<RosterPage />);
@@ -91,35 +118,37 @@ describe('Roster page', () => {
     await waitFor(() => expect(owned()).toEqual(['Evie']));
     await user.click(screen.getByRole('button', { name: /Friend/ }));
     await waitFor(() => expect(owned()).toEqual(['Fay']));
-    await user.click(screen.getByRole('button', { name: /^Rank of Fay/ }));
+    await user.click(screen.getByRole('button', { name: /^Rank and equipment of Fay/ }));
     await user.click(within(await screen.findByRole('group', { name: 'Rank of Fay' })).getByRole('button', { name: 'Mythic+' }));
     await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/roster/Fay?profile=2')?.body).toMatchObject({ rank: 'Mythic+', equipmentLevel: 0 }));
   });
 
-  it('offers in a popover only the ranks the tier allows and the equipment the rank allows, saves a pick and closes', async () => {
+  it('offers in one popover only the ranks the tier allows and the equipment the rank allows, and saves each pick without closing it', async () => {
     const user = userEvent.setup();
     render(<RosterPage />);
     await waitFor(() => expect(owned()).toEqual(['Evie']));
-    await user.click(screen.getByRole('button', { name: /^Rank of Evie/ }));
+    await user.click(screen.getByRole('button', { name: /^Rank and equipment of Evie/ }));
     expect(within(screen.getByRole('group', { name: 'Rank of Evie' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['Mythic+', 'Epic']);
-    await user.click(screen.getByRole('button', { name: /^Rank of Evie/ })); // the same button again closes it
-    expect(screen.queryByRole('group')).toBeNull();
-    await user.click(screen.getByRole('button', { name: /^Equipment of Evie/ }));
     const list = within(screen.getByRole('group', { name: 'Equipment of Evie' }));
     expect(list.getAllByRole('button').map((b) => b.textContent)).toEqual(['+10 ★★★', '+0 ★', 'None']);
     await user.click(list.getByRole('button', { name: '+10 ★★★' }));
     await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/roster/Evie?profile=1')?.body).toMatchObject({ rank: 'Mythic+', equipmentLevel: 10 }));
-    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Rank and equipment of Evie' })).toBeTruthy(); // both values can be changed in one visit
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Epic' }));
+    await waitFor(() => expect(requests.filter((r) => r.method === 'PUT' && r.url === '/api/roster/Evie?profile=1').pop()?.body).toMatchObject({ rank: 'Epic', equipmentLevel: null }));
+    expect(screen.getByRole('group', { name: 'Rank and equipment of Evie' })).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('closes the popover on a press elsewhere without a change, and one list replaces another', async () => {
+  it('closes the popover on a second click on its button, and on a press elsewhere, without a change', async () => {
     const user = userEvent.setup();
     render(<RosterPage />);
     await waitFor(() => expect(owned()).toEqual(['Evie']));
-    await user.click(screen.getByRole('button', { name: /^Rank of Evie/ }));
-    await user.click(screen.getByRole('button', { name: /^Equipment of Evie/ }));
-    expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Equipment of Evie']);
+    await user.click(screen.getByRole('button', { name: /^Rank and equipment of Evie/ }));
+    expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Rank and equipment of Evie', 'Rank of Evie', 'Equipment of Evie']);
+    await user.click(screen.getByRole('button', { name: /^Rank and equipment of Evie/ }));
+    expect(screen.queryByRole('group')).toBeNull();
+    await user.click(screen.getByRole('button', { name: /^Rank and equipment of Evie/ }));
     await user.click(screen.getByRole('heading', { name: /Me/ }));
     expect(screen.queryByRole('group')).toBeNull();
     expect(requests.some((r) => r.method === 'PUT' && r.url.startsWith('/api/roster/'))).toBe(false);
@@ -144,7 +173,7 @@ describe('Roster page', () => {
     render(<RosterPage />);
     await waitFor(() => expect(owned()).toEqual(['Evie']));
     const fay = screen.getAllByRole('article').find((a) => a.querySelector('.name')?.textContent === 'Fay')!;
-    expect(within(fay).queryByRole('button', { name: /^Rank of/ })).toBeNull();
+    expect(within(fay).queryByRole('button', { name: /^Rank and equipment of/ })).toBeNull();
   });
 
   it('creates a profile, optionally copying the heroes of another, and shows it', async () => {

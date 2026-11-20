@@ -194,6 +194,7 @@ describe('the Wrong findings', () => {
     const { wrong } = await findings();
     expect(wrong.map((f) => [f.code, f.subject])).toEqual([['record-phantimal-faction', String(battle)]]);
     expect(wrong[0].message).toContain('Gervan needs 3 Lightbearer heroes; this team has 1');
+    expect(wrong[0]).toMatchObject({ recordId: battle, mode: 'Supreme Arena' }); // what the review needs to link to the record
   });
 
   describe('a roster rank below the latest recorded one', () => {

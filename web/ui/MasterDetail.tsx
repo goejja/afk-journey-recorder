@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 
 interface Props {
-  /** Page-level controls that remain visible above both panes. */
-  header: ReactNode;
+  /** Page-level controls that remain visible above both panes; without one, both panes start at the top of the page. */
+  header?: ReactNode;
   /** Actions and filters that belong to the left-hand list, kept outside its scroll region. */
   sidebarHeader: ReactNode;
   sidebar: ReactNode;
@@ -15,7 +15,7 @@ interface Props {
   detailKey?: string | number | null;
 }
 
-/** A master/detail workspace with one pinned header and independent list and detail scrolling on wide screens. */
+/** A master/detail workspace with an optional pinned header and independent list and detail scrolling on wide screens. */
 export function MasterDetail({ header, sidebarHeader, sidebar, detailHeader, detail, sidebarLabel, detailLabel, detailKey }: Props) {
   const detailScroll = useRef<HTMLDivElement>(null);
 
@@ -24,8 +24,8 @@ export function MasterDetail({ header, sidebarHeader, sidebar, detailHeader, det
   }, [detailKey]);
 
   return (
-    <section className="master-detail">
-      <div className="master-detail-header">{header}</div>
+    <section className={header === undefined ? 'master-detail master-detail-bare' : 'master-detail'}>
+      {header !== undefined && <div className="master-detail-header">{header}</div>}
       <div className="master-detail-columns">
         <aside className="master-detail-sidebar" aria-label={sidebarLabel}>
           <div className="master-detail-sidebar-head">{sidebarHeader}</div>

@@ -54,6 +54,8 @@ Every route is described once, in `src/shared/contracts/<topic>.ts`, with `endpo
 
 The web app builds its Pages from shared pieces: `web/ui/` (components such as `Tabs`, `Dialog`, `Notice`, `Icon`, `Toast`), `web/hooks/` (`useLoad`, `useAction`, `useConfirmActions`), `web/records/` (the shared record lists of Arena and Dream Hunt) and `web/jobs/` (the job watcher). [docs/ui-conventions.md](./docs/ui-conventions.md) says when to use each and lists them.
 
+A page address can name a record: `#stages?record=12`, `#dreamHunt?record=12` or `#arena?record=12` opens that record's edit form (the Stages page keeps the rest of its state in the same query, `web/stages/page-state.ts`). `recordLink` in `src/domain/record-link.ts` makes the address from a record's mode (Stage to Stages, Dream Hunt to Dream Hunt, every other mode to PvP), and `useLinkedRecord` in `web/records/linked-record.ts` reads it once when the page opens, asks for that one record by its id (`GET /api/attempts/:id`, `/api/dream-hunt/attempts/:id` or `/api/pvp/battles/:id`, so its age does not matter) and takes `record` out of the address when the form closes. The Phantimal check and the Reader review link their records this way.
+
 Background work has one answer: `GET /api/jobs` (`src/server/agent/job-registry.ts`). Each kind of work (scenario runs, the Review explanation, the two picture queues) registers in a `JobRegistry`, and the Agent is started in the background only through `startAgentJob` (`src/server/agent/agent-job.ts`). The same summary is pushed as Server-Sent Events from `GET /api/jobs/stream` whenever it changes (ADR 0042). The web app listens in one place, `JobsProvider`, and Pages read from it.
 
 ## The Advisor

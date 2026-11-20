@@ -7,6 +7,7 @@ import { useLoad, useReference } from '../hooks/load.js';
 import { AttemptForm, type AttemptFormProps } from './AttemptForm.js';
 import { BoxPanel, type BoxRef } from './BoxPanel.js';
 import { ChangeStageKind } from './ChangeStageKind.js';
+import { useLinkedRecord } from '../records/linked-record.js';
 import { usePageState } from './page-state.js';
 import { StageLane } from './StageLane.js';
 import { TabPanel, Tabs } from '../ui/Tabs.js';
@@ -32,6 +33,19 @@ export function StagesPage() {
   const [jumpKind, setJumpKind] = useState<StageKind>('Normal');
   const [flashed, setFlashed] = useState<{ kind: StageKind; number: number } | null>(null);
   const { confirm, dialog } = useConfirm();
+  // A link to an attempt opens its form; behind the form, the grid stands at the attempt's stage.
+  const linkError = useLinkedRecord(
+    api.attempt,
+    (attempt) => {
+      const { kind, phase: stagePhase, number } = attempt.stage;
+      const target = isApex(kind) ? stagePhase : standardPhase(kind, number);
+      choosePhase(target);
+      setLane(target, kind, true);
+      setSelected({ kind, number });
+      setForm({ editing: attempt });
+    },
+    form !== null,
+  );
 
   const boxes = useMemo(() => grid.data?.boxes ?? [], [grid.data]);
   const season = grid.data?.season ?? 0;
@@ -129,9 +143,9 @@ export function StagesPage() {
 
   return (
     <section>
-      {(error || grid.error || reference.error) && (
+      {(error || grid.error || reference.error || linkError) && (
         <Notice kind="error">
-          {error ?? grid.error ?? reference.error}
+          {error ?? grid.error ?? reference.error ?? linkError}
         </Notice>
       )}
       <div className="filters stage-toolbar">

@@ -47,6 +47,11 @@ export const Upload = z.custom<Blob>((value) => typeof Blob !== 'undefined' && v
 /** The response of a route that sends a file: its handler answers with `file(...)` (src/server/contract.ts), and the web app uses `urlOf` to point an element at it. */
 export const Binary = z.custom<Uint8Array>((value) => value instanceof Uint8Array);
 
+/** A query parameter that is text, or absent. */
+export const queryText = z.string().optional();
+/** A query parameter that is text or a list of text (a repeated parameter), or absent. */
+export const queryTexts = z.union([z.string(), z.array(z.string())]).optional();
+
 /** The names of the `:name` segments of a path. */
 type ParamNames<P extends string> = P extends `${string}:${infer Name}/${infer Rest}` ? Name | ParamNames<`/${Rest}`> : P extends `${string}:${infer Name}` ? Name : never;
 

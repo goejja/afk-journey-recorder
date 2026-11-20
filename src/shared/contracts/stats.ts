@@ -1,10 +1,8 @@
 import { z } from 'zod';
-import type { ArtifactStat, FactionMismatch, FormationGroupStat, FormationProfileStat, FormationReport, GroupCounterReport, HeroDistribution, HeroStat, MapStat, PairStat, PartnerReport, PartnerTag, PositionalPartnerReport, PlayerStat, RowStat, Summary, TrioStat } from '../api.js';
+import type { ArtifactStat, BackCheck, DunlingrCheck, FactionMismatch, FormationGroupStat, FormationProfileStat, FormationReport, GroupCounterReport, HeroDistribution, HeroStat, MapStat, PairStat, PartnerReport, PartnerTag, PositionalPartnerReport, PlayerStat, RowStat, Summary, TrioStat } from '../api.js';
 import { PARTNER_RELATIONS } from '../../domain/partner-relation.js';
-import { endpoint } from '../contract.js';
+import { endpoint, queryText as text, queryTexts as texts } from '../contract.js';
 
-const text = z.string().optional();
-const texts = z.union([z.string(), z.array(z.string())]).optional();
 
 /** The filters every view of sides shares: modes, tags, Players (by Player ID) and the seasons records were played in, each matching any of those given. */
 const common = { mode: texts, tag: texts, player: texts, playedIn: texts, excludeDefault: text };
@@ -29,6 +27,9 @@ export const statsContract = {
   groupCounters: endpoint({ method: 'GET', path: '/api/stats/group-counters', query: withMin, response: z.custom<GroupCounterReport>() }),
   /** Read-only: the stored records whose Phantimal its heroes cannot have brought (ADR 0029). Never changes a record. */
   factionMismatches: endpoint({ method: 'GET', path: '/api/stats/faction-mismatches', response: list<FactionMismatch>() }),
+  /** Read-only: the records where a ranged damage dealer is not at the back of its side (#221). Never changes a record. */
+  dunlingrCheck: endpoint({ method: 'GET', path: '/api/stats/dunlingr-check', response: z.custom<DunlingrCheck>() }),
+  backCheck: endpoint({ method: 'GET', path: '/api/stats/back-check', response: z.custom<BackCheck>() }),
   pairs: endpoint({ method: 'GET', path: '/api/stats/pairs', query: withMin, response: list<PairStat>() }),
   /** The heroes fielded on the same side as `hero`, from the sides the filters select. */
   partners: endpoint({ method: 'GET', path: '/api/stats/partners', query: withMin.extend({ hero: z.string().min(1) }), response: z.custom<PartnerReport>() }),

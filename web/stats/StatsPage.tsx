@@ -4,10 +4,13 @@ import { weaponLabel } from '../../src/domain/exclusive-weapon.js';
 import { isSmallSample, SMALL_SAMPLE } from '../../src/domain/stats.js';
 import { useLoad } from '../hooks/load.js';
 import { api, type ArtifactStat, type HeroStat, type MapStat, type RowStat, type PairStat, type PlayerStat, type Summary, type TrioStat } from '../backend.js';
+import { BackCheckList } from './BackCheckList.js';
+import { DunlingrCheckList } from './DunlingrCheckList.js';
 import { FormationGroups } from './FormationGroups.js';
 import { MapFormations } from './MapFormations.js';
 import { Partners } from './Partners.js';
 import { heroCell, rateColumns, StatsTable, WinBar } from './StatsTable.js';
+import { RecordLink } from '../records/RecordLink.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { TagFilter } from '../Tags.js';
 import { percent } from '../format.js';
@@ -15,7 +18,7 @@ import { TabPanel, Tabs } from '../ui/Tabs.js';
 import { Notice } from '../ui/Notice.js';
 import { Loading } from '../ui/ListStatus.js';
 
-type View = 'overview' | 'players' | 'formations' | 'heroes' | 'pairs' | 'partners' | 'artifacts' | 'maps' | 'phantimals';
+type View = 'overview' | 'players' | 'formations' | 'heroes' | 'pairs' | 'partners' | 'artifacts' | 'maps' | 'phantimals' | 'placement';
 
 const VIEWS: { key: View; label: string }[] = [
   { key: 'overview', label: 'Overview' },
@@ -27,6 +30,7 @@ const VIEWS: { key: View; label: string }[] = [
   { key: 'artifacts', label: 'Artifacts' },
   { key: 'maps', label: 'Maps' },
   { key: 'phantimals', label: 'Phantimal check' },
+  { key: 'placement', label: 'Placement check' },
 ];
 
 
@@ -126,7 +130,7 @@ function FactionMismatchList() {
         <tbody>
           {data.map((row) => (
             <tr key={`${row.attemptId}-${row.side}`}>
-              <td>{row.attemptId}</td>
+              <td><RecordLink mode={row.mode} id={row.attemptId} /></td>
               <td>{row.side}</td>
               <td>{row.mode}</td>
               <td>{row.mapName ?? '–'}</td>
@@ -193,6 +197,7 @@ export function StatsPage() {
       artifacts: () => api.statsArtifacts(withMode).then(keep(setArtifacts)),
       maps: () => api.statsMaps(withMode).then(keep(setMaps)),
       phantimals: () => Promise.resolve(), // the Phantimal check loads its own list
+      placement: () => Promise.resolve(), // the placement check loads its own list
     }[view];
     load().then(
       () => live && setError(null),
@@ -204,7 +209,7 @@ export function StatsPage() {
   }, [modesReady, view, mode, tag, player, playedIn, min, size, excludeDefault]);
 
   // The seasons to choose from, read once when a view that filters by season is first opened.
-  const filtersBySeason = view !== 'overview' && view !== 'phantimals';
+  const filtersBySeason = view !== 'overview' && view !== 'phantimals' && view !== 'placement';
   useEffect(() => {
     if (filtersBySeason && seasons.length === 0) api.seasons().then((all) => setSeasons(all.filter((s) => s.records > 0).map((s) => String(s.number))), (e: Error) => setOptionsError(`The seasons to choose from could not be read: ${e.message}`));
   }, [filtersBySeason, seasons.length]);
@@ -354,6 +359,12 @@ export function StatsPage() {
         {view === 'formations' && modesReady && <FormationGroups filters={formationFilters} />}
         {view === 'partners' && modesReady && <Partners filters={formationFilters} />}
         {view === 'phantimals' && <FactionMismatchList />}
+        {view === 'placement' && (
+          <>
+            <BackCheckList />
+            <DunlingrCheckList />
+          </>
+        )}
         {view === 'artifacts' && (
           <StatsTable
             rows={artifacts}

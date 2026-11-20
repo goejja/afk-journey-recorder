@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DAMAGE_TYPES, HERO_CLASSES, HERO_FACTIONS, HERO_TIERS, HeroAttributesBodySchema, HeroBodySchema, PlacementRuleBodySchema, PvpHintBodySchema, PVP_ROLES, PVP_TIERS } from '../../domain/hero-admin.js';
+import { BACK_MARKS, BackMarkBodySchema, DAMAGE_TYPES, HERO_CLASSES, HERO_FACTIONS, HERO_TIERS, HeroAttributesBodySchema, HeroBodySchema, PlacementRuleBodySchema, PvpHintBodySchema, PVP_ROLES, PVP_TIERS } from '../../domain/hero-admin.js';
 import { EFFECTS, RELATIONS } from '../../domain/placement-kinds.js';
 import type { TierCheck } from '../api.js';
 import { endpoint } from '../contract.js';
@@ -22,6 +22,8 @@ export const HeroAdmin = z.object({
   /** The day the hint was set, and by whom: Prydwen's list (`prydwen`) or the player (`manual`). */
   pvpSetOn: z.string().nullable(),
   pvpSource: z.enum(['prydwen', 'manual']).nullable(),
+  /** The player's mark for the placement check of ranged damage dealers (#221), or null to leave the hero to its range and Role. */
+  backMark: z.enum(BACK_MARKS).nullable(),
   /** Range, energy and mechanic tags (ADR 0037): null for a hero that has none. */
   attributes: z
     .object({
@@ -67,6 +69,7 @@ export type HeroUsage = z.infer<typeof HeroUsage>;
 export type HeroAdminBody = z.input<typeof HeroBodySchema>;
 export type PvpHintBody = z.input<typeof PvpHintBodySchema>;
 export type HeroAttributesBody = z.input<typeof HeroAttributesBodySchema>;
+export type BackMarkBody = z.input<typeof BackMarkBodySchema>;
 export type PlacementRuleBody = z.input<typeof PlacementRuleBodySchema>;
 
 export const heroesContract = {
@@ -76,6 +79,7 @@ export const heroesContract = {
   save: endpoint({ method: 'PUT', path: '/api/admin/heroes/:name', body: HeroBodySchema, response: HeroAdmin }),
   savePvpHint: endpoint({ method: 'PUT', path: '/api/admin/heroes/:name/pvp-hint', body: PvpHintBodySchema, response: HeroAdmin }),
   saveAttributes: endpoint({ method: 'PUT', path: '/api/admin/heroes/:name/attributes', body: HeroAttributesBodySchema, response: HeroAdmin }),
+  saveBackMark: endpoint({ method: 'PUT', path: '/api/admin/heroes/:name/back-mark', body: BackMarkBodySchema, response: HeroAdmin }),
   remove: endpoint({ method: 'DELETE', path: '/api/admin/heroes/:name', response: z.undefined(), status: 204 }),
   /** The default profile's own records against each Prydwen tier hint (ADR 0036): a pointer, never a change to the tier. */
   tierCheck: endpoint({ method: 'GET', path: '/api/admin/tier-check', response: z.array(z.custom<TierCheck>()) }),

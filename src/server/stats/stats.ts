@@ -1,11 +1,12 @@
 import type Database from 'better-sqlite3';
 import { Hono, type Context } from 'hono';
-import type { ArtifactStat, HeroStat, PairStat, PartnerReport, PositionalPartnerReport, FormationGroupStat, Summary, TrioStat } from '../../shared/api.js';
+import type { ArtifactStat, BackCheck, DunlingrCheck, HeroStat, PairStat, PartnerReport, PositionalPartnerReport, FormationGroupStat, Summary, TrioStat } from '../../shared/api.js';
 import { statsContract } from '../../shared/contracts/stats.js';
 import { formationProfile, formationReport } from '../../query/formation-profile.js';
 import { artifactStats, groupCounterReport, heroDistribution, heroRowStats, heroStats, mapStats, mapFormations, pairStats, partnerStats, partnerTags, positionalPartners, playerStats, trioStats, summary } from '../../query/index.js';
 import { isPartnerRelation, PARTNER_RELATIONS } from '../../domain/partner-relation.js';
 import { factionMismatches } from '../../query/faction-mismatches.js';
+import { backCheck, dunlingrCheck } from '../../advisor/index.js';
 import { fail, serve } from '../contract.js';
 import { listParam } from '../params.js';
 
@@ -30,6 +31,8 @@ export function statsRoutes(db: Database.Database): Hono {
   serve(app, statsContract.formationProfile, (_, c) => formationProfile(db, listParam(c, 'core') ?? [], common(c)) ?? fail(404, 'No formation group has these core heroes'));
   serve(app, statsContract.groupCounters, (_, c) => groupCounterReport(db, withMin(c)));
   serve(app, statsContract.factionMismatches, () => factionMismatches(db));
+  serve(app, statsContract.backCheck, () => backCheck(db) as BackCheck);
+  serve(app, statsContract.dunlingrCheck, () => dunlingrCheck(db) as DunlingrCheck);
 
   serve(app, statsContract.pairs, (_, c) => pairStats(db, withMin(c)) as PairStat[]);
   serve(app, statsContract.partners, (_, c) => {

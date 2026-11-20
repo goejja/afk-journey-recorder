@@ -18,23 +18,23 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 describe('saveImage', () => {
   it('names the file after the row id, for each table', () => {
     const written: string[] = [];
-    const first = saveImage(db, 'hero_example', { hero_name: 'Evie' }, join(dir, 'a'), Buffer.from('x'), written, 'roster');
-    const second = saveImage(db, 'hero_example', { hero_name: 'Evie' }, join(dir, 'a'), Buffer.from('y'), written, 'roster');
+    const first = saveImage(db, dir, 'hero_example', { hero_name: 'Evie' }, Buffer.from('x'), written, 'roster');
+    const second = saveImage(db, dir, 'hero_example', { hero_name: 'Evie' }, Buffer.from('y'), written, 'roster');
     expect([first, second]).toEqual([1, 2]);
     expect(db.prepare('SELECT id, file FROM hero_example ORDER BY id').all()).toEqual([{ id: 1, file: '1.png' }, { id: 2, file: '2.png' }]);
-    saveImage(db, 'unit_look', { kind: 'artifact', name: 'Arc Burst' }, join(dir, 'b'), Buffer.from('z'), written, 'roster');
+    saveImage(db, dir, 'unit_look', { kind: 'artifact', name: 'Arc Burst' }, Buffer.from('z'), written, 'roster');
     expect(db.prepare('SELECT kind, name, file FROM unit_look').all()).toEqual([{ kind: 'artifact', name: 'Arc Burst', file: '1.png' }]);
-    saveImage(db, 'rank_look', { rank: 'Supreme' }, join(dir, 'c'), Buffer.from('w'), written, 'offline');
+    saveImage(db, dir, 'rank_look', { rank: 'Supreme' }, Buffer.from('w'), written, 'offline');
     expect(db.prepare('SELECT source FROM hero_example UNION ALL SELECT source FROM rank_look').pluck().all()).toEqual(['roster', 'roster', 'offline']);
-    expect(written.map((p) => p.slice(dir.length + 1))).toEqual(['a/1.png', 'a/2.png', 'b/1.png', 'c/1.png']);
+    expect(written.map((p) => p.slice(dir.length + 1))).toEqual(['hero-example/1.png', 'hero-example/2.png', 'unit-look/1.png', 'rank-look/1.png']);
   });
 
   it('takes the id SQLite would give, also after the last row was deleted', () => {
     const written: string[] = [];
-    saveImage(db, 'rank_look', { rank: 'Supreme' }, dir, Buffer.from('x'), written, 'roster');
-    saveImage(db, 'rank_look', { rank: 'Supreme' }, dir, Buffer.from('x'), written, 'roster');
+    saveImage(db, dir, 'rank_look', { rank: 'Supreme' }, Buffer.from('x'), written, 'roster');
+    saveImage(db, dir, 'rank_look', { rank: 'Supreme' }, Buffer.from('x'), written, 'roster');
     db.prepare('DELETE FROM rank_look WHERE id = 2').run();
-    expect(saveImage(db, 'rank_look', { rank: 'Supreme' }, dir, Buffer.from('x'), written, 'roster')).toBe(2);
+    expect(saveImage(db, dir, 'rank_look', { rank: 'Supreme' }, Buffer.from('x'), written, 'roster')).toBe(2);
   });
 
   it('undoes the row when the file cannot be written, and removeFiles takes back the ones already written', () => {
@@ -42,8 +42,8 @@ describe('saveImage', () => {
     writeFileSync(join(dir, 'blocked'), 'a file where a folder should be');
     expect(() =>
       db.transaction(() => {
-        saveImage(db, 'hero_look', { hero_name: 'Evie' }, join(dir, 'look'), Buffer.from('x'), written, 'roster');
-        saveImage(db, 'hero_look', { hero_name: 'Evie' }, join(dir, 'blocked'), Buffer.from('y'), written, 'roster');
+        saveImage(db, dir, 'hero_look', { hero_name: 'Evie' }, Buffer.from('x'), written, 'roster');
+        saveImage(db, join(dir, 'blocked'), 'hero_look', { hero_name: 'Evie' }, Buffer.from('y'), written, 'roster');
       })(),
     ).toThrow();
     expect(db.prepare('SELECT count(*) FROM hero_look').pluck().get()).toBe(0);

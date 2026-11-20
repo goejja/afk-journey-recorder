@@ -10,6 +10,7 @@ import { importFeedbackContract } from '../../shared/contracts/reader.js';
 import { fail, serve } from '../contract.js';
 import { parkable, prepareParking, saveParked } from './parked-readings.js';
 import { removeFiles, saveImage } from './saved-image.js';
+import { learnedPicturesRoot } from './learned-pictures.js';
 
 /** The most looks kept of one artifact or phantimal: more would only fill the Agent's reference sheets. */
 export const MAX_LOOKS_PER_UNIT = 4;
@@ -111,7 +112,6 @@ const PNG = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/;
  */
 export function importFeedbackRoutes(db: Database.Database, options: { imagesDir?: string } = {}): Hono {
   const app = new Hono();
-  const lookDir = join(resolve(options.imagesDir ?? 'images'), 'custom', 'unit-look');
 
   serve(app, importFeedbackContract.send, async ({ body: given }) => {
     const body = given as any; // checked below
@@ -194,7 +194,7 @@ export function importFeedbackRoutes(db: Database.Database, options: { imagesDir
     }
     // what the corrections left unpaired, and the readings the Agent was not sure of, wait for the player to confirm (ADR 0040)
     const parking = await prepareParking(db, sides.flatMap((s) => parkable(s.read, s.final, s.tiles, s.side)), heroNames);
-    const root = join(resolve(options.imagesDir ?? 'images'), 'custom');
+    const root = learnedPicturesRoot(options.imagesDir);
     // the crops are decoded by sharp before they are written, so the file is a real PNG whatever was sent; an unreadable crop is a look not kept
     const lookPictures: { kind: 'artifact' | 'phantimal'; name: string; png: Buffer }[] = [];
     for (const save of saves) {
@@ -208,9 +208,9 @@ export function importFeedbackRoutes(db: Database.Database, options: { imagesDir
     const written: string[] = [];
     try {
       db.transaction(() => {
-        for (const save of heroSaves) saveImage(db, 'hero_example', { hero_name: save.hero }, join(root, 'hero-example'), save.png, written, 'battle');
-        for (const save of rankSaves) saveImage(db, 'rank_look', { rank: save.rank }, join(root, 'rank-look'), save.png, written, 'battle');
-        for (const save of lookPictures) saveImage(db, 'unit_look', { kind: save.kind, name: save.name }, lookDir, save.png, written, 'battle');
+        for (const save of heroSaves) saveImage(db, root, 'hero_example', { hero_name: save.hero }, save.png, written, 'battle');
+        for (const save of rankSaves) saveImage(db, root, 'rank_look', { rank: save.rank }, save.png, written, 'battle');
+        for (const save of lookPictures) saveImage(db, root, 'unit_look', { kind: save.kind, name: save.name }, save.png, written, 'battle');
         saveParked(db, mode, parking.saves, join(root, 'parked-reading'), written);
       })();
     } catch (e) {

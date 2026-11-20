@@ -30,6 +30,24 @@ describe('hero admin API', () => {
     expect(db.prepare('SELECT count(*) FROM hero_pvp_hint').pluck().get()).toBe(129);
   });
 
+  it('keeps the player\'s mark for the placement check apart from the hero, and a hero without one has none', async () => {
+    expect((await list()).find((h) => h.name === 'Alna')).toMatchObject({ backMark: null });
+    expect(await (await send('PUT', '/api/admin/heroes/Alna/back-mark', { mark: 'back' })).json()).toMatchObject({ name: 'Alna', source: 'import', backMark: 'back' });
+    expect(db.prepare('SELECT stands_back FROM hero_back_mark WHERE hero = ?').pluck().get('Alna')).toBe(1);
+    expect((await (await send('PUT', '/api/admin/heroes/Alna/back-mark', { mark: 'free' })).json()).backMark).toBe('free');
+    expect(db.prepare('SELECT stands_back FROM hero_back_mark WHERE hero = ?').pluck().get('Alna')).toBe(0);
+    expect((await (await send('PUT', '/api/admin/heroes/Alna/back-mark', { mark: null })).json()).backMark).toBeNull();
+    expect(db.prepare('SELECT count(*) FROM hero_back_mark').pluck().get()).toBe(0);
+    expect(await error(await send('PUT', '/api/admin/heroes/Alna/back-mark', { mark: 'front' }))).toContain('The mark must be one of back, free');
+    expect((await send('PUT', '/api/admin/heroes/Nobody/back-mark', { mark: 'back' })).status).toBe(404);
+  });
+
+  it('deletes the mark with the hero', async () => {
+    await send('PUT', '/api/admin/heroes/Alna/back-mark', { mark: 'back' });
+    await send('DELETE', '/api/admin/heroes/Alna');
+    expect(db.prepare('SELECT count(*) FROM hero_back_mark').pluck().get()).toBe(0);
+  });
+
   it('keeps range, energy and mechanic tags apart from the hero: dated, manual, tags sorted and unique, and the hero stays imported', async () => {
     expect((await list()).find((h) => h.name === 'Alna')).toMatchObject({ attributes: null });
     const body = { range: 1, energy: [0, 200], mechanics: ['Dot', 'execute', 'dot'], releasedInSeason: 5 };

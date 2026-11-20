@@ -4,7 +4,7 @@ import { pathOf, queryStringOf, Upload, urlOf, type ClientInput, type Endpoint }
 import { artifactsContract } from '../src/shared/contracts/artifacts.js';
 import { defaultsContract } from '../src/shared/contracts/defaults.js';
 import { mapsContract } from '../src/shared/contracts/maps.js';
-import { heroesContract, type HeroAttributesBody } from '../src/shared/contracts/heroes.js';
+import { heroesContract, type BackMarkBody, type HeroAttributesBody } from '../src/shared/contracts/heroes.js';
 import { unitRulesContract } from '../src/shared/contracts/unit-rules.js';
 import { updateDateContract } from '../src/shared/contracts/update-date.js';
 import { recordStatesContract } from '../src/shared/contracts/record-states.js';
@@ -18,7 +18,7 @@ import { battlesContract } from '../src/shared/contracts/battles.js';
 import { scenariosContract } from '../src/shared/contracts/scenarios.js';
 import { statsContract } from '../src/shared/contracts/stats.js';
 import { counterRuleContract, statsSettingsContract } from '../src/shared/contracts/stats-settings.js';
-import { importFeedbackContract, keptPicturesContract, learnedContract, parkedReadingsContract, readerExamplesContract } from '../src/shared/contracts/reader.js';
+import { importFeedbackContract, keptPicturesContract, learnedContract, learnedPicturesContract, parkedReadingsContract, readerExamplesContract } from '../src/shared/contracts/reader.js';
 import { rosterImportContract } from '../src/shared/contracts/roster-import.js';
 import { adminContract } from '../src/shared/contracts/admin.js';
 import { imagesContract } from '../src/shared/contracts/images.js';
@@ -67,10 +67,13 @@ function sendJson<T>(url: string, method: string, body: unknown): Promise<T> {
   return request<T>(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 }
 
-export const learnedLookUrl = (kind: 'rank' | 'unit', id: number) => urlOf(learnedContract.image, { params: { kind, id: String(id) } });
+/** The table of each kind of learned picture the review shows: Rank and Unit Looks, and the two kinds of hero tile. */
+const LOOK_TABLE = { rank: 'rank_look', unit: 'unit_look' } as const;
+const EXAMPLE_TABLE = { example: 'hero_example', look: 'hero_look' } as const;
+export const learnedLookUrl = (kind: 'rank' | 'unit', id: number) => urlOf(learnedPicturesContract.image, { params: { table: LOOK_TABLE[kind], id: String(id) } });
 /** The picture of a parked reading (ADR 0040). */
 export const parkedReadingUrl = (id: number) => urlOf(parkedReadingsContract.image, { params: { id: String(id) } });
-export const readerExampleUrl = (e: Pick<ReaderExample, 'kind' | 'id'>) => urlOf(readerExamplesContract.image, { params: { kind: e.kind, id: String(e.id) } });
+export const readerExampleUrl = (e: Pick<ReaderExample, 'kind' | 'id'>) => urlOf(learnedPicturesContract.image, { params: { table: EXAMPLE_TABLE[e.kind], id: String(e.id) } });
 
 /** A query string where a value may be a list, sent as the same name repeated (`mode=Arena&mode=Guild+Duel`); empty values are left out. */
 export type Query = Record<string, string | string[]>;
@@ -106,6 +109,7 @@ export const api = {
   saveAdminHero: (name: string, hero: HeroAdminBody) => call(heroesContract.save, { params: { name }, body: hero }),
   savePvpHint: (name: string, hint: PvpHintBody) => call(heroesContract.savePvpHint, { params: { name }, body: hint }),
   placementRules: () => call(heroesContract.placementRules),
+  saveBackMark: (name: string, mark: BackMarkBody['mark']) => call(heroesContract.saveBackMark, { params: { name }, body: { mark } }),
   tierCheck: () => call(heroesContract.tierCheck),
   createPlacementRule: (hero: string, rule: PlacementRuleBody) => call(heroesContract.createPlacementRule, { params: { name: hero }, body: rule }),
   savePlacementRule: (id: number, rule: PlacementRuleBody) => call(heroesContract.savePlacementRule, { params: { id: String(id) }, body: rule }),
@@ -120,7 +124,7 @@ export const api = {
   parkedReadings: (kind: 'all' | 'difference' | 'unsure', offset: number, limit: number) => call(parkedReadingsContract.list, { query: { ...(kind === 'all' ? {} : { kind }), offset: String(offset), limit: String(limit) } }),
   confirmParkedReading: (id: number, hero: string) => call(parkedReadingsContract.confirm, { params: { id: String(id) }, body: { hero } }),
   dismissParkedReading: (id: number) => call(parkedReadingsContract.dismiss, { params: { id: String(id) } }),
-  moveReaderExample: (e: Pick<ReaderExample, 'kind' | 'id'>, hero: string) => call(readerExamplesContract.move, { params: { kind: e.kind, id: String(e.id) }, body: { hero } }),
+  moveReaderExample: (e: Pick<ReaderExample, 'kind' | 'id'>, hero: string) => call(learnedPicturesContract.move, { params: { table: EXAMPLE_TABLE[e.kind], id: String(e.id) }, body: { value: hero } }),
   learned: () => call(learnedContract.view),
   latestReviewRun: () => call(reviewContract.latestRun),
   askAgentAboutReview: (runId: number) => call(reviewContract.explain, { params: { id: String(runId) } }),
@@ -132,11 +136,16 @@ export const api = {
   thinningSettings: () => call(reviewContract.thinningSettings),
   saveThinningSettings: (rank: number) => call(reviewContract.saveThinningSettings, { body: { rank } }),
   applyThinning: (kind: 'rank', ids: number[]) => call(reviewContract.applyThinning, { body: { kind, ids } }),
-  moveRankLook: (id: number, rank: string) => call(learnedContract.moveRank, { params: { id: String(id) }, body: { rank } }),
-  moveUnitLook: (id: number, name: string) => call(learnedContract.moveUnit, { params: { id: String(id) }, body: { name } }),
-  deleteLearned: (kind: 'rank' | 'unit', id: number) => call(learnedContract.remove, { params: { kind, id: String(id) } }),
-  deleteLearnedSource: (source: string) => call(learnedContract.removeSource, { params: { source } }),
-  deleteReaderExample: (e: Pick<ReaderExample, 'kind' | 'id'>) => call(readerExamplesContract.remove, { params: { kind: e.kind, id: String(e.id) } }),
+  /** Moves a Rank Look to another rank; says how many looks the rank reader names wrong before and after. */
+  moveRankLook: async (id: number, rank: string) => {
+    const report = await call(learnedPicturesContract.move, { params: { table: LOOK_TABLE.rank, id: String(id) }, body: { value: rank } });
+    if (!report) throw new Error('The server did not say how the readings changed');
+    return report;
+  },
+  moveUnitLook: (id: number, name: string) => call(learnedPicturesContract.move, { params: { table: LOOK_TABLE.unit, id: String(id) }, body: { value: name } }),
+  deleteLearned: (kind: 'rank' | 'unit', id: number) => call(learnedPicturesContract.remove, { params: { table: LOOK_TABLE[kind], id: String(id) } }),
+  deleteLearnedSource: (source: string) => call(learnedPicturesContract.removeSource, { params: { source } }),
+  deleteReaderExample: (e: Pick<ReaderExample, 'kind' | 'id'>) => call(learnedPicturesContract.remove, { params: { table: EXAMPLE_TABLE[e.kind], id: String(e.id) } }),
   images: (kind: string) => call(imagesContract.list, { params: { kind } }),
   uploadImage: (kind: string, name: string, file: File) =>
     call(imagesContract.upload, { params: { kind, name }, body: file }).then(() => undefined),
@@ -164,6 +173,7 @@ export const api = {
     call(stagesContract.changeKind, { body: change }),
   attempts: (query: Query = {}) =>
     call(stagesContract.attempts, { query }),
+  attempt: (id: number) => call(stagesContract.attempt, { params: { id: String(id) } }),
   createAttempt: (attempt: StageAttemptInput) => call(stagesContract.createAttempt, { body: attempt }),
   /** One attempt per stage from `from` to `to`, the same formation having cleared them in auto-battle. */
   createAttemptRange: (range: StageRangeInput) => call(stagesContract.createRange, { body: range }),
@@ -243,6 +253,8 @@ export const api = {
   statsPartnerPositions: (query: Query & { hero: string; relation: PartnerRelation }) => call(statsContract.partnerPositions, { query }),
   statsPartnerTags: () => call(statsContract.partnerTags),
   factionMismatches: () => call(statsContract.factionMismatches),
+  backCheck: () => call(statsContract.backCheck),
+  dunlingrCheck: () => call(statsContract.dunlingrCheck),
   statsSettings: () => call(statsSettingsContract.get),
   saveStatsSettings: (modes: string[]) => call(statsSettingsContract.save, { body: { modes } }),
   updateDate: () => call(updateDateContract.get),
@@ -286,6 +298,7 @@ export const api = {
   saveRoundDeployments: (tournamentId: number, round: Round, entries: { profileId: number; teams: RoundDeployment }[]) =>
     call(roundDeploymentsContract.saveAll, { params: { tournament: String(tournamentId), round }, body: { entries } }),
   createArenaBattle: (battle: ArenaBattleInput) => call(arenaContract.create, { body: battle }),
+  arenaBattle: (id: number) => call(arenaContract.get, { params: { id: String(id) } }),
   updateArenaBattle: (id: number, battle: ArenaBattleInput) => call(arenaContract.update, { params: { id: String(id) }, body: battle }),
   deleteArenaBattle: (id: number) => call(stagesContract.removeAttempt, { params: { id: String(id) } }),
 

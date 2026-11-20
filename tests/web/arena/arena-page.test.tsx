@@ -45,6 +45,8 @@ beforeEach(() => {
       if (url === '/api/defaults') return Response.json({ 'Supreme Arena': { slots: [], updatedAt: null }, 'Super League': { slots: [], updatedAt: null }, 'Guild Duel': { slots: [], updatedAt: null }, 'Dream Hunt': { slots: [], updatedAt: null } });
       if (url === '/api/boss-rules') return Response.json([{ name: 'Berserk', description: '' }]);
       if (url === '/api/reference') return Response.json({ ranks: ['Elite', 'Mythic+'], equipmentLevels: [0, 10], caps: [{ rank: 'Mythic+', minLevel: 0, maxLevel: 10 }] });
+      if (url === '/api/pvp/battles/5' && method === 'GET') return Response.json(battle);
+      if (url === '/api/pvp/battles/99' && method === 'GET') return Response.json({ error: 'Record 99 no longer exists' }, { status: 404 });
       if (url.startsWith('/api/pvp/battles') && method === 'GET') return Response.json([battle]);
       if (url === '/api/pvp/battle-groups' && method === 'POST') return Response.json({ id: 9, fights: [battle] }, { status: 201 });
       if (url.startsWith('/api/pvp/battle-groups/') && method === 'PUT') return Response.json({ id: 4, fights: [battle] });
@@ -1049,5 +1051,35 @@ describe('Arena page', () => {
     expect(sent.url).toBe('/api/pvp/battles/5');
     expect(sent.body).toMatchObject({ mode: 'Supreme Arena', outcome: 'Loss', rule: 'Berserk' });
     expect(sent.body.formation.heroes).toEqual([{ tile: 38, hero: 'Evie', rank: 'Mythic+', equipmentLevel: 10 }]);
+  });
+});
+
+describe('a link to a record', () => {
+  afterEach(() => window.history.replaceState(null, '', '#arena'));
+
+  it('opens the edit form of the record the address names, asking for that one record, and takes it out of the address when the form closes', async () => {
+    window.history.replaceState(null, '', '#arena?record=5');
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    expect(await screen.findByText('Edit battle')).toBeTruthy();
+    expect(requests.some((r) => r.url === '/api/pvp/battles/5')).toBe(true);
+    expect(window.location.hash).toBe('#arena?record=5'); // still there while the form is open
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByRole('button', { name: 'New battles' })).toBeTruthy();
+    expect(window.location.hash).toBe('#arena');
+  });
+
+  it('says the record is gone, opens no form and drops the id from the address', async () => {
+    window.history.replaceState(null, '', '#arena?record=99');
+    render(<ArenaPage />);
+    expect((await screen.findByRole('alert')).textContent).toContain('Record 99 no longer exists');
+    expect(screen.queryByText('Edit battle')).toBeNull();
+    await waitFor(() => expect(window.location.hash).toBe('#arena')); // the address is cleaned in an effect after the message shows
+  });
+
+  it('asks for no record when the address names none', async () => {
+    render(<ArenaPage />);
+    await screen.findByRole('button', { name: 'Edit' });
+    expect(requests.some((r) => /^\/api\/pvp\/battles\/\d+$/.test(r.url))).toBe(false);
   });
 });

@@ -1,14 +1,14 @@
 import { useCallback, useState } from 'react';
 import { weaponLabel } from '../../src/domain/exclusive-weapon.js';
-import { allowedEquipmentLevels, equipmentForRank, type HeroStateRules } from '../../src/domain/hero-state.js';
+import { allowedEquipmentLevels, type HeroStateRules } from '../../src/domain/hero-state.js';
+import { HeroStatePopover } from '../HeroStatePopover.js';
 import { RankText } from '../RankText.js';
 import { WeaponStars } from '../WeaponStars.js';
-import { EquipmentOptions, RankOptions } from './HeroStateOptions.js';
-import { Popover } from './Popover.js';
 
 /**
- * A hero's rank and equipment as two buttons, each opening a `Popover` of the values it can take under it. A pick changes the value
- * and closes the list; a new rank moves the equipment into what it allows. There is no equipment button for a rank without equipment.
+ * A hero's rank and equipment as one button, the rank with the equipment under it, opening a `HeroStatePopover` where both can be set.
+ * The list stays open after a pick, since a new rank moves the equipment into what it allows, and closes on a press elsewhere or a second
+ * click on the button. There is no equipment line for a rank without equipment.
  * With `unknown`, a hero with no rank shows that text and the list offers it as an entry to pick.
  */
 export function HeroStateButtons({ name, tier, rank, level, rules, unknown, onChange }: {
@@ -20,37 +20,37 @@ export function HeroStateButtons({ name, tier, rank, level, rules, unknown, onCh
   unknown?: string;
   onChange: (rank: string | null, level: number | null) => void;
 }) {
-  // The value whose list is open, and the button it hangs under; a press anywhere else closes it.
-  const [editing, setEditing] = useState<'rank' | 'equipment' | null>(null);
+  // The button the list hangs under while it is open; a press anywhere else closes it.
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const close = useCallback(() => setEditing(null), []);
-  const toggle = (field: 'rank' | 'equipment', button: HTMLElement) => {
-    setAnchor(button);
-    setEditing(editing === field ? null : field);
-  };
-  const pick = (nextRank: string | null, nextLevel: number | null) => {
-    onChange(nextRank, nextLevel);
-    setEditing(null);
-  };
+  const close = useCallback(() => setAnchor(null), []);
+  const hasEquipment = allowedEquipmentLevels(rank, rules).length > 0;
+  const equipment = level === null ? 'no equipment' : weaponLabel(level);
 
   return (
     <>
-      <button type="button" className="state-value" aria-expanded={editing === 'rank'} aria-label={`Rank of ${name}: ${rank ?? 'not set'}`} title="Change the rank" onClick={(e) => toggle('rank', e.currentTarget)}>
+      <button
+        type="button"
+        className="state-value state-values"
+        aria-expanded={anchor !== null}
+        aria-label={`Rank and equipment of ${name}: ${rank ?? 'not set'}${hasEquipment ? `, ${equipment}` : ''}`}
+        title="Change rank and equipment"
+        onClick={(e) => setAnchor(anchor ? null : e.currentTarget)}
+      >
         {rank === null && unknown !== undefined ? <span className="muted">{unknown}</span> : <RankText rank={rank} />}
+        {hasEquipment && <span className="weapon-line">{level === null ? <span className="muted">No equipment</span> : <><WeaponStars level={level} /> <span>{weaponLabel(level)}</span></>}</span>}
       </button>
-      {allowedEquipmentLevels(rank, rules).length > 0 && (
-        <button type="button" className="state-value weapon-line" aria-expanded={editing === 'equipment'} aria-label={`Equipment of ${name}: ${level === null ? 'none' : weaponLabel(level)}`} title="Change the equipment" onClick={(e) => toggle('equipment', e.currentTarget)}>
-          {level === null ? <span className="muted">No equipment</span> : <><WeaponStars level={level} /> <span>{weaponLabel(level)}</span></>}
-        </button>
-      )}
-      {editing && anchor && (
-        <Popover anchor={anchor} label={editing === 'rank' ? `Rank of ${name}` : `Equipment of ${name}`} onClose={close}>
-          {editing === 'rank' ? (
-            <RankOptions tier={tier} rank={rank} rules={rules} unknown={unknown} onPick={(next) => pick(next, equipmentForRank(level, next, rules))} />
-          ) : (
-            <EquipmentOptions rank={rank} level={level} rules={rules} onPick={(next) => pick(rank, next)} />
-          )}
-        </Popover>
+      {anchor && (
+        <HeroStatePopover
+          anchor={anchor}
+          name={name}
+          tier={tier}
+          rank={rank ?? ''}
+          equipment={level === null ? '' : String(level)}
+          rules={rules}
+          unknown={unknown ?? null}
+          onChange={(nextRank, nextEquipment) => onChange(nextRank || null, nextEquipment === '' ? null : Number(nextEquipment))}
+          onClose={close}
+        />
       )}
     </>
   );

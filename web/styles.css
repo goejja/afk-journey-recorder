@@ -42,6 +42,7 @@
   --tile-open: #3a4054;
   --tile-wood: #a8743a;
   --tile-stone: #aab0bd;
+  --tile-boost-strength: 58%; /* a Boost tile is the colour of its side at this strength, where a plain deployment tile has 42% */
   --star-grey: #aab3c5;
   --star-purple: #b36cff;
   --star-yellow: #f2c230;
@@ -167,6 +168,8 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 .state { display: grid; justify-items: center; gap: var(--sp-1); margin: 0 var(--sp-2) var(--sp-2); }
 /* A rank or an equipment on a Card: a button that opens a Popover of the values it can take. */
 .state-value { display: inline-flex; gap: var(--sp-1); align-items: baseline; min-height: 0; padding: var(--sp-1) var(--sp-2); border: 1px solid transparent; border-radius: var(--r-control); background: transparent; }
+.state-values { flex-direction: column; align-items: center; }
+.board .state-values { align-items: flex-start; }
 .state-value:hover, .state-value[aria-expanded="true"] { background: var(--panel-hi); border-color: var(--border); }
 /* A short list under the control that opened it; its place is set in code. A list taller than the room left scrolls. */
 .popover { position: fixed; z-index: var(--z-overlay-popover); display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); background: var(--panel); border: 1px solid var(--accent); border-radius: var(--r-control); }
@@ -198,6 +201,7 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 a { text-decoration: none; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-color); font-weight: 600; }
 .master-detail { height: calc(100vh - 100px); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--sp-3); overflow: hidden; }
+.master-detail-bare { grid-template-rows: minmax(0, 1fr); }
 .master-detail-header { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
 .master-detail-header > .toolbar, .master-detail-header > .panel { margin-bottom: 0; }
 .master-detail-columns { display: grid; grid-template-columns: minmax(12rem, 220px) minmax(0, 1fr); gap: var(--sp-4); min-width: 0; min-height: 0; }
@@ -233,6 +237,10 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .zone-enemy { stroke: var(--side-b-line); }
 .tile-wood { background: var(--tile-wood); }
 .tile-stone { background: var(--tile-stone); }
+/* A Boost tile is the colour of its type a little stronger and lighter, so it is told apart but stays close; it has to come after the type classes. */
+.tile-open.tile-boost { background: color-mix(in srgb, var(--tile-open), white 12%); }
+.tile-player.tile-boost { background: color-mix(in srgb, var(--side-a) var(--tile-boost-strength), transparent); }
+.tile-enemy.tile-boost { background: color-mix(in srgb, var(--side-b) var(--tile-boost-strength), transparent); }
 .legend { list-style: none; display: flex; flex-wrap: wrap; gap: var(--sp-4); padding: 0; margin: var(--sp-2) 0 var(--sp-4); color: var(--muted); }
 .swatch { position: relative; display: inline-block; width: 22px; height: 24px; line-height: 24px; text-align: center; font-size: var(--font-xs); font-weight: 700; color: var(--on-color); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); vertical-align: middle; }
 .actions > .muted { align-self: center; }
@@ -556,7 +564,7 @@ a.button:hover { background: var(--panel-hi); }
 .tags-cell { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
 
 /* The selected profile's identity and controls stay in the workspace header while its hero grid scrolls below. */
-.roster-top-panel { display: grid; gap: var(--sp-2); }
+.roster-head { display: grid; gap: var(--sp-2); }
 .roster-profile-toolbar { margin-bottom: 0; gap: var(--sp-2); flex-wrap: wrap; }
 .roster-profile-toolbar h2 { margin: 0; }
 .roster-filters { margin-bottom: 0; }

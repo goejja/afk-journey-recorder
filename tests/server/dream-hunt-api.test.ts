@@ -64,6 +64,14 @@ describe('boss rules', () => {
 });
 
 describe('dream hunt attempts', () => {
+  it('reads one fight by its id and says when it is gone, in the words of a record that a link names', async () => {
+    const saved = await (await fight()).json();
+    expect(await json(send('GET', `/api/dream-hunt/attempts/${saved.id}`))).toMatchObject({ id: saved.id, boss: 'King Croaker' });
+    const gone = await send('GET', '/api/dream-hunt/attempts/9999');
+    expect(gone.status).toBe(404);
+    expect((await gone.json()).error).toBe('Record 9999 no longer exists');
+  });
+
   it('records a cleared fight with its time and a snapshot formation', async () => {
     db.prepare("UPDATE roster SET rank = NULL WHERE hero_name = 'A'").run();
     const response = await fight();

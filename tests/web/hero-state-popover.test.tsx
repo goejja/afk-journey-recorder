@@ -28,6 +28,15 @@ describe('HeroStatePopover', () => {
     expect(p.equipment.getByRole('button', { name: /^\+5/ }).getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('offers no unknown rank when it is asked for none, and names it as asked otherwise', () => {
+    const anchor = document.body.appendChild(document.createElement('button'));
+    render(<HeroStatePopover anchor={anchor} name="Evie" tier="S" rank="Mythic+" equipment="5" rules={rules} unknown={null} onChange={() => {}} onClose={() => {}} />);
+    expect(within(screen.getByRole('group', { name: 'Rank of Evie' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['Supreme', 'Mythic+', 'Epic']);
+    cleanup();
+    render(<HeroStatePopover anchor={anchor} name="Evie" tier="S" rank="Mythic+" equipment="5" rules={rules} unknown="No rank" onChange={() => {}} onClose={() => {}} />);
+    expect(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'No rank' })).toBeTruthy();
+  });
+
   it('moves the equipment into what a new rank allows when a rank is picked', async () => {
     const p = open('Supreme', '15');
     await userEvent.setup().click(p.rank.getByRole('button', { name: 'Mythic+' }));

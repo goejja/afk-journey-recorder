@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { phantimalsContract, type Phantimal } from '../../shared/contracts/phantimals.js';
 import { loadUnitRules } from '../../db/unit-rules.js';
 import { fail, serve } from '../contract.js';
-import { deploymentsNaming, deploymentsNamingPart, takenNames, unitNameProblem } from './unit-names.js';
+import { deploymentsNaming, takenNames, unitNameProblem } from './unit-names.js';
 
 interface PhantimalRow {
   name: string;
@@ -38,7 +38,7 @@ export function phantimalRoutes(db: Database.Database): Hono {
   function usage(name: string) {
     const part = partOf(name);
     const records = (db.prepare('SELECT (SELECT count(*) FROM formation WHERE phantimal_name = ?) + (SELECT count(*) FROM arena_attempt WHERE opp_phantimal = ?)').pluck().get(name, name) as number);
-    const deployments = deploymentsNaming(db, name) + (part ? deploymentsNamingPart(db, part) : 0);
+    const deployments = deploymentsNaming(db, 'hero', name) + (part ? deploymentsNaming(db, 'part', part) : 0);
     return { records, deployments, onBoard: records + deployments };
   }
 

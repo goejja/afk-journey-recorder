@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, type ReviewFinding, type ReviewFindings } from '../backend.js';
+import { RecordLink } from '../records/RecordLink.js';
 
 /** Marks a finding the previous run did not have. */
 const NewMark = ({ finding }: { finding: ReviewFinding }) => (finding.new ? <><span className="badge">New</span>{' '}</> : null);
@@ -97,7 +98,13 @@ export function ReviewFindingsView({ findings: found, dismissed, placeholder, on
             ) : (
               <li key={`${f.code}-${f.subject}`}>
                 <NewMark finding={f} />
-                {f.message} <DismissButton finding={f} onDismissalChanged={onDismissalChanged} onError={onError} />
+                {f.message}{' '}
+                {f.recordId !== undefined && f.mode !== undefined && (
+                  <>
+                    <RecordLink mode={f.mode} id={f.recordId} label="Open the record" />{' '}
+                  </>
+                )}
+                <DismissButton finding={f} onDismissalChanged={onDismissalChanged} onError={onError} />
               </li>
             ),
           )}

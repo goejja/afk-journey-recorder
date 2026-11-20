@@ -52,8 +52,8 @@ beforeEach(() => {
         return Response.json({ id: 2, createdAt: '2026-11-12 09:00:00', findings, dismissed, explanation: null }, { status: 201 });
       }
       if (url === '/api/admin/review/files/delete') return Response.json({ deleted: 1 });
-      if (url === '/api/admin/learned/rank/7' && method === 'PATCH') return Response.json({ wrongBefore: 3, wrongAfter: 1 });
-      if (url === '/api/admin/learned/rank/7' && method === 'DELETE') return Response.json({ deleted: 1 });
+      if (url === '/api/admin/pictures/rank_look/7' && method === 'PATCH') return Response.json({ wrongBefore: 3, wrongAfter: 1 });
+      if (url === '/api/admin/pictures/rank_look/7' && method === 'DELETE') return Response.json({ deleted: 1 });
       if (url === '/api/thinning-settings') return Response.json({ rank: method === 'PUT' ? JSON.parse(String(init!.body)).rank : 0.05, defaults: { rank: 0.05 } });
       if (url === '/api/admin/review/thinning/apply') return Response.json({ deleted: 2 });
       return new Response(null, { status: 404 });
@@ -132,7 +132,7 @@ describe('ReviewPage', () => {
       findings = {
         wrong: [
           { code: 'rank-look-misread', subject: '7', filedUnder: 'R1', readAs: 'R2', message: 'Rank Look 7, filed under R1, is read as R2 by the others: check which rank it shows.' },
-          { code: 'record-phantimal-faction', subject: '12', message: 'Record 12 (Supreme Arena, side A): Gervan needs 3 Lightbearer heroes; this team has 1. Check the Phantimal in the record.' },
+          { code: 'record-phantimal-faction', subject: '12', recordId: 12, mode: 'Supreme Arena', message: 'Record 12 (Supreme Arena, side A): Gervan needs 3 Lightbearer heroes; this team has 1. Check the Phantimal in the record.' },
           { code: 'roster-below-record', subject: 'Evie', recordId: 30, message: 'The roster has Evie at Epic, but its latest record (30) shows Legend: check which is current.' },
         ],
         obsolete: [
@@ -155,7 +155,7 @@ describe('ReviewPage', () => {
       for (const f of findings.wrong) expect(screen.getByText(f.message)).toBeTruthy();
 
       await userEvent.click(screen.getByRole('button', { name: 'Move Rank Look 7 to R2' }));
-      await waitFor(() => expect(requests.find((r) => r.url === '/api/admin/learned/rank/7' && r.method === 'PATCH')?.body).toEqual({ rank: 'R2' }));
+      await waitFor(() => expect(requests.find((r) => r.url === '/api/admin/pictures/rank_look/7' && r.method === 'PATCH')?.body).toEqual({ value: 'R2' }));
       // the fixed finding leaves the list, and a fix starts no new run: that scan takes seconds and the player asks for it with the button
       await waitFor(() => expect(screen.queryByText(findings.wrong[0].message)).toBeNull());
       expect(runsStarted()).toBe(0);
@@ -165,7 +165,7 @@ describe('ReviewPage', () => {
     it('deletes a Rank Look the others read as another rank', async () => {
       renderWithJobs(<ReviewPage />, 'admin');
       await userEvent.click(await screen.findByRole('button', { name: 'Delete Rank Look 7' }));
-      await waitFor(() => expect(requests.some((r) => r.url === '/api/admin/learned/rank/7' && r.method === 'DELETE')).toBe(true));
+      await waitFor(() => expect(requests.some((r) => r.url === '/api/admin/pictures/rank_look/7' && r.method === 'DELETE')).toBe(true));
       await waitFor(() => expect(screen.queryByRole('button', { name: 'Delete Rank Look 7' })).toBeNull());
     });
 
@@ -175,6 +175,15 @@ describe('ReviewPage', () => {
       // the only button on a record finding is Dismiss, which hides the finding and changes no record
       expect(screen.queryByRole('button', { name: /^(?!Dismiss).*record/i })).toBeNull();
       expect(screen.getAllByRole('button').map((b) => b.textContent)).not.toContain('Fix');
+    });
+
+    it('links a record finding to the record in its own page, in a new tab', async () => {
+      renderWithJobs(<ReviewPage />, 'admin');
+      await screen.findByText(findings.wrong[1].message);
+      const link = screen.getByRole('link', { name: 'Open the record' }) as HTMLAnchorElement;
+      expect(link.getAttribute('href')).toBe('#arena?record=12');
+      expect(link.target).toBe('_blank');
+      expect(screen.getAllByRole('link', { name: 'Open the record' })).toHaveLength(1); // a finding without a mode has none
     });
 
     it('deletes the unreferenced files left ticked, and shows the size and age of the kept pictures', async () => {

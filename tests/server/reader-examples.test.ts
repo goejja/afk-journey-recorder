@@ -77,22 +77,22 @@ describe('the Reader review', () => {
     const afterRelabel = await (await app.request('/api/admin/reader')).json();
     expect(afterRelabel.heroes.map((h: any) => h.hero)).toEqual(['Evie', 'Fay', 'Lily May']);
     // a delete shows at once
-    await app.request(`/api/admin/reader/example/${added}`, { method: 'DELETE', headers: { 'x-afk-action': 'delete-example' } });
+    await app.request(`/api/admin/pictures/hero_example/${added}`, { method: 'DELETE', headers: { 'x-afk-action': 'delete-example' } });
     const afterDelete = await (await app.request('/api/admin/reader')).json();
     expect(afterDelete.heroes.map((h: any) => h.hero)).toEqual(['Evie', 'Lily May']);
   });
 
   it('serves the picture of a tile', async () => {
     const id = await learn('look', 'Evie', await tile(200, 20, 20));
-    const response = await app.request(`/api/admin/reader/look/${id}/image`);
+    const response = await app.request(`/api/admin/pictures/hero_look/${id}/image`);
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('image/png');
-    expect((await app.request('/api/admin/reader/look/999/image')).status).toBe(404);
+    expect((await app.request('/api/admin/pictures/hero_look/999/image')).status).toBe(404);
   });
 
   it('lets the browser keep the picture of a tile and answers 304 while the file is unchanged', async () => {
     const id = await learn('look', 'Evie', await tile(200, 20, 20));
-    const url = `/api/admin/reader/look/${id}/image`;
+    const url = `/api/admin/pictures/hero_look/${id}/image`;
     const etag = (await app.request(url)).headers.get('etag');
     expect(etag).toBeTruthy();
     const again = await app.request(url, { headers: { 'if-none-match': etag! } });
@@ -105,12 +105,12 @@ describe('the Reader review', () => {
   it('deletes a tile with its row and its picture, only when asked for from the app', async () => {
     const id = await learn('example', 'Evie', await tile(200, 20, 20));
     const file = join(images, 'custom', 'hero-example', `${id}.png`);
-    expect((await app.request(`/api/admin/reader/example/${id}`, { method: 'DELETE' })).status).toBe(400);
+    expect((await app.request(`/api/admin/pictures/hero_example/${id}`, { method: 'DELETE' })).status).toBe(400);
     expect(existsSync(file)).toBe(true);
-    expect((await app.request(`/api/admin/reader/example/${id}`, { method: 'DELETE', headers: { 'x-afk-action': 'delete-example' } })).status).toBe(204);
+    expect((await app.request(`/api/admin/pictures/hero_example/${id}`, { method: 'DELETE', headers: { 'x-afk-action': 'delete-example' } })).status).toBe(204);
     expect(existsSync(file)).toBe(false);
     expect(db.prepare('SELECT count(*) FROM hero_example').pluck().get()).toBe(0);
-    expect((await app.request(`/api/admin/reader/example/${id}`, { method: 'DELETE', headers: { 'x-afk-action': 'delete-example' } })).status).toBe(404);
-    expect((await app.request('/api/admin/reader/rank/1', { method: 'DELETE', headers: { 'x-afk-action': 'delete-example' } })).status).toBe(404);
+    expect((await app.request(`/api/admin/pictures/hero_example/${id}`, { method: 'DELETE', headers: { 'x-afk-action': 'delete-example' } })).status).toBe(404);
+    expect((await app.request('/api/admin/pictures/rank/1', { method: 'DELETE', headers: { 'x-afk-action': 'delete-example' } })).status).toBe(404);
   });
 });

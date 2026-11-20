@@ -275,7 +275,7 @@ export function dreamHuntRoutes(db: Database.Database, loadRules: () => HeroStat
     return withWholeBattles(db, listed, (id) => loadAttempts({ id })[0]);
   });
 
-  serve(app, dreamHuntContract.attempt, ({ params }) => loadAttempts({ id: Number(params.id) })[0] ?? fail(404, 'Unknown fight'));
+  serve(app, dreamHuntContract.attempt, ({ params }) => loadAttempts({ id: Number(params.id) })[0] ?? fail(404, `Record ${params.id} no longer exists`));
 
   // ---- comparing teams ----------------------------------------------------------------------
 

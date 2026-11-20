@@ -117,14 +117,25 @@ describe('Roster import', () => {
     expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Saved 1 hero.');
   });
 
-  it('applies what the player corrected: the rank and the equipment of a row', async () => {
+  it('applies what the player corrected: the rank and the equipment of a row, both from one box', async () => {
     const user = userEvent.setup();
     state.job = { id: 1, state: 'done', screen: 'info', sections: [section()], chosen: {} };
     open();
-    await user.selectOptions(await screen.findByLabelText('Rank of Evie'), 'Supreme');
-    await user.selectOptions(screen.getByLabelText('Equipment of Evie'), '5');
+    await user.click(await screen.findByRole('button', { name: /^Rank and equipment of Evie/ }));
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Supreme' }));
+    await user.click(within(screen.getByRole('group', { name: 'Equipment of Evie' })).getByRole('button', { name: /^\+5/ })); // the box stays open after the rank
     await user.click(screen.getByRole('button', { name: 'Apply 1 change' }));
     expect(requests.find((r) => r.url.endsWith('/apply'))!.body.sections[0].changes).toEqual([{ hero: 'Evie', rank: 'Supreme', equipmentLevel: 5, tile: '0.team1.0' }]);
+  });
+
+  it('takes the equipment off a row whose new rank has none', async () => {
+    const user = userEvent.setup();
+    state.job = { id: 1, state: 'done', screen: 'info', sections: [section()], chosen: {} };
+    open();
+    await user.click(await screen.findByRole('button', { name: /^Rank and equipment of Evie/ }));
+    await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Epic' }));
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }));
+    expect(requests.find((r) => r.url.endsWith('/apply'))!.body.sections[0].changes).toEqual([{ hero: 'Evie', rank: 'Epic', equipmentLevel: null, tile: '0.team1.0' }]);
   });
 
   it('asks for a name before applying heroes to a new profile, and creates it without a Player ID', async () => {

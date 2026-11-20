@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { findProfile } from '../db/profiles.js';
+import { findProfile, listProfiles } from '../db/profiles.js';
 
 /** Counts per mode and per tag, to see what history there is. */
 export function summary(db: Database.Database) {
@@ -33,11 +33,5 @@ export function roster(db: Database.Database, profile?: string | number) {
 
 /** The profiles, with the default first. */
 export function profiles(db: Database.Database) {
-  return db
-    .prepare(
-      `SELECT p.name, p.player_id AS playerId, p.is_default = 1 AS isDefault, (SELECT count(*) FROM roster r WHERE r.profile_id = p.id) AS heroes
-       FROM profile p ORDER BY p.is_default DESC, p.name`,
-    )
-    .all()
-    .map((p: any) => ({ ...p, isDefault: p.isDefault === 1 }));
+  return listProfiles(db).map(({ id: _id, ...profile }) => profile);
 }

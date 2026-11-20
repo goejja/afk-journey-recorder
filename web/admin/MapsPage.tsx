@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { MAP_TAGS, TILE, TILE_COUNT } from '../../src/domain/map.js';
 import { api, type GameMap } from '../backend.js';
 import { HexMap, Legend } from '../HexMap.js';
+import { TilePopover } from '../TilePopover.js';
 import { useNameDialog } from '../ui/Dialog.js';
 import { useAction } from '../hooks/action.js';
 import { useConfirmActions } from '../hooks/confirm.js';
@@ -13,13 +14,15 @@ interface Draft {
   name: string;
   tags: string[];
   cells: number[];
+  boostTiles: number[];
 }
 
+
 const NO_MAPS: GameMap[] = [];
-const blankDraft = (): Draft => ({ name: '', tags: ['Stage'], cells: Array(TILE_COUNT).fill(TILE.OPEN) });
-const toDraft = (map: GameMap): Draft => ({ name: map.name, tags: map.tags, cells: map.cells });
+const blankDraft = (): Draft => ({ name: '', tags: ['Stage'], cells: Array(TILE_COUNT).fill(TILE.OPEN), boostTiles: [] });
+const toDraft = (map: GameMap): Draft => ({ name: map.name, tags: map.tags, cells: map.cells, boostTiles: map.boostTiles });
 const sameDraft = (a: Draft, b: Draft) =>
-  a.name === b.name && a.tags.join() === b.tags.join() && a.cells.join() === b.cells.join();
+  a.name === b.name && a.tags.join() === b.tags.join() && a.cells.join() === b.cells.join() && a.boostTiles.join() === b.boostTiles.join();
 
 export function MapsPage() {
   const loaded = useLoad(() => api.maps(), []);
@@ -28,6 +31,8 @@ export function MapsPage() {
   const [draft, setDraft] = useState<Draft>(blankDraft());
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('');
+  /** The tile whose type and Boost are being set, with the button it was clicked on. */
+  const [editing, setEditing] = useState<{ index: number; anchor: HTMLElement } | null>(null);
   const { error: actionError, busy, setError, run: act } = useAction();
   const error = loaded.error ?? actionError;
   const { confirmDelete, confirmDiscard, confirmRun, dialog } = useConfirmActions(act);
@@ -42,6 +47,7 @@ export function MapsPage() {
     async (select?: string | null) => {
       const list = await reloadMaps();
       if (list && select !== undefined) {
+        setEditing(null);
         setSelected(select);
         const map = list.find((m) => m.name === select);
         setDraft(map ? toDraft(map) : blankDraft());
@@ -59,6 +65,7 @@ export function MapsPage() {
     )
       return;
     setError(null);
+    setEditing(null);
     const map = maps.find((m) => m.name === name);
     setSelected(name);
     setDraft(map ? toDraft(map) : blankDraft());
@@ -165,10 +172,27 @@ export function MapsPage() {
             <HexMap
               rowLengths={current?.rowLengths ?? [2, 5, 6, 6, 7, 6, 6, 5, 2]}
               cells={draft.cells}
-              onChange={(index, tile) => setDraft((d) => ({ ...d, cells: d.cells.map((c, i) => (i === index ? tile : c)) }))}
+              boostTiles={draft.boostTiles}
+              onTileClick={(index, anchor) => setEditing((old) => (old?.index === index ? null : { index, anchor }))}
             />
-            <p className="muted">Click a tile to change its type. The enemy deploys on the top half, you on the bottom.</p>
-            <Legend />
+            <p className="muted">Click a tile to set its type and its Boost. The enemy deploys on the top half, you on the bottom.</p>
+            {editing && (
+              <TilePopover
+                anchor={editing.anchor}
+                index={editing.index}
+                tile={draft.cells[editing.index]!}
+                boosted={draft.boostTiles.includes(editing.index)}
+                onChange={(tile, boosted) =>
+                  setDraft((d) => ({
+                    ...d,
+                    cells: d.cells.map((c, i) => (i === editing.index ? tile : c)),
+                    boostTiles: (boosted ? [...d.boostTiles.filter((t) => t !== editing.index), editing.index] : d.boostTiles.filter((t) => t !== editing.index)).sort((x, y) => x - y),
+                  }))
+                }
+                onClose={() => setEditing(null)}
+              />
+            )}
+            <Legend boost />
 
             <div className="actions">
               <button className="primary" onClick={() => void save()} disabled={busy || !dirty || draft.name.trim() === ''}>

@@ -6,6 +6,7 @@ import { FightRow } from '../records/FightRow.js';
 import { GroupCard } from '../records/GroupCard.js';
 import { RecordListView } from '../records/RecordListView.js';
 import { useRecordList } from '../records/useRecordList.js';
+import { useLinkedRecord } from '../records/linked-record.js';
 import { toPayload } from '../FormationEditor.js';
 import { toOpponentPayload } from './OpponentEditor.js';
 import { BattleMapPreview } from './BattleMapPreview.js';
@@ -131,6 +132,7 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
     deps: [mode, tag, player],
     formOpen: adding || editing !== null || editingBattle !== null,
   });
+  const linkError = useLinkedRecord(api.arenaBattle, (fight) => (setAdding(false), setEditing(fight)), adding || editing !== null || editingBattle !== null);
   const { confirmRun, dialog } = useConfirmActions(run);
   const battles = loaded.data ?? NO_BATTLES;
   const reload = loaded.reload;
@@ -383,7 +385,7 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
       <RecordListView
         list={list}
         loaded={loaded}
-        error={error}
+        error={error ?? linkError}
         notice={notice}
         label="Battles"
         battle="battle"
