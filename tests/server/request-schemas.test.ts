@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { problemWith } from '../../src/domain/schema.js';
 import { validateAgentSettings } from '../../src/domain/agent.js';
-import { validateStatsModes } from '../../src/domain/stats.js';
+import { StatsModesSchema } from '../../src/domain/stats.js';
 import { parseBody } from '../../src/server/request.js';
 
 describe('parseBody', () => {
@@ -31,11 +31,11 @@ describe('parseBody', () => {
 
 describe('the validators the schemas stand behind', () => {
   it('statistics modes: a list of known modes, empty allowed', () => {
-    expect(validateStatsModes([])).toBeNull();
-    expect(validateStatsModes(['Arena', 'Stage'])).toBeNull();
-    expect(validateStatsModes('Arena')).toBe('Give the modes as a list');
-    expect(validateStatsModes(['Arena', 'Chess'])).toBe('Unknown mode "Chess"');
-    expect(validateStatsModes([3])).toBe('Unknown mode 3');
+    expect(problemWith(StatsModesSchema, [])).toBeNull();
+    expect(problemWith(StatsModesSchema, ['Arena', 'Stage'])).toBeNull();
+    expect(problemWith(StatsModesSchema, 'Arena')).toBe('Give the modes as a list');
+    expect(problemWith(StatsModesSchema, ['Arena', 'Chess'])).toBe('Unknown mode "Chess"');
+    expect(problemWith(StatsModesSchema, [3])).toBe('Unknown mode 3');
   });
 
   it('agent settings: preset, model name and time limit', () => {

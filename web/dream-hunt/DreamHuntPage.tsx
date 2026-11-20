@@ -1,23 +1,36 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { api } from '../backend.js';
+import { useReference } from '../hooks/load.js';
 import { BestTeams } from './BestTeams.js';
 import { ThisWeek } from './ThisWeek.js';
 import { Advisor, Simulator, type RecordPick } from '../advisor/index.js';
 import { Finder } from './Finder.js';
 import { useSentTeams } from './sentTeams.js';
-import { type Reference, type Draft, newDraft, draftFromFight } from './draft.js';
+import { type Draft, newDraft, draftFromFight } from './draft.js';
 import { Fights } from './FightList.js';
+import { TabPanel, Tabs } from '../ui/Tabs.js';
+import { Notice } from '../ui/Notice.js';
 
 type View = 'week' | 'advisor' | 'simulator' | 'best' | 'finder' | 'fights';
+
+const VIEWS: { key: View; label: string }[] = [
+  { key: 'week', label: 'This week' },
+  { key: 'advisor', label: 'Advisor' },
+  { key: 'simulator', label: 'Simulator' },
+  { key: 'best', label: 'Best teams' },
+  { key: 'finder', label: 'Finder' },
+  { key: 'fights', label: 'Fights' },
+];
 
 export function DreamHuntPage() {
   const [view, setView] = useState<View>('week');
   const [full, setFull] = useState(false);
-  const [reference, setReference] = useState<Reference | null>(null);
+  const loaded = useReference({ bosses: api.bosses, rules: api.bossRules, maps: api.maps, heroes: api.heroes, artifacts: api.artifacts, heroRules: api.rules, defaults: api.defaults });
+  const reference = loaded.data ?? null;
+  const patchReference = loaded.patch;
   const [error, setError] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<{ index: number; draft: Draft }[] | null>(null);
   const [version, setVersion] = useState(0); // goes up when records changed, so the views built from them load again
-  const patchReference = useCallback((change: Partial<Reference>) => setReference((old) => old && { ...old, ...change }), []);
   // A saved fight can update the roster (the sync offer), so the heroes are read again; the rest of the reference does not change with records.
   const reloadHeroes = useCallback(async () => {
     try {
@@ -26,20 +39,6 @@ export function DreamHuntPage() {
       setError((e as Error).message);
     }
   }, [patchReference]);
-
-  const reload = useCallback(async () => {
-    try {
-      const [bosses, rules, maps, heroes, artifacts, heroRules, defaults] = await Promise.all([api.bosses(), api.bossRules(), api.maps(), api.heroes(), api.artifacts(), api.rules(), api.defaults()]);
-      setReference({ bosses, rules, maps, heroes, artifacts, heroRules, defaults });
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
 
   // From the Advisor or the Simulator: start a new day from the proposed teams, each in the place of its boss. A team that was fought
   // is copied from the fight that stood that way (without its result, time and note); a pinned one comes from the Simulator as it is.
@@ -75,28 +74,28 @@ export function DreamHuntPage() {
     isSent: shelf.has,
   };
 
+  const views = (
+    <>
+        {reference && view === 'week' && <ThisWeek key={version} slots={reference.defaults['Dream Hunt'].slots} />}
+        {reference && view === 'advisor' && <Advisor key={version} onRecord={(picks) => void record(picks)} />}
+        {reference && view === 'simulator' && <Simulator key={version} reference={reference} onRecord={(picks) => void record(picks)} sent={shelf.sent} onRemoveSent={shelf.remove} />}
+        {reference && view === 'best' && <BestTeams key={version} bosses={reference.bosses} rules={reference.rules} send={toSimulator} />}
+        {reference && view === 'finder' && <Finder key={version} rules={reference.rules} send={toSimulator} />}
+        {reference && view === 'fights' && <Fights reference={reference} onChanged={() => (setVersion((v) => v + 1), void reloadHeroes())} onDefaults={(defaults) => patchReference({ defaults })} onForm={setFull} prefill={prefill} onPrefillUsed={prefillUsed} />}
+    </>
+  );
+
   return (
     <div>
-      {!full && (
-        <div className="tabs" role="tablist">
-          {([['week', 'This week'], ['advisor', 'Advisor'], ['simulator', 'Simulator'], ['best', 'Best teams'], ['finder', 'Finder'], ['fights', 'Fights']] as const).map(([key, label]) => (
-            <button key={key} role="tab" aria-selected={view === key} className={view === key ? 'active' : undefined} onClick={() => setView(key)}>
-              {label}
-            </button>
-          ))}
-        </div>
+      {!full && <Tabs id="dream-hunt" label="Dream Hunt views" tabs={VIEWS} value={view} onChange={setView} />}
+      {(error ?? loaded.error) && (
+        <Notice kind="error">
+          {error ?? loaded.error}
+        </Notice>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {reference && view === 'week' && <ThisWeek key={version} slots={reference.defaults['Dream Hunt'].slots} />}
-      {reference && view === 'advisor' && <Advisor key={version} onRecord={(picks) => void record(picks)} />}
-      {reference && view === 'simulator' && <Simulator key={version} reference={reference} onRecord={(picks) => void record(picks)} sent={shelf.sent} onRemoveSent={shelf.remove} />}
-      {reference && view === 'best' && <BestTeams key={version} bosses={reference.bosses} rules={reference.rules} send={toSimulator} />}
-      {reference && view === 'finder' && <Finder key={version} rules={reference.rules} send={toSimulator} />}
-      {reference && view === 'fights' && <Fights reference={reference} onChanged={() => (setVersion((v) => v + 1), void reloadHeroes())} onDefaults={(defaults) => patchReference({ defaults })} onForm={setFull} prefill={prefill} onPrefillUsed={prefillUsed} />}
+      <TabPanel id="dream-hunt" value={full ? null : view}>
+        {views}
+      </TabPanel>
     </div>
   );
 }

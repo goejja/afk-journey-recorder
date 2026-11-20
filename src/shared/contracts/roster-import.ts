@@ -7,7 +7,7 @@ import { Binary, endpoint, Upload } from '../contract.js';
 /** The screens a roster import can read. */
 export type ImportScreen = 'info' | 'battle' | 'hall' | 'recap' | 'suggestion' | 'report';
 
-export interface ImportHeroState {
+interface ImportHeroState {
   rank: string | null;
   equipmentLevel: number | null;
 }
@@ -117,7 +117,7 @@ const Job = z.custom<ImportJob>();
 const SECTION_MESSAGE = 'Unknown section';
 const TARGET_MESSAGE = 'Choose a profile, a new profile or the match';
 /** Where one player's heroes go; whether the section and the profile exist is checked against the import. */
-export const TargetBody = z.object(
+const TargetBody = z.object(
   {
     section: z.number({ error: SECTION_MESSAGE }).int(SECTION_MESSAGE),
     target: z.discriminatedUnion(
@@ -129,9 +129,9 @@ export const TargetBody = z.object(
   { error: SECTION_MESSAGE },
 );
 /** The hero picked for a tile, or null to go back to the Agent's reading. */
-export const ChooseBody = z.object({ tile: z.string({ error: 'Unknown tile' }), hero: z.string({ error: 'Unknown hero' }).nullable() }, { error: 'Unknown tile' });
+const ChooseBody = z.object({ tile: z.string({ error: 'Unknown tile' }), hero: z.string({ error: 'Unknown hero' }).nullable() }, { error: 'Unknown tile' });
 /** The sections to apply; each is checked one by one against the import, the profiles and the rules. */
-export const ApplyBody = z.object({ sections: z.array(z.unknown(), { error: 'Send the sections to apply' }) }, { error: 'Send the sections to apply' });
+const ApplyBody = z.object({ sections: z.array(z.unknown(), { error: 'Send the sections to apply' }) }, { error: 'Send the sections to apply' });
 
 const text = z.string().optional();
 

@@ -33,7 +33,7 @@ import type { DefaultMode, DefaultSlot } from '../src/domain/defaults.js';
 import type { Deployment } from '../src/domain/layout.js';
 import type { RoundDeployment } from '../src/domain/round-deployment.js';
 import type { Round } from '../src/domain/tournament.js';
-import type { GameMap, Phantimal, StageKind, StageKey, Stage, BossRule, StageAttemptInput, StageRangeInput, DreamHuntInput, BattleImportState, ImportApplySection, ImportFeedbackSide, ImportScreen, RosterImportState, ReaderExample, CleanupRequest, ScenarioInput, AgentSettings, AgentJob, ArenaMode, BattleFormationIds, BattleRound, ArenaBattleInput, HeroAdminBody, PlacementRuleBody, PvpHintBody, } from '../src/shared/api.js';
+import type { GameMap, Phantimal, StageKind, StageKey, Stage, BossRule, StageAttemptInput, StageRangeInput, DreamHuntInput, BattleImportState, ImportApplySection, ImportFeedbackSide, ImportScreen, RosterImportState, ReaderExample, CleanupRequest, ScenarioInput, AgentSettings, ArenaMode, BattleFormationIds, BattleRound, ArenaBattleInput, HeroAdminBody, PlacementRuleBody, PvpHintBody, } from '../src/shared/api.js';
 
 export type * from '../src/shared/api.js';
 
@@ -124,7 +124,6 @@ export const api = {
   learned: () => call(learnedContract.view),
   latestReviewRun: () => call(reviewContract.latestRun),
   askAgentAboutReview: (runId: number) => call(reviewContract.explain, { params: { id: String(runId) } }),
-  reviewExplainJob: () => call(reviewContract.explainJob),
   dismissFinding: async (finding: { code: string; subject: string; message: string }) => void (await call(reviewContract.dismiss, { body: finding })),
   restoreFinding: async (finding: { code: string; subject: string; message: string }) => void (await call(reviewContract.restore, { body: finding })),
   startReviewRun: () => call(reviewContract.startRun),
@@ -225,7 +224,6 @@ export const api = {
     call(rosterImportContract.choose, { params: { id: String(id) }, body: { tile, hero } }),
   applyRosterImport: (id: number, sections: ImportApplySection[]) =>
     call(rosterImportContract.apply, { params: { id: String(id) }, body: { sections } }),
-  scenarioRuns: () => call(agentContract.runs) as Promise<Record<number, AgentJob>>,
   runScenario: (id: number) => call(agentContract.run, { params: { id: String(id) } }),
   cancelScenarioRun: (id: number) => call(agentContract.cancel, { params: { id: String(id) } }),
   statsSummary: () => call(statsContract.summary),
@@ -234,7 +232,7 @@ export const api = {
   statsPlayers: (query: Query) => call(statsContract.players, { query }),
   statsArtifacts: (query: Query) => call(statsContract.artifacts, { query }),
   statsMaps: (query: Query) => call(statsContract.maps, { query }),
-  statsRules: (query: Query) => call(statsContract.rules, { query }),
+  statsMapFormations: (query: Query & { map: string }) => call(statsContract.mapFormations, { query }),
   statsHeroRows: (hero: string, query: Query) => call(statsContract.heroRows, { params: { hero }, query }),
   statsTrios: (query: Query) => call(statsContract.trios, { query }),
   statsFormationReport: (query: Query) => call(statsContract.formationReport, { query }),
@@ -245,7 +243,6 @@ export const api = {
   statsPartnerPositions: (query: Query & { hero: string; relation: PartnerRelation }) => call(statsContract.partnerPositions, { query }),
   statsPartnerTags: () => call(statsContract.partnerTags),
   factionMismatches: () => call(statsContract.factionMismatches),
-  statsStages: (query: Query) => call(statsContract.stages, { query }),
   statsSettings: () => call(statsSettingsContract.get),
   saveStatsSettings: (modes: string[]) => call(statsSettingsContract.save, { body: { modes } }),
   updateDate: () => call(updateDateContract.get),

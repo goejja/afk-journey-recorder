@@ -15,7 +15,7 @@ export interface SentTeam {
 const STORAGE_KEY = 'afk.simulator.sentTeams';
 
 /** A team on a Layout is one entry; a team sent without a Layout is its fastest one. */
-export const sentKey = (composition: Composition, layout?: LayoutSummary) => `${composition.key}|${(layout ?? composition.layouts[0])?.key ?? ''}`;
+const sentKey = (composition: Composition, layout?: LayoutSummary) => `${composition.key}|${(layout ?? composition.layouts[0])?.key ?? ''}`;
 
 function load(): SentTeam[] {
   try {

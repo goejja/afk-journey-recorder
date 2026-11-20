@@ -8,7 +8,7 @@ export const seasonGroup = (season: number): string => `Season ${season}`;
 const GROUP_MESSAGE = `The group is ${PRE_SEASON_GROUP} or one season, such as ${seasonGroup(8)}`;
 
 /** A group an artifact can have: Pre-Season or one season. */
-export const ArtifactGroupSchema = z.string({ error: GROUP_MESSAGE }).refine((group) => group === PRE_SEASON_GROUP || /^Season [1-9]\d*$/.test(group), GROUP_MESSAGE);
+const ArtifactGroupSchema = z.string({ error: GROUP_MESSAGE }).refine((group) => group === PRE_SEASON_GROUP || /^Season [1-9]\d*$/.test(group), GROUP_MESSAGE);
 
 /** What an artifact is created or renamed with: a name, which is trimmed, and its group. */
 export const ArtifactBodySchema = z.object(

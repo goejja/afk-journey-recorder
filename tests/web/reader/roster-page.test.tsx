@@ -197,4 +197,28 @@ describe('Roster page', () => {
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'DELETE' && r.url === '/api/profiles/2')).toBe(true));
   });
+
+  it('applies heroes added one right after the other, each after the one before, and drops none', async () => {
+    const user = userEvent.setup();
+    const answer = vi.mocked(fetch).getMockImplementation()!;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const puts: string[] = [];
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (init?.method === 'PUT') puts.push(String(url));
+      if (url === '/api/heroes?profile=1') return Response.json([hero('Evie', false), hero('Fay', false)]);
+      if (url === '/api/roster/Evie?profile=1') await held;
+      return answer(url, init);
+    });
+    render(<RosterPage />);
+    const [addEvie, addFay] = await screen.findAllByTitle('Add to roster');
+    await user.click(addEvie!);
+    await user.click(addFay!);
+    await waitFor(() => expect(puts).toEqual(['/api/roster/Evie?profile=1']));
+    // the second waits for the first
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(puts).toEqual(['/api/roster/Evie?profile=1']);
+    release();
+    await waitFor(() => expect(puts).toEqual(['/api/roster/Evie?profile=1', '/api/roster/Fay?profile=1']));
+  });
 });

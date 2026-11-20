@@ -1,9 +1,6 @@
 import type { DreamHuntRun } from '../domain/dream-hunt.js';
 import type { Layout } from '../domain/layout.js';
 
-/** What a route answers while the Advisor is not part of this build. */
-export const ADVISOR_MISSING = 'The Advisor is not installed in this build.';
-
 /** The two plans of the Advisor: the lowest total of average clear times, or of best clear times. */
 export type PlanKind = 'reliable' | 'fastest';
 
@@ -69,7 +66,7 @@ export interface AdvisorChoice {
   placementAttemptId: number;
 }
 
-export type GapReason = 'no history' | 'no clear since the update' | 'no choice without a shared hero or artifact';
+type GapReason = 'no history' | 'no clear since the update' | 'no choice without a shared hero or artifact';
 
 export interface AdvisorFight {
   boss: string;

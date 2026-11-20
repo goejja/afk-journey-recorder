@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { groupByWeek, WeekSection, weekSummary } from './weeks.js';
-import { toggled } from './format.js';
+import { groupByWeek, WeekSection, weekSummary } from '../weeks.js';
+import { toggled } from '../format.js';
 
 /** The part of a fight that decides how a list groups it. */
 export interface Groupable {

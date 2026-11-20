@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RosterImport } from '../../../web/reader/RosterImport.js';
+import { jobsBody, renderWithJobs } from '../support/jobs.js';
+import { jobsStream } from '../support/jobs-stream.js';
 
 const rules = { ranks: ['Epic', 'Supreme', 'Supreme+', 'Paragon 1'], equipmentLevels: [0, 5, 10, 15], caps: ['Supreme', 'Supreme+', 'Paragon 1'].map((rank) => ({ rank, minLevel: null, maxLevel: 15 })) };
 const hero = (name: string) => ({ name, tier: 'S' as const, class: 'Mage', faction: 'Wilder', damageType: 'Magic', imagePath: null, owned: false, rank: null, equipmentLevel: null });
@@ -30,6 +32,7 @@ let state: any;
 let requests: { method: string; url: string; body?: any; headers?: any }[];
 
 beforeEach(() => {
+  jobsStream.install();
   requests = [];
   state = { canRead: true, reason: null, busy: false, job: null };
   vi.stubGlobal(
@@ -198,5 +201,25 @@ describe('Roster import', () => {
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'The agent did not reply with the players it read');
     await user.click(screen.getByRole('button', { name: 'Try another picture' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Read picture' })).toBeTruthy());
+  });
+
+  it('asks for the queue again when the app watches it change, and not before', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let watched = { active: 1, failed: 0, done: 0, signature: '1:running' };
+      jobsStream.send(jobsBody({ roster: watched }));
+      state.job = { id: 1, state: 'running', screen: 'info', sections: [], chosen: {} };
+      await act(async () => void renderWithJobs(<RosterImport profile={profiles[0]!} profiles={profiles} heroes={heroes} rules={rules} onClose={() => {}} onApplied={() => {}} />, 'roster'));
+      const loads = () => requests.filter((r) => r.method === 'GET' && r.url === '/api/roster-import').length;
+      const first = loads();
+      await act(async () => jobsStream.send(jobsBody({ roster: watched })));
+      expect(loads()).toBe(first);
+      watched = { active: 0, failed: 0, done: 1, signature: '1:done' };
+      state.job = { id: 1, state: 'done', screen: 'info', sections: [section()], chosen: {} };
+      await act(async () => jobsStream.send(jobsBody({ roster: watched })));
+      expect(loads()).toBe(first + 1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

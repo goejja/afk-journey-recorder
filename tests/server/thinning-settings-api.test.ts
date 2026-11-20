@@ -28,12 +28,6 @@ describe('the Thinning settings', () => {
     expect(await json(send('GET', '/api/thinning-settings'))).toEqual({ rank: 0.03, defaults: { rank: 0.05 } });
   });
 
-  it('go back to the default when reset', async () => {
-    await send('PUT', '/api/thinning-settings', { rank: 0.03 });
-    expect(await json(send('DELETE', '/api/thinning-settings'))).toEqual({ rank: 0.05, defaults: { rank: 0.05 } });
-    expect(await json(send('GET', '/api/thinning-settings'))).toEqual({ rank: 0.05, defaults: { rank: 0.05 } });
-  });
-
   it('refuse a distance that is not above 0 and at most 0.2, or not a number, keeping the saved one', async () => {
     await send('PUT', '/api/thinning-settings', { rank: 0.03 });
     for (const body of [{ rank: 0 }, { rank: -0.01 }, { rank: 0.21 }, { rank: '0.03' }, { rank: null }, {}, null]) {

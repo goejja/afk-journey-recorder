@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { MAX_STANDARD_HEROES } from '../../src/domain/formation.js';
 import { heroCount, isSummon } from '../../src/domain/units.js';
 import { playerOnTop, TILE } from '../../src/domain/map.js';
@@ -19,6 +19,8 @@ import { derivePhantimal, type PhantimalOption } from '../phantimal.js';
 import { PhantimalField } from '../PhantimalField.js';
 import { firstFreeTile, phantimalAt, phantimalTileOf, missingPhantimalPart, swapPhantimal, swapTiles, rowName, selectorHeroes, unitsUnavailable } from '../units.js';
 import { useConfirm } from '../ui/Dialog.js';
+import { TabPanel, Tabs } from '../ui/Tabs.js';
+import { Notice } from '../ui/Notice.js';
 
 type Side = 'A' | 'B';
 type Picked = { type: 'hero' | 'phantimal'; name: string };
@@ -134,6 +136,7 @@ export function SideProfileBar({ profiles, sideProfiles, onSideProfile, onNewPro
 /** Both sides on one map, with a Side A / Side B switch beside it choosing whose heroes the icons place. */
 export function BattleEditor({ map, heroes, artifacts, rules, formation, onFormation, opponent, onOpponent, onBoth, unavailable, borrow, sideAHeroes = 'all', editSideAStates = false, heroesOnly = false, phantimals, labels = { a: 'Side A', b: 'Side B' }, onlySide, sideRosters }: Props) {
   const [side, setSide] = useState<Side>(onlySide ?? 'A');
+  const sidesId = useId();
   const [picked, setPicked] = useState<Picked | null>(null);
   const currentSeason = useCurrentSeason();
   const [chosenSeason, setChosenSeason] = useState<number | null>(null);
@@ -374,23 +377,20 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
             }}
           />
           {!!bannerOrder && <SideBanner side={bannerOrder[1]} labels={labels} active={side} />}
-          {!hasZone('A') && <p className="error" role="alert">This map has no player deployment tiles. Paint some in Admin → Maps first.</p>}
-          {!hasZone('B') && <p className="error" role="alert">This map has no enemy deployment tiles. Paint some in Admin → Maps first.</p>}
-          {message && <p className="error" role="alert">{message}</p>}
-          {missingPhantimals.map((part) => <p key={part} className="error" role="alert">{part} still has to be placed: the wedges always stand together.</p>)}
+          {!hasZone('A') && <Notice kind="error">This map has no player deployment tiles. Paint some in Admin → Maps first.</Notice>}
+          {!hasZone('B') && <Notice kind="error">This map has no enemy deployment tiles. Paint some in Admin → Maps first.</Notice>}
+          {message && <Notice kind="error">{message}</Notice>}
+          {missingPhantimals.map((part) => <Notice kind="error" key={part}>{part} still has to be placed: the wedges always stand together.</Notice>)}
         </div>
         <div className="picker">
           <div className="picker-fixed">
-          <div className="tabs" role="tablist" aria-label="Side">
-            {(['A', 'B'] as Side[]).filter((s) => !onlySide || s === onlySide).map((s) => {
-              const count = heroCount(s === 'A' ? formation.placed : opponent.placed);
-              return (
-                <button key={s} role="tab" aria-selected={side === s} className={side === s ? 'active' : undefined} onClick={() => chooseSide(s)}>
-                  {s === 'A' ? labels.a : labels.b} ({count}/{MAX_STANDARD_HEROES})
-                </button>
-              );
-            })}
-          </div>
+          <Tabs
+            id={sidesId}
+            label="Side"
+            tabs={(['A', 'B'] as Side[]).filter((s) => !onlySide || s === onlySide).map((s) => ({ key: s, label: `${s === 'A' ? labels.a : labels.b} (${heroCount(s === 'A' ? formation.placed : opponent.placed)}/${MAX_STANDARD_HEROES})` }))}
+            value={side}
+            onChange={chooseSide}
+          />
           {onlySide !== 'B' && <PlacedUnits
             label={labels.a}
             units={[
@@ -422,7 +422,7 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
             />
           )}
           </div>
-          <div className="picker-scroll">
+          <TabPanel id={sidesId} value={side} className="picker-scroll">
           <HeroGrid
             key={side}
             heroes={heroIcons}
@@ -463,7 +463,7 @@ export function BattleEditor({ map, heroes, artifacts, rules, formation, onForma
               />
             </>
           )}
-          </div>
+          </TabPanel>
         </div>
       </div>
       {dialog}

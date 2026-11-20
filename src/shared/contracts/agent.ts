@@ -13,7 +13,5 @@ export const agentContract = {
   refresh: endpoint({ method: 'POST', path: '/api/admin/agent/refresh', response: Settings }),
   /** Starts the agent on a scenario in the background; answers at once with the running job. */
   run: endpoint({ method: 'POST', path: '/api/scenarios/:id/run', response: Job, status: 202 }),
-  /** The scenarios that have a job, for one poll of the whole page; a scenario without one is idle. */
-  runs: endpoint({ method: 'GET', path: '/api/scenarios/runs', response: z.record(z.string(), Job) }),
   cancel: endpoint({ method: 'POST', path: '/api/scenarios/:id/run/cancel', response: Job }),
 };

@@ -29,6 +29,7 @@ import { updateSettingRoutes } from './reference/update-setting.js';
 import { seasonRoutes } from './reference/seasons.js';
 import { scenarioRoutes } from './scenarios.js';
 import { newAgentSlot } from './agent/agent-slot.js';
+import { jobRoutes, newJobRegistry } from './agent/job-registry.js';
 import { importFeedbackRoutes } from './reader/import-feedback.js';
 import { parkedReadingRoutes } from './reader/parked-readings.js';
 import { keptPictureRoutes } from './reader/kept-pictures.js';
@@ -62,7 +63,7 @@ interface HeroRow {
   equipment_level: number | null;
 }
 
-export function loadRules(db: Database.Database): HeroStateRules {
+function loadRules(db: Database.Database): HeroStateRules {
   return {
     ranks: db.prepare('SELECT name FROM rank ORDER BY position').pluck().all() as string[],
     equipmentLevels: db.prepare('SELECT level FROM equipment_level ORDER BY level').pluck().all() as number[],
@@ -98,9 +99,11 @@ export function createApp(db: Database.Database, options: { imagesDir?: string; 
   app.route('/', scenarioRoutes(db, () => loadRules(db)));
   // one agent runs at a time, whether it answers a scenario or reads a picture
   const agentSlot = newAgentSlot();
-  app.route('/', scenarioRunRoutes(db, options.agentRunner ?? spawnAgent, agentSlot));
-  app.route('/', rosterImportRoutes(db, options.agentRunner ?? spawnAgent, () => loadRules(db), { imagesDir: options.imagesDir, workDir: options.importWorkDir, slot: agentSlot, concurrency: options.importConcurrency, maxQueuedBytes: options.importMaxBytes, persistQueue: options.importPersist }));
-  app.route('/', reviewExplainRoutes(db, options.agentRunner ?? spawnAgent, agentSlot));
+  const jobs = newJobRegistry();
+  app.route('/', scenarioRunRoutes(db, options.agentRunner ?? spawnAgent, agentSlot, jobs));
+  app.route('/', rosterImportRoutes(db, options.agentRunner ?? spawnAgent, () => loadRules(db), { imagesDir: options.imagesDir, workDir: options.importWorkDir, slot: agentSlot, registry: jobs, concurrency: options.importConcurrency, maxQueuedBytes: options.importMaxBytes, persistQueue: options.importPersist }));
+  app.route('/', reviewExplainRoutes(db, options.agentRunner ?? spawnAgent, agentSlot, jobs));
+  app.route('/', jobRoutes(jobs));
   app.route('/', importFeedbackRoutes(db, { imagesDir: options.imagesDir }));
   app.route('/', parkedReadingRoutes(db, { imagesDir: options.imagesDir }));
   app.route('/', keptPictureRoutes(db, { imagesDir: options.imagesDir }));

@@ -14,7 +14,7 @@ const RUNS_KEPT = 10;
 
 /** One thing the Reader review found: `subject` is what it is about (a rank, a hero, a file) and `message` says it in words. */
 /** What a category of pictures kept for a purpose holds: shown for the player to judge, never offered for removal. */
-export interface KeptCategory {
+interface KeptCategory {
   category: string;
   files: number;
   bytes: number;
@@ -22,9 +22,9 @@ export interface KeptCategory {
   oldest: string;
 }
 
-export type ReviewFindings = { wrong: Finding[]; obsolete: Finding[]; improve: Finding[]; kept: KeptCategory[] };
+type ReviewFindings = { wrong: Finding[]; obsolete: Finding[]; improve: Finding[]; kept: KeptCategory[] };
 
-export interface Finding {
+interface Finding {
   code: string;
   subject: string;
   message: string;
@@ -167,8 +167,6 @@ export function reviewFindingsRoutes(db: Database.Database, options: { imagesDir
     kept: keptCategories(),
   });
 
-  serve(app, reviewContract.findings, () => findAll());
-
   serve(app, reviewContract.dismiss, ({ body: { code, subject, message } }) => {
     db.prepare('INSERT OR IGNORE INTO review_dismissal (code, subject, message) VALUES (?, ?, ?)').run(code, subject, message);
     return { code, subject, message };
@@ -186,8 +184,6 @@ export function reviewFindingsRoutes(db: Database.Database, options: { imagesDir
     db.prepare('DELETE FROM review_run WHERE id NOT IN (SELECT id FROM review_run ORDER BY id DESC LIMIT ?)').run(RUNS_KEPT);
     return loadReviewRun(db, id)!;
   });
-
-  serve(app, reviewContract.runs, () => db.prepare('SELECT id, created_at AS createdAt FROM review_run ORDER BY id DESC').all() as { id: number; createdAt: string }[]);
 
   serve(app, reviewContract.latestRun, () => {
     const id = latestReviewRunId(db);

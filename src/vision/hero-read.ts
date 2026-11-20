@@ -13,7 +13,7 @@ const SIZE = 24;
 /** The mean difference (0 to 1 of a colour channel) under which a tile is taken for the example's hero. */
 export const HERO_MAX_DISTANCE = 0.06;
 /** How much closer the best hero's closest example must be than the closest example of any other hero, as a share of that distance. */
-export const HERO_MARGIN = 0.25;
+const HERO_MARGIN = 0.25;
 
 /**
  * The version of what `heroFeatures` computes. Vectors are stored with it (`hero_example_feature`, `hero_look_feature`), so a change to the

@@ -47,7 +47,7 @@ export interface ParsedTile {
 }
 
 /** An artifact as a battle report shows it beside a player's name: its name and the level after the "+", each null when the Agent could not read it. */
-export interface ParsedArtifact {
+interface ParsedArtifact {
   name: string | null;
   level: number | null;
 }
@@ -154,7 +154,7 @@ export function parseImportReply(reply: string, expected: ExpectedCrops, heroNam
 }
 
 /** What the star counter said about a tile: no reading when the tile could not be cut from the picture. */
-export interface StarsReading {
+interface StarsReading {
   state: 'present' | 'absent' | 'unsure';
   level: number | null;
 }
@@ -200,7 +200,7 @@ export interface ImportProfile {
   heroes: Map<string, HeroStateValue>;
 }
 
-export interface ProposalRow {
+interface ProposalRow {
   tile: string;
   hero: string;
   direction: 'new' | 'upgrade' | 'downgrade';
@@ -216,7 +216,7 @@ export interface ProposalRow {
   check: ('hero' | 'rank' | 'stars' | 'not-owned')[];
 }
 
-export interface UnknownTile {
+interface UnknownTile {
   tile: string;
   candidates: string[];
   rank: string | null;

@@ -1,6 +1,7 @@
 import { Portrait, type ImageKind } from './Portrait.js';
+import { IconButton } from './ui/Icon.js';
 
-export interface PlacedUnit {
+interface PlacedUnit {
   key: string;
   name: string;
   kind: ImageKind;
@@ -23,9 +24,7 @@ export function PlacedUnits({ label, units }: Props) {
           <li key={u.key}>
             <Portrait kind={u.kind} name={u.name} size={22} />
             {u.name}
-            <button aria-label={`Remove ${u.name}`} title={`Remove ${u.name}`} onClick={u.onRemove}>
-              ✕
-            </button>
+            <IconButton icon="close" label={`Remove ${u.name}`} onClick={u.onRemove} />
           </li>
         ))}
       </ul>

@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { api } from '../backend.js';
+import { useAction } from '../hooks/action.js';
 import type { LearnedView } from '../../src/shared/api.js';
 import { sourceLabel } from './LookTile.js';
 import { useConfirm } from '../ui/Dialog.js';
+import { DisclosureMark } from '../ui/Icon.js';
+import { Notice } from '../ui/Notice.js';
 
 /** The panel's header line: the readings and the share of them that agreed with the player (weighted by readings), then the pictures and their sources. */
 export function summaryLine(view: Pick<LearnedView, 'accuracy' | 'sources'>): string {
@@ -16,7 +19,7 @@ export function summaryLine(view: Pick<LearnedView, 'accuracy' | 'sources'>): st
 
 /** How well the readers did on the pictures read so far, and the way to undo everything one source added. Starts collapsed, its header line giving the gist. */
 export function LearnedSummary({ view, onChanged }: { view: LearnedView; onChanged: () => void }) {
-  const [error, setError] = useState<string | null>(null);
+  const { error, busy, run } = useAction();
   const [open, setOpen] = useState(false);
   const { confirm, dialog } = useConfirm();
 
@@ -28,13 +31,7 @@ export function LearnedSummary({ view, onChanged }: { view: LearnedView; onChang
       danger: true,
     });
     if (!ok) return;
-    try {
-      await api.deleteLearnedSource(source.source);
-      setError(null);
-      onChanged();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    await run(() => api.deleteLearnedSource(source.source), onChanged);
   }
 
   return (
@@ -42,7 +39,7 @@ export function LearnedSummary({ view, onChanged }: { view: LearnedView; onChang
       {dialog}
       <div className="deployment-head">
         <button className="deployment-toggle" aria-expanded={open} aria-controls="learned-summary-body" onClick={() => setOpen((old) => !old)}>
-          <span aria-hidden="true">{open ? '▾' : '▸'}</span> How the readings did
+          <DisclosureMark open={open} /> How the readings did
         </button>
         <span className="muted">{summaryLine(view)}</span>
       </div>
@@ -76,9 +73,9 @@ export function LearnedSummary({ view, onChanged }: { view: LearnedView; onChang
           )}
           <h3>Where the pictures came from</h3>
           {error && (
-            <p className="error" role="alert">
+            <Notice kind="error">
               {error}
-            </p>
+            </Notice>
           )}
           {view.sources.length === 0 ? (
             <p className="muted">No picture has a source yet: it is kept for the pictures learnt from now on.</p>
@@ -88,7 +85,7 @@ export function LearnedSummary({ view, onChanged }: { view: LearnedView; onChang
                 <li key={s.source}>
                   <span>{sourceLabel(s.source)}</span>
                   <span className="num">{s.count} pictures</span>
-                  <button className="danger small" aria-label={`Delete all from ${sourceLabel(s.source)}`} onClick={() => void removeSource(s)}>
+                  <button className="danger small" disabled={busy} aria-label={`Delete all from ${sourceLabel(s.source)}`} onClick={() => void removeSource(s)}>
                     Delete all
                   </button>
                 </li>

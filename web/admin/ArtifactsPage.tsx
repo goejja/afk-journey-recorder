@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { artifactGroupProblem, seasonGroup } from '../../src/domain/artifact.js';
 import { PRE_SEASON_GROUP } from '../../src/domain/stage.js';
-import { api, type Artifact } from '../backend.js';
+import { api, type Artifact, type SeasonEntry } from '../backend.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { Portrait } from '../Portrait.js';
-import { useCrud } from '../useCrud.js';
+import { useAction } from '../hooks/action.js';
+import { useConfirmActions } from '../hooks/confirm.js';
+import { useLoad } from '../hooks/load.js';
 import { MasterDetail } from '../ui/MasterDetail.js';
+import { Notice } from '../ui/Notice.js';
 
 interface Draft {
   name: string;
@@ -13,6 +16,8 @@ interface Draft {
   season: number | null;
 }
 
+const NO_ITEMS: Artifact[] = [];
+const NO_SEASONS: number[] = [];
 const seasonOf = (group: string): number | null => (/^Season (\d+)$/.exec(group) ? Number(group.slice(7)) : null);
 const toDraft = (a: Artifact): Draft => ({ name: a.name, seasonal: a.group !== PRE_SEASON_GROUP, season: seasonOf(a.group) });
 const groupOf = (d: Draft): string => (d.seasonal && d.season !== null ? seasonGroup(d.season) : d.seasonal ? '' : PRE_SEASON_GROUP);
@@ -20,39 +25,37 @@ const sameDraft = (a: Draft, b: Draft) => a.name === b.name && groupOf(a) === gr
 
 /** The artifacts of the game: which ones are Pre-Season and which belong to one season. */
 export function ArtifactsPage() {
-  const [items, setItems] = useState<Artifact[]>([]);
-  const [known, setKnown] = useState<number[]>([]);
-  const [current, setCurrent] = useState<number | null>(null);
+  const loaded = useLoad(() => api.artifacts(), []);
+  const items = loaded.data ?? NO_ITEMS;
+  // the season list is only a convenience: the artifacts' own seasons are offered too, so a failure to read it is not shown
+  const seasonList = useLoad(() => api.seasons().catch(() => [] as SeasonEntry[]), []);
+  const known = useMemo(() => seasonList.data?.map((s) => s.number) ?? NO_SEASONS, [seasonList.data]);
+  const current = seasonList.data?.find((s) => s.current)?.number ?? null;
   const [selected, setSelected] = useState<string | null>(null); // null while adding
   const [draft, setDraft] = useState<Draft>({ name: '', seasonal: false, season: null });
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState<string[]>([]);
-  const { error, setError, run: act, confirmDelete, confirmDiscard, dialog } = useCrud();
+  const { error: actionError, busy, setError, run: act } = useAction();
+  const error = loaded.error ?? actionError;
+  const { confirmDelete, confirmDiscard, dialog } = useConfirmActions(act);
 
   const blank = useCallback((): Draft => ({ name: '', seasonal: false, season: current }), [current]);
   const open_ = items.find((a) => a.name === selected) ?? null;
   const dirty = open_ ? !sameDraft(draft, toDraft(open_)) : draft.name !== '';
 
-  const reload = useCallback(async (select?: string | null) => {
-    const loaded = await api.artifacts();
-    setItems(loaded);
-    if (select !== undefined) {
-      setSelected(select);
-      const item = loaded.find((a) => a.name === select);
-      setDraft(item ? toDraft(item) : { name: '', seasonal: false, season: null });
-    }
-  }, []);
-
-  useEffect(() => {
-    void act(() => reload());
-    api.seasons().then(
-      (seasons) => {
-        setKnown(seasons.map((s) => s.number));
-        setCurrent(seasons.find((s) => s.current)?.number ?? null);
-      },
-      () => undefined, // the season list is only a convenience: the artifacts' own seasons are offered too
-    );
-  }, [act, reload]);
+  // reads the artifacts again; with `select` (a saved artifact's name, or null for a new one) the page then opens it
+  const reloadItems = loaded.reload;
+  const reload = useCallback(
+    async (select?: string | null) => {
+      const list = await reloadItems();
+      if (list && select !== undefined) {
+        setSelected(select);
+        const item = list.find((a) => a.name === select);
+        setDraft(item ? toDraft(item) : { name: '', seasonal: false, season: null });
+      }
+    },
+    [reloadItems],
+  );
 
   const run = (action: () => Promise<string | null | undefined>) => act(action, reload);
 
@@ -124,9 +127,9 @@ export function ArtifactsPage() {
         detail={
           <div className="map-editor">
             {error && (
-              <p className="error" role="alert">
+              <Notice kind="error">
                 {error}
-              </p>
+              </Notice>
             )}
             <div className="filters">
               <label className="field">
@@ -163,11 +166,11 @@ export function ArtifactsPage() {
               {open_ && (open_.source === 'manual' ? ' Edited by you: an import leaves it alone.' : ' From the import: saving a change makes it yours, and an import then leaves it alone.')}
             </p>
             <div className="actions">
-              <button className="primary" onClick={() => void save()} disabled={!dirty || problem !== null} title={problem ?? undefined}>
+              <button className="primary" onClick={() => void save()} disabled={busy || !dirty || problem !== null} title={problem ?? undefined}>
                 {open_ ? 'Save' : 'Create artifact'}
               </button>
               {open_ && (
-                <button className="danger" onClick={() => void remove()}>
+                <button className="danger" disabled={busy} onClick={() => void remove()}>
                   Delete
                 </button>
               )}

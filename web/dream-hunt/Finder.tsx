@@ -3,8 +3,9 @@ import { api, type BossRule } from '../backend.js';
 import { HeroFilter } from './HeroFilter.js';
 import { CompositionTable, type SendToSimulator } from './BestTeams.js';
 import { TagFilter } from '../Tags.js';
-import { useLoad } from '../useLoad.js';
-import { useMaps } from '../useMaps.js';
+import { useLoad } from '../hooks/load.js';
+import { useMaps } from '../hooks/maps.js';
+import { Notice } from '../ui/Notice.js';
 
 interface Props {
   rules: BossRule[];
@@ -43,14 +44,14 @@ export function Finder({ rules, send }: Props) {
         Every team recorded in Dream Hunt that holds all the included heroes and none of the excluded ones, grouped by boss because clear times only compare within one boss. Open a team to see where its heroes stood.
       </p>
       {mapsError && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {mapsError}
-        </p>
+        </Notice>
       )}
       {found.error && asked && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {found.error}
-        </p>
+        </Notice>
       )}
       {!asked && <p className="muted">Include or exclude one or more heroes to find the teams that used them.</p>}
       {result && result.bosses.length === 0 && <p className="muted">No recorded team matches these heroes.</p>}

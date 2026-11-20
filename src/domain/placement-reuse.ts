@@ -40,7 +40,7 @@ export interface ConfirmedTeam {
   artifact?: string | null;
 }
 
-export type PlacementTier = 'confirmed' | 'profile' | 'any' | 'free';
+type PlacementTier = 'confirmed' | 'profile' | 'any' | 'free';
 
 export interface ResolvedPlacement<S = unknown> {
   tier: PlacementTier;

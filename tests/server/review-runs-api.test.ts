@@ -43,8 +43,8 @@ describe('the Review runs', () => {
   it('keeps the last ten runs and deletes the older ones, newest first', async () => {
     const ids: number[] = [];
     for (let i = 0; i < 12; i++) ids.push((await (await startRun()).json()).id);
-    const runs = (await (await app.request('/api/admin/review/runs')).json()) as { id: number; createdAt: string }[];
-    expect(runs.map((r) => r.id)).toEqual(ids.slice(2).reverse());
+    const kept = db.prepare('SELECT id FROM review_run ORDER BY id DESC').pluck().all();
+    expect(kept).toEqual(ids.slice(2).reverse());
     expect((await latest()).id).toBe(ids[11]);
   });
 

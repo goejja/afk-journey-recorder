@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { problemWith } from './schema.js';
 
 export const TILE = { OPEN: 0, PLAYER: 1, ENEMY: -1, WOOD_WALL: -2, STONE_WALL: -3 } as const;
 
@@ -54,9 +53,6 @@ export const MapBodySchema = z.object(
   },
   { error: 'A map needs a name' },
 );
-
-/** Returns an error message, or null when the map content is valid. */
-export const validateMap = (input: { name: unknown; tags: unknown; cells: unknown }): string | null => problemWith(MapBodySchema, input);
 
 /** A side of a tile: two corners on the lattice described at `zoneEdges`, smaller corner first. */
 export type Segment = [[number, number], [number, number]];

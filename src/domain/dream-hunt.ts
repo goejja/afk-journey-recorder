@@ -1,5 +1,6 @@
 import { layoutKey, type Layout } from './layout.js';
-const MAX_CLEAR_SECONDS = 3600;
+/** The time limit of a fight in the game, in seconds: a fight not won by then is lost. */
+export const FIGHT_LIMIT_SECONDS = 90;
 /** A composition with fewer clears than this is flagged: random variation can still dominate its times. */
 export const MIN_CLEARS_FOR_CONFIDENCE = 3;
 
@@ -13,8 +14,8 @@ export function validateDreamHuntResult(result: DreamHuntResult): string | null 
   if (result.outcome !== 'Win' && result.outcome !== 'Loss') return 'The outcome must be Win or Loss';
   if (result.outcome === 'Loss') return result.timeSeconds === null || result.timeSeconds === undefined ? null : 'A failed fight has no clear time';
   const t = result.timeSeconds;
-  if (typeof t !== 'number' || !Number.isFinite(t) || t <= 0 || t > MAX_CLEAR_SECONDS) {
-    return `A cleared fight needs a time above 0 seconds and up to ${MAX_CLEAR_SECONDS / 60} minutes`;
+  if (typeof t !== 'number' || !Number.isFinite(t) || t <= 0 || t > FIGHT_LIMIT_SECONDS) {
+    return `A cleared fight needs a time above 0 seconds and up to ${FIGHT_LIMIT_SECONDS} seconds`;
   }
   return null;
 }

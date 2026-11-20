@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { summarizeCompositions, type DreamHuntRun } from '../domain/dream-hunt.js';
-import { listOf, MAX_ROWS, placeholders, seasonsOf, type StatFilters } from './filters.js';
+import { MAX_ROWS } from './filters.js';
 
 /** Every past attempt on one stage, newest first, with the formations used: the heroes by name, with no rank or equipment, since a Stage record keeps none (ADR 0041). */
 export function stageHistory(db: Database.Database, key: { season: number; kind: string; number: number; phase?: number }) {
@@ -43,26 +43,4 @@ export function dreamHuntBest(db: Database.Database, boss: string, filters: { ru
     attemptId: x.id, heroes: heroesOf.all(x.id) as string[], artifact: x.artifact, outcome: x.outcome, timeSeconds: x.timeSeconds,
   }));
   return { boss, fights: runs.length, compositions: summarizeCompositions(runs) };
-}
-
-/** Win rate on each stage that has attempts, newest season and highest stage first. */
-export function stageStats(db: Database.Database, filters: { kind?: string | string[]; season?: number; playedIn?: StatFilters['playedIn']; tag?: string | string[]; minGames?: number } = {}) {
-  const where: string[] = [];
-  const params: unknown[] = [];
-  const kinds = listOf(filters.kind);
-  if (kinds.length) (where.push(`s.kind IN (${placeholders(kinds)})`), params.push(...kinds));
-  if (filters.season !== undefined) (where.push('s.season = ?'), params.push(filters.season));
-  const seasons = seasonsOf(filters.playedIn);
-  if (seasons.length) (where.push(`a.season IN (${placeholders(seasons.map(String))})`), params.push(...seasons));
-  const tags = listOf(filters.tag);
-  if (tags.length) (where.push(`a.id IN (SELECT attempt_id FROM attempt_tag WHERE tag IN (${placeholders(tags)}))`), params.push(...tags));
-  return db
-    .prepare(
-      `SELECT s.season, s.phase, s.kind, s.number, count(*) AS games, sum(a.outcome = 'Win') AS wins,
-              round(1.0 * sum(a.outcome = 'Win') / count(*), 3) AS winRate, max(a.created_at) AS last
-       FROM stage_attempt sa JOIN attempt a ON a.id = sa.attempt_id JOIN stage s ON s.id = sa.stage_id
-       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       GROUP BY s.id HAVING count(*) >= ? ORDER BY s.season DESC, s.phase DESC, s.number DESC LIMIT ${MAX_ROWS}`,
-    )
-    .all(...params, filters.minGames ?? 1);
 }

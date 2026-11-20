@@ -1,20 +1,20 @@
 import { WEAPON_CAPS, WEAPON_LEVELS } from '../domain/exclusive-weapon.js';
 import { evalConst, parseChunk, type Json } from './static-eval.js';
 
-export interface RankRow {
+interface RankRow {
   name: string;
   position: number;
 }
-export interface ArtifactRow {
+interface ArtifactRow {
   name: string;
   group: string;
 }
-export interface RankEquipmentCapRow {
+interface RankEquipmentCapRow {
   rank: string;
   minLevel: number | null;
   maxLevel: number | null;
 }
-export interface PhantimalRow {
+interface PhantimalRow {
   name: string;
   faction: string;
   class: string;

@@ -1,5 +1,5 @@
-import { api, type GameMap } from './backend.js';
-import { useLoad } from './useLoad.js';
+import { api, type GameMap } from '../backend.js';
+import { useLoad } from './load.js';
 
 const NO_MAPS: GameMap[] = [];
 

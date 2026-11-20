@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from 'node:fs';
 import type { Context, Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
 import type { z } from 'zod';
 import { Upload, type Endpoint, type ServerInput } from '../shared/contract.js';
 import { parseBody } from './request.js';
@@ -14,7 +15,7 @@ export class Failure {
 export const fail = (status: Failure['status'], error: string) => new Failure(status, error);
 
 /** A handler answers with this when it made something new on a route that otherwise answers 200 (find or create): the answer is 201. */
-export class Created<T> {
+class Created<T> {
   constructor(readonly value: T) {}
 }
 export const created = <T>(value: T) => new Created(value);
@@ -103,4 +104,25 @@ export function serve<E extends Endpoint>(app: Hono, route: E, handler: (input: 
     }
     return c.json(result as object, status);
   });
+}
+
+/** How often a quiet stream sends a comment, so nothing between the app and the browser closes it as idle. */
+export const STREAM_HEARTBEAT_MS = 15_000;
+
+/**
+ * Registers a route that pushes what `subscribe` gives it as Server-Sent Events (one JSON event each), until the client leaves. `subscribe`
+ * calls `send` with each value and returns the function that stops it. A route like this has no body and no status: it is described with
+ * `endpoint` only so that both sides read its path and the type of what it pushes.
+ */
+export function serveStream<E extends Endpoint>(app: Hono, route: E, subscribe: (send: (value: z.output<E['response']>) => void) => () => void): void {
+  app.get(route.path, (c) =>
+    streamSSE(c, async (stream) => {
+      const left = new Promise<void>((resolve) => stream.onAbort(resolve));
+      const stop = subscribe((value) => void stream.writeSSE({ data: JSON.stringify(value) }).catch(() => undefined));
+      const beat = setInterval(() => void stream.write(': keep-alive\n\n').catch(() => undefined), STREAM_HEARTBEAT_MS);
+      await left;
+      clearInterval(beat);
+      stop();
+    }),
+  );
 }

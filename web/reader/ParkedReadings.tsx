@@ -3,8 +3,10 @@ import { api, parkedReadingUrl, type Hero, type ParkedList, type ParkedReading, 
 import { HeroGrid } from '../HeroGrid.js';
 import { Portrait } from '../Portrait.js';
 import { Dialog } from '../ui/Dialog.js';
-import { ListStatus } from '../ui/ListStatus.js';
+import { ListStatus, Loading } from '../ui/ListStatus.js';
 import { useToast } from '../ui/Toast.js';
+import { Notice } from '../ui/Notice.js';
+import { ShowMore } from '../ui/ShowMore.js';
 
 const PAGE = 20;
 type Filter = 'all' | ParkKind;
@@ -114,9 +116,9 @@ export function ParkedReadings({ onWaiting, onChanged }: { onWaiting: (count: nu
         replaced it, and a hero the Agent was not sure of that you kept. Say which hero each tile shows and the reader learns it; put aside the ones you cannot tell.
       </p>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       {full.map((k) => (
         <p key={k} className="warn-text">
@@ -156,18 +158,15 @@ export function ParkedReadings({ onWaiting, onChanged }: { onWaiting: (count: nu
           </li>
         ))}
       </ul>
-      {info && entries.length < shown && (
-        <div className="actions">
-          <button
-            disabled={more}
-            onClick={() => {
-              setMore(true);
-              void load(filter, entries.length);
-            }}
-          >
-            Show more ({shown - entries.length} left)
-          </button>
-        </div>
+      {info && (
+        <ShowMore
+          left={shown - entries.length}
+          busy={more}
+          onMore={() => {
+            setMore(true);
+            void load(filter, entries.length);
+          }}
+        />
       )}
       {choosing && (
         <Dialog
@@ -187,7 +186,7 @@ export function ParkedReadings({ onWaiting, onChanged }: { onWaiting: (count: nu
             <img className="crop" src={parkedReadingUrl(choosing.id)} alt={`Tile ${choosing.id} to confirm`} />
             <div className="parked-dialog-grid">
               {heroes === null ? (
-                <p className="muted">Loading…</p>
+                <Loading />
               ) : (
                 <HeroGrid
                   heroes={heroes}

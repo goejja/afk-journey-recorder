@@ -3,9 +3,6 @@ import { weaponLabel } from '../src/domain/exclusive-weapon.js';
 /** A rate from 0 to 1 as a whole percentage: 0.724 becomes "72%". */
 export const percent = (rate: number) => `${Math.round(rate * 100)}%`;
 
-/** Wins over wins and losses as a whole percentage, or a dash when there are no games. */
-export const winPercent = (wins: number, losses: number) => (wins + losses === 0 ? '–' : percent(wins / (wins + losses)));
-
 /** A difference of rates as signed percentage points: -0.08 becomes "−8 pts". */
 export const points = (delta: number) => `${delta < 0 ? '−' : '+'}${Math.round(Math.abs(delta) * 100)} pts`;
 

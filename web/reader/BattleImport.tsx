@@ -8,6 +8,8 @@ import { fetchCrops, fetchOriginal, type ImportGroup } from './battle-import.js'
 import { lastChoices, type BatchOptions, type ImportRound, type ImportStart } from './battle-import-edits.js';
 import type { RoundTeam, RoundDeployment } from '../../src/domain/round-deployment.js';
 import { RoundDeploymentsView, type DeploymentRow, type TeamEditorReference } from '../arena/RoundDeploymentsView.js';
+import { Notice } from '../ui/Notice.js';
+import { useToast } from '../ui/Toast.js';
 
 export type { BatchOptions, ImportRound, ImportStart };
 
@@ -77,7 +79,7 @@ export function BattleImport({ start: restore, onClose, onOpen, onReview, onSave
           }
     return rows.sort((a, b) => a.name.localeCompare(b.name));
   })();
-  const [notice, setNotice] = useState<string | null>(null);
+  const toast = useToast();
 
   const saveReady = () =>
     attempt(async () => {
@@ -88,7 +90,7 @@ export function BattleImport({ start: restore, onClose, onOpen, onReview, onSave
       const ids = withPictures.filter((g) => saved.includes(g.key)).flatMap((g) => g.pictures.map((p) => p.id));
       if (ids.length > 0) await api.dismissBattleImport(ids);
       await refresh();
-      setNotice(`Saved ${saved.length} ${saved.length === 1 ? 'battle' : 'battles'} in ${chosen.label}, ${chosen.round}.`);
+      toast(`Saved ${saved.length} ${saved.length === 1 ? 'battle' : 'battles'} in ${chosen.label}, ${chosen.round}.`);
       if (errors.length > 0) setError(errors.join(' | '));
     });
 
@@ -108,28 +110,23 @@ export function BattleImport({ start: restore, onClose, onOpen, onReview, onSave
         <button onClick={onClose}>Close</button>
       </div>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       {choice.problem && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {choice.problem}
-        </p>
+        </Notice>
       )}
       {reviewError && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           The Round could not be checked: {reviewError}
-        </p>
+        </Notice>
       )}
 
       <ReadForm state={state} mode={mode} setMode={setMode} files={files} setFiles={setFiles} reuse={reuse} chooseReuse={chooseReuse} choice={choice} busy={busy} onStart={() => void start()} />
       <QueueStatus waiting={waiting} failed={failed} busy={busy} onCancel={() => void dismiss()} onRetry={(id) => void retry(id)} onDiscard={(ids) => void dismiss(ids)} />
-      {notice && (
-        <p role="status" className="muted">
-          {notice}
-        </p>
-      )}
       {chosen && (
         <RoundDeploymentsView
           tournament={chosen.label}

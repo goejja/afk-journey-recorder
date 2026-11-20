@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DREAM_HUNT_FIGHTS, formatDuration } from '../../src/domain/dream-hunt.js';
 import { api, type DreamHuntAttempt, type WeeklySetups } from '../backend.js';
-import { RecordList, RecordToolbar, useGroupedList, type ListItem } from '../GroupedList.js';
+import { RecordToolbar, useGroupedList, type ListItem } from '../records/GroupedList.js';
+import { FightRow } from '../records/FightRow.js';
+import { GroupCard } from '../records/GroupCard.js';
+import { RecordListView } from '../records/RecordListView.js';
+import { useRecordList } from '../records/useRecordList.js';
 import { Portrait } from '../Portrait.js';
 import { timeShare } from './ThisWeek.js';
 import { TeamOverview } from '../stats/TeamOverview.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { FormationIdBadge } from '../FormationIdField.js';
 import { TagBadges, TagFilter } from '../Tags.js';
-import { useConfirm } from '../ui/Dialog.js';
-import { useLoad } from '../useLoad.js';
-import { ListStatus } from '../ui/ListStatus.js';
+import { useConfirmActions } from '../hooks/confirm.js';
 import { type Reference, type Draft } from './draft.js';
 import { NewFights } from './NewFights.js';
 import { EditFight } from './EditFight.js';
-
-/** How many fights the list loads at first and each time "Show older" is pressed. */
-const PAGE = 100;
 
 /** How far each cleared fight's time is from the best, 0 (the fastest) to 1 (the slowest), among the cleared fights against the same boss in the same week. */
 type Shares = Map<number, number>;
@@ -97,11 +96,12 @@ interface FightRowProps {
 }
 
 /** One boss fight of the list: the boss and result, the buttons and the team. */
-function FightRow({ fight: f, onEdit, onDelete, onClone, shares, inBattle = false }: FightRowProps) {
+function BossFightRow({ fight: f, onEdit, onDelete, onClone, shares, inBattle = false }: FightRowProps) {
   return (
-    <>
-      <div className="attempt-top">
-        <div className={`attempt-info fight-line${inBattle ? ' in-battle' : ''}`}>
+    <FightRow
+      infoClassName={`fight-line${inBattle ? ' in-battle' : ''}`}
+      info={
+        <>
           {inBattle && <strong>Fight {f.battlePosition}</strong>}
           <Portrait kind="boss" name={f.boss} size={32} />
           {inBattle ? <span className="fight-boss">{f.boss}</span> : <strong className="fight-boss">{f.boss}</strong>}
@@ -118,18 +118,16 @@ function FightRow({ fight: f, onEdit, onDelete, onClone, shares, inBattle = fals
               <span className="tags-cell"><TagBadges tags={f.tags} /></span>
             </>
           )}
-        </div>
-        <div className="attempt-actions">
-          <button onClick={() => onEdit(f)}>Edit</button>
-          <button title="Start new fights from this one" onClick={() => onClone([f])}>Clone</button>
-          <button className="danger" onClick={() => onDelete(f)}>
-            Delete
-          </button>
-        </div>
-      </div>
+        </>
+      }
+      cloneTitle="Start new fights from this one"
+      onEdit={() => onEdit(f)}
+      onClone={() => onClone([f])}
+      onDelete={() => onDelete(f)}
+      note={f.note}
+    >
       <TeamOverview heroes={f.formation.heroes} artifact={f.formation.artifact} size={32} />
-      {f.note && <p className="muted">{f.note}</p>}
-    </>
+    </FightRow>
   );
 }
 
@@ -141,79 +139,26 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
   const [cloning, setCloning] = useState<DreamHuntAttempt[] | null>(null);
   const [seed, setSeed] = useState<{ index: number; draft: Draft }[] | null>(null);
   const [editingDay, setEditingDay] = useState<{ id: number; fights: DreamHuntAttempt[] } | null>(null);
-  // what a plain Save left undone, shown after the form has closed (reload() clears `error`, so it is kept apart)
-  const [notice, setNotice] = useState<string | null>(null);
-  useEffect(() => {
-    if (adding || editing || editingDay) setNotice(null);
-  }, [adding, editing, editingDay]);
-  const [limit, setLimit] = useState(PAGE);
   const [boss, setBoss] = useState<string[]>([]);
   const [tag, setTag] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const { confirm, dialog } = useConfirm();
 
   // one more than the limit is asked for: that it came back tells whether there are older fights
-  const loaded = useLoad(() => api.dreamHuntAttempts({ limit: String(limit + 1), boss, tag }), [boss, tag, limit]);
+  const { loaded, limit, showMore, notice, setNotice, run, error } = useRecordList({
+    load: (page) => api.dreamHuntAttempts({ limit: String(page + 1), boss, tag }),
+    deps: [boss, tag],
+    formOpen: adding || editing !== null || editingDay !== null,
+  });
+  const { confirmRun, dialog } = useConfirmActions(run);
   const fights = useMemo(() => (loaded.data ?? NO_FIGHTS).slice(0, limit), [loaded.data, limit]);
   const older = (loaded.data?.length ?? 0) > limit;
   const reload = loaded.reload;
-  // an answer clears what an action here failed to do, as the answer of the list did before
-  useEffect(() => {
-    if (loaded.data) setError(null);
-  }, [loaded.data]);
+  const changed = async () => {
+    await reload();
+    onChanged();
+  };
 
-  async function remove(fight: DreamHuntAttempt) {
-    if (
-      !(await confirm({
-        title: `Delete this fight against ${fight.boss}?`,
-        confirmLabel: 'Delete',
-        danger: true,
-      }))
-    )
-      return;
-    try {
-      await api.deleteAttempt(fight.id);
-      await reload();
-      onChanged();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  async function ungroup(id: number) {
-    if (
-      !(await confirm({
-        title: 'Ungroup this day?',
-        message: 'Its fights stay as fights on their own.',
-        confirmLabel: 'Ungroup',
-      }))
-    )
-      return;
-    try {
-      await api.deleteBattleGroup(id, false);
-      await reload();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  async function removeDay(id: number, count: number) {
-    if (
-      !(await confirm({
-        title: `Delete this day and its ${count} fights?`,
-        confirmLabel: 'Delete',
-        danger: true,
-      }))
-    )
-      return;
-    try {
-      await api.deleteBattleGroup(id, true);
-      await reload();
-      onChanged();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
+  const remove = (fight: DreamHuntAttempt) => confirmRun({ title: `Delete this fight against ${fight.boss}?`, confirmLabel: 'Delete' }, () => api.deleteAttempt(fight.id), changed);
+  const removeDay = (id: number, count: number) => confirmRun({ title: `Delete this day and its ${count} fights?`, confirmLabel: 'Delete' }, () => api.deleteBattleGroup(id, true), changed);
 
   // A plan the Advisor proposed: open the form with its teams filled in, each in the fight of its boss.
   useEffect(() => {
@@ -241,7 +186,7 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
     if (item.kind === 'fight') {
       return (
         <li key={`fight-${item.fight.id}`} className="attempt">
-          <FightRow fight={item.fight} {...rowProps} />
+          <BossFightRow fight={item.fight} {...rowProps} />
         </li>
       );
     }
@@ -249,8 +194,11 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
     const totalSeconds = cleared.reduce((sum, f) => sum + (f.timeSeconds ?? 0), 0);
     const rule = item.fights.find((f) => f.bossRule)?.bossRule;
     return (
-      <li key={`battle-${item.id}`} className="attempt" aria-label="Dream Hunt day">
-        <div className="attempt-top">
+      <GroupCard
+        key={`battle-${item.id}`}
+        label="Dream Hunt day"
+        fightsLabel="Fights of the day"
+        header={
           <div className="attempt-info day-info">
             <DayStrip fights={item.fights} shares={shares} />
             <span className="badge" title="Fights cleared">{cleared.length}/{item.fights.length} cleared</span>
@@ -267,28 +215,17 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
             <span><FormationIdBadge code={item.fights[0]!.battleFormationId} /></span>
             <span className="tags-cell"><TagBadges tags={item.fights[0]!.tags} /></span>
           </div>
-          <div className="attempt-actions">
-            <button aria-expanded={list.open.has(item.id)} onClick={() => list.toggle(item.id)}>
-              {list.open.has(item.id) ? 'Hide fights' : 'Show fights'}
-            </button>
-            <button title="Edit all the fights of this day" onClick={() => (setAdding(false), setEditingDay({ id: item.id, fights: item.fights }))}>Edit</button>
-            <button title="Start a new day from this one" onClick={() => rowProps.onClone(item.fights)}>Clone</button>
-            <button onClick={() => void ungroup(item.id)}>Ungroup</button>
-            <button className="danger" onClick={() => void removeDay(item.id, item.fights.length)}>
-              Delete
-            </button>
-          </div>
-        </div>
-        {list.open.has(item.id) && (
-          <ul className="battle-fights" aria-label="Fights of the day">
-            {item.fights.map((fight) => (
-              <li key={fight.id} className="battle-fight">
-                <FightRow fight={fight} inBattle {...rowProps} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </li>
+        }
+        fights={item.fights}
+        open={list.open.has(item.id)}
+        onToggle={() => list.toggle(item.id)}
+        editTitle="Edit all the fights of this day"
+        onEdit={() => (setAdding(false), setEditingDay({ id: item.id, fights: item.fights }))}
+        cloneTitle="Start a new day from this one"
+        onClone={() => rowProps.onClone(item.fights)}
+        onDelete={() => void removeDay(item.id, item.fights.length)}
+        renderFight={(fight) => <BossFightRow fight={fight} inBattle {...rowProps} />}
+      />
     );
   };
 
@@ -354,21 +291,23 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
         <MultiSelect label="Boss" options={reference.bosses.map((b) => b.name)} value={boss} onChange={setBoss} />
         <TagFilter value={tag} onChange={setTag} />
       </RecordToolbar>
-      {(error ?? loaded.error) && (
-        <p className="error" role="alert">
-          {error ?? loaded.error}
-        </p>
-      )}
-      {notice && (
-        <p className="error" role="alert">
-          {notice}
-        </p>
-      )}
-      <div className={loaded.loading && loaded.data ? 'refreshing' : undefined} aria-busy={loaded.loading}>
-        <RecordList list={list} label="Boss fights" battle="day" fight="fight" renderItem={renderItem} />
-      </div>
-      {older && <button onClick={() => setLimit((old) => old + PAGE)}>Show older fights</button>}
-      <ListStatus loaded={loaded.data !== undefined} failed={loaded.error !== null} empty={fights.length === 0} filtered={boss.length > 0 || tag.length > 0} none="No boss fights recorded yet." noMatch="No boss fights match these filters." />
+      <RecordListView
+        list={list}
+        loaded={loaded}
+        error={error}
+        notice={notice}
+        label="Boss fights"
+        battle="day"
+        fight="fight"
+        renderItem={renderItem}
+        older={older}
+        olderLabel="Show older fights"
+        onOlder={showMore}
+        empty={fights.length === 0}
+        filtered={boss.length > 0 || tag.length > 0}
+        none="No boss fights recorded yet."
+        noMatch="No boss fights match these filters."
+      />
       {dialog}
     </div>
   );

@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ARENA_MODES, TEAMS_PER_MODE } from '../../src/domain/arena.js';
 import { api, type ArenaBattle } from '../backend.js';
-import { RecordList, RecordToolbar, useGroupedList, type ListItem as GroupedItem } from '../GroupedList.js';
+import { RecordToolbar, useGroupedList, type ListItem as GroupedItem } from '../records/GroupedList.js';
+import { FightRow } from '../records/FightRow.js';
+import { GroupCard } from '../records/GroupCard.js';
+import { RecordListView } from '../records/RecordListView.js';
+import { useRecordList } from '../records/useRecordList.js';
 import { toPayload } from '../FormationEditor.js';
 import { toOpponentPayload } from './OpponentEditor.js';
 import { BattleMapPreview } from './BattleMapPreview.js';
@@ -12,21 +16,17 @@ import { applyTeamChange } from './round-deployment.js';
 import { feedbackOf, type ImportGroup } from '../reader/battle-import.js';
 import { sendFeedback, useParkedToast, type FeedbackAnswer } from '../reader/parked-toast.js';
 import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
-import { useConfirm } from '../ui/Dialog.js';
+import { useConfirmActions } from '../hooks/confirm.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { FormationIdBadge } from '../FormationIdField.js';
 import { TagBadges, TagFilter } from '../Tags.js';
 import { toggled } from '../format.js';
-import { useLoad } from '../useLoad.js';
-import { ListStatus } from '../ui/ListStatus.js';
-import { afterSaved, told } from '../useSaveRecord.js';
+import { joinNotices, stepAfterSave } from '../hooks/saved.js';
 import { type PatchReference, type Reference, toInput, type Clone, cloneOf, savedOfMode, rostersOf, pairOf, loadRoundDeployments, fillSavedDeploymentTiles, cloneFromImport, type Side } from './draft.js';
 import { ModeChip, Players } from './BoardParts.js';
 import { NewBattles } from './NewBattles.js';
 import { EditBattle } from './EditBattle.js';
-
-/** How many fights the list loads at first and each time "Show older" is pressed. */
-const PAGE = 100;
+import { Notice } from '../ui/Notice.js';
 
 type ListItem = GroupedItem<ArenaBattle>;
 
@@ -53,11 +53,12 @@ function UnionRecap({ fight }: { fight: ArenaBattle }) {
 }
 
 /** One fight of the list: what it was, the buttons, the two teams and, on request, the map. */
-function FightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDelete, onClone, inBattle = false }: FightRowProps) {
+function ArenaFightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDelete, onClone, inBattle = false }: FightRowProps) {
   return (
-    <>
-      <div className="attempt-top">
-        <div className={inBattle ? 'attempt-info' : 'attempt-info one-line'}>
+    <FightRow
+      infoClassName={inBattle ? undefined : 'one-line'}
+      info={
+        <>
           {inBattle ? <strong>Team {b.battlePosition}</strong> : <ModeChip mode={b.mode} />}
           {!inBattle && <Players fight={b} profiles={reference.profiles} />}
           <span className="muted">
@@ -74,28 +75,33 @@ function FightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDelete, o
               <FormationIdBadge code={b.opponent.formationId} side="B" />
             </>
           )}
-        </div>
-        <div className="attempt-actions">
-          <button aria-expanded={shown.has(b.id)} onClick={() => onToggleMap(b.id)}>
-            {shown.has(b.id) ? 'Hide map' : 'Show map'}
-          </button>
-          <button onClick={() => onEdit(b)}>Edit</button>
-          <button title="Start a new battle from this fight" onClick={() => onClone([b])}>Clone</button>
+        </>
+      }
+      leading={
+        <button aria-expanded={shown.has(b.id)} onClick={() => onToggleMap(b.id)}>
+          {shown.has(b.id) ? 'Hide map' : 'Show map'}
+        </button>
+      }
+      cloneTitle="Start a new battle from this fight"
+      cloneVariants={
+        <>
           <button title="Start a new battle with only the heroes of Side A" onClick={() => onClone([b], 'A')}>Clone A</button>
           <button title="Start a new battle with only the heroes of Side B" onClick={() => onClone([b], 'B')}>Clone B</button>
-          <button className="danger" onClick={() => onDelete(b)}>
-            Delete
-          </button>
-        </div>
-      </div>
+        </>
+      }
+      onEdit={() => onEdit(b)}
+      onClone={() => onClone([b])}
+      onDelete={() => onDelete(b)}
+      note={b.note}
+      noteClassName="battle-note"
+    >
       <div className="attempt-head">
         <TeamOverview label="Side A" side="a" outcome={b.outcome === 'Win' ? 'won' : 'lost'} heroes={b.formation.heroes} phantimal={b.formation.phantimal} artifact={b.formation.artifact} size={36} />
         <span className="muted">vs</span>
         <TeamOverview label="Side B" side="b" outcome={b.outcome === 'Win' ? 'lost' : 'won'} heroes={b.opponent.heroes} phantimal={b.opponent.phantimal} artifact={b.opponent.artifact} size={36} />
       </div>
       {shown.has(b.id) && <BattleMapPreview battle={b} map={reference.maps.find((m) => m.name === b.mapName)} />}
-      {b.note && <p className="muted battle-note">{b.note}</p>}
-    </>
+    </FightRow>
   );
 }
 
@@ -114,62 +120,23 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
   const [cloning, setCloning] = useState<Clone | null>(null);
   const [editing, setEditing] = useState<ArenaBattle | null>(null);
   const [editingBattle, setEditingBattle] = useState<{ id: number; clone: Clone; round: Round | null; tournamentId: number | null } | null>(null);
-  // what a plain Save left undone, shown after the form has closed (reload() clears `error`, so it is kept apart)
-  const [notice, setNotice] = useState<string | null>(null);
-  useEffect(() => {
-    if (adding || editing || editingBattle) setNotice(null);
-  }, [adding, editing, editingBattle]);
-  const [error, setError] = useState<string | null>(null);
   /** The roster sync a batch save offers, as the form does for one side (ADR 0021). */
   const sync = useRosterSync();
-  const [limit, setLimit] = useState(PAGE);
   const [shownMaps, setShownMaps] = useState<Set<number>>(new Set()); // battles whose map is open
-  const { confirm, dialog } = useConfirm();
   const reportParked = useParkedToast();
   const toggleMap = (id: number) => setShownMaps((old) => toggled(old, id));
 
-  const loaded = useLoad(() => api.arenaBattles({ limit: String(limit), mode, tag, player: player.trim() }), [mode, tag, player, limit]);
+  const { loaded, limit, showMore, notice, setNotice, run, error } = useRecordList({
+    load: (page) => api.arenaBattles({ limit: String(page), mode, tag, player: player.trim() }),
+    deps: [mode, tag, player],
+    formOpen: adding || editing !== null || editingBattle !== null,
+  });
+  const { confirmRun, dialog } = useConfirmActions(run);
   const battles = loaded.data ?? NO_BATTLES;
   const reload = loaded.reload;
-  // an answer clears what an action here failed to do, as the answer of the list did before
-  useEffect(() => {
-    if (loaded.data) setError(null);
-  }, [loaded.data]);
 
-  async function remove(battle: ArenaBattle) {
-    if (
-      !(await confirm({
-        title: `Delete this ${battle.mode} fight?`,
-        confirmLabel: 'Delete',
-        danger: true,
-      }))
-    )
-      return;
-    try {
-      await api.deleteArenaBattle(battle.id);
-      await reload();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  async function removeBattle(id: number, fights: number) {
-    if (
-      !(await confirm({
-        title: `Delete this battle and its ${fights} fights?`,
-        confirmLabel: 'Delete',
-        danger: true,
-      }))
-    )
-      return;
-    try {
-      await api.deleteBattleGroup(id, true);
-      await reload();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
+  const remove = (battle: ArenaBattle) => confirmRun({ title: `Delete this ${battle.mode} fight?`, confirmLabel: 'Delete' }, () => api.deleteArenaBattle(battle.id), reload);
+  const removeBattle = (id: number, fights: number) => confirmRun({ title: `Delete this battle and its ${fights} fights?`, confirmLabel: 'Delete' }, () => api.deleteBattleGroup(id, true), reload);
 
   const list = useGroupedList(battles);
   const rowProps = { reference, shown: shownMaps, onToggleMap: toggleMap, onEdit: (f: ArenaBattle) => (setAdding(false), setEditing(f)), onDelete: (f: ArenaBattle) => void remove(f), onClone: (fights: ArenaBattle[], side?: Side) => (setEditing(null), setCloning(cloneOf(reference, fights, false, side)), setAdding(true)) };
@@ -210,58 +177,57 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
   const renderItem = (item: ListItem) =>
     item.kind === 'fight' ? (
       <li key={`fight-${item.fight.id}`} className="attempt">
-        <FightRow fight={item.fight} {...rowProps} />
+        <ArenaFightRow fight={item.fight} {...rowProps} />
       </li>
     ) : (
-      <li key={`battle-${item.id}`} className="attempt" aria-label={`${item.fights[0]!.mode} battle`}>
-        <div className="attempt-top">
-          <div className="attempt-info battle-info one-line">
-            <ModeChip mode={item.fights[0]!.mode} />
-            <Players fight={item.fights[0]!} profiles={reference.profiles} keepCell />
-            <span className="badge" title="Fights won by Side A">{item.fights.filter((f) => f.outcome === 'Win').length}-{item.fights.filter((f) => f.outcome === 'Loss').length}</span>
-            <span className="muted">{item.fights[0]!.createdAt}</span>
-            <span className="badge" title="The season the record was played in">S{item.fights[0]!.season}</span>
-            <span className="tags-cell">
-              <UnionRecap fight={item.fights[0]!} />
-              <FormationIdBadge code={item.fights[0]!.battleFormationId} side="A" />
-              <FormationIdBadge code={item.fights[0]!.battleOpponentFormationId} side="B" />
-            </span>
-          </div>
-          <div className="battle-teams">
-            <span className="team-pips" aria-label="Teams">
-              {item.fights.map((f) => (
-                <span key={f.id} className={`team-pip ${f.outcome === 'Win' ? 'win' : 'loss'}`} title={`Team ${f.battlePosition}: Side A ${f.outcome === 'Win' ? 'won' : 'lost'}`}>
-                  T{f.battlePosition} · {f.mapName}{f.rule ? ` · ${f.rule}` : ''}
-                </span>
-              ))}
-            </span>
-            <span className="tags-cell">
-              <TagBadges tags={item.fights[0]!.tags} />
-            </span>
-          </div>
-          <div className="attempt-actions">
-            <button className="small" aria-expanded={list.open.has(item.id)} onClick={() => list.toggle(item.id)}>
-              {list.open.has(item.id) ? 'Hide fights' : 'Show fights'}
-            </button>
-            <button title="Edit all the teams of this battle" onClick={() => (setAdding(false), setEditingBattle({ id: item.id, clone: cloneOf(reference, item.fights, true), round: item.fights[0]?.round ?? null, tournamentId: item.fights[0]?.tournamentId ?? null }))}>Edit</button>
-            <button title="Start a new battle from this one" onClick={() => rowProps.onClone(item.fights)}>Clone</button>
+      <GroupCard
+        key={`battle-${item.id}`}
+        label={`${item.fights[0]!.mode} battle`}
+        fightsLabel="Fights of the battle"
+        header={
+          <>
+        <div className="attempt-info battle-info one-line">
+          <ModeChip mode={item.fights[0]!.mode} />
+          <Players fight={item.fights[0]!} profiles={reference.profiles} keepCell />
+          <span className="badge" title="Fights won by Side A">{item.fights.filter((f) => f.outcome === 'Win').length}-{item.fights.filter((f) => f.outcome === 'Loss').length}</span>
+          <span className="muted">{item.fights[0]!.createdAt}</span>
+          <span className="badge" title="The season the record was played in">S{item.fights[0]!.season}</span>
+          <span className="tags-cell">
+            <UnionRecap fight={item.fights[0]!} />
+            <FormationIdBadge code={item.fights[0]!.battleFormationId} side="A" />
+            <FormationIdBadge code={item.fights[0]!.battleOpponentFormationId} side="B" />
+          </span>
+        </div>
+        <div className="battle-teams">
+          <span className="team-pips" aria-label="Teams">
+            {item.fights.map((f) => (
+              <span key={f.id} className={`team-pip ${f.outcome === 'Win' ? 'win' : 'loss'}`} title={`Team ${f.battlePosition}: Side A ${f.outcome === 'Win' ? 'won' : 'lost'}`}>
+                T{f.battlePosition} · {f.mapName}{f.rule ? ` · ${f.rule}` : ''}
+              </span>
+            ))}
+          </span>
+          <span className="tags-cell">
+            <TagBadges tags={item.fights[0]!.tags} />
+          </span>
+        </div>
+          </>
+        }
+        fights={item.fights}
+        open={list.open.has(item.id)}
+        onToggle={() => list.toggle(item.id)}
+        editTitle="Edit all the teams of this battle"
+        onEdit={() => (setAdding(false), setEditingBattle({ id: item.id, clone: cloneOf(reference, item.fights, true), round: item.fights[0]?.round ?? null, tournamentId: item.fights[0]?.tournamentId ?? null }))}
+        cloneTitle="Start a new battle from this one"
+        onClone={() => rowProps.onClone(item.fights)}
+        cloneVariants={
+          <>
             <button title="Start a new battle with only the heroes of Side A" onClick={() => rowProps.onClone(item.fights, 'A')}>Clone A</button>
             <button title="Start a new battle with only the heroes of Side B" onClick={() => rowProps.onClone(item.fights, 'B')}>Clone B</button>
-            <button className="danger" onClick={() => void removeBattle(item.id, item.fights.length)}>
-              Delete
-            </button>
-          </div>
-        </div>
-        {list.open.has(item.id) && (
-          <ul className="battle-fights" aria-label="Fights of the battle">
-            {item.fights.map((fight) => (
-              <li key={fight.id} className="battle-fight">
-                <FightRow fight={fight} inBattle {...rowProps} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </li>
+          </>
+        }
+        onDelete={() => void removeBattle(item.id, item.fights.length)}
+        renderFight={(fight) => <ArenaFightRow fight={fight} inBattle {...rowProps} />}
+      />
     );
 
   /** After a Battle is saved from the batch: offer the roster update of each side, as the form does (ADR 0021). */
@@ -279,9 +245,9 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
     return (
       <>
       {notice && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {notice}
-        </p>
+        </Notice>
       )}
       <BattleImport
         start={fromImport?.start}
@@ -340,15 +306,15 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
               // The Battle is saved from here on, so a step that fails is told after "saved" and never makes the Battle a failed one.
               const left: (string | null)[] = [];
               // the tiles the Battle was saved with go to the confirmed Round Deployment teams that had none (ADR 0021)
-              left.push(await afterSaved(() => fillSavedDeploymentTiles(options.round, clone.drafts, clone.profiles ?? { A: null, B: null }, deployments), 'The Round Deployment could not be given the tiles'));
+              left.push(await stepAfterSave(() => fillSavedDeploymentTiles(options.round, clone.drafts, clone.profiles ?? { A: null, B: null }, deployments), 'The Round Deployment could not be given the tiles'));
               // offer the roster update of each side, as the form does after a save
-              left.push(await afterSaved(() => syncSavedBattle(clone, result.fights.map((fight) => fight.id))));
+              left.push(await stepAfterSave(() => syncSavedBattle(clone, result.fights.map((fight) => fight.id))));
               // what the pictures said against what was kept (ADR 0016): reported outside the app, a failure changes nothing and stays silent
               const feedback = feedbackOf(filled.map(({ d }) => d));
               if (feedback.length > 0) sends.push(sendFeedback(group.mode, feedback));
               const pictures = filled.flatMap(({ d }, i) => (d.imported?.picture && result.fights[i] ? [{ attemptId: result.fights[i]!.id, ...d.imported.picture }] : []));
-              if (pictures.length > 0) left.push(await afterSaved(() => pictures.reduce((all, p) => all.then(() => api.keepPicture(p.attemptId, p.label, p.data)).then(() => undefined), Promise.resolve()), 'The pictures could not be kept'));
-              const problems = told(left);
+              if (pictures.length > 0) left.push(await stepAfterSave(() => pictures.reduce((all, p) => all.then(() => api.keepPicture(p.attemptId, p.label, p.data)).then(() => undefined), Promise.resolve()), 'The pictures could not be kept'));
+              const problems = joinNotices(left);
               if (problems) errors.push(`${who(group)}: saved. ${problems}`);
             } catch (e) {
               errors.push(`${who(group)}: ${(e as Error).message}`);
@@ -414,23 +380,23 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
           <input type="search" value={player} placeholder="Name or Player ID" onChange={(e) => setPlayer(e.target.value)} />
         </label>
       </RecordToolbar>
-      {(error ?? loaded.error) && (
-        <p className="error" role="alert">
-          {error ?? loaded.error}
-        </p>
-      )}
-      {notice && (
-        <p className="error" role="alert">
-          {notice}
-        </p>
-      )}
-      <div className={loaded.loading && loaded.data ? 'refreshing' : undefined} aria-busy={loaded.loading}>
-        <RecordList list={list} label="Battles" battle="battle" fight="fight" renderItem={renderItem} />
-      </div>
-      {battles.length >= limit && (
-        <button onClick={() => setLimit((old) => old + PAGE)}>Show older battles</button>
-      )}
-      <ListStatus loaded={loaded.data !== undefined} failed={loaded.error !== null} empty={battles.length === 0} filtered={mode.length > 0 || tag.length > 0 || player.trim() !== ''} none="No battles recorded yet." noMatch="No battles match these filters." />
+      <RecordListView
+        list={list}
+        loaded={loaded}
+        error={error}
+        notice={notice}
+        label="Battles"
+        battle="battle"
+        fight="fight"
+        renderItem={renderItem}
+        older={battles.length >= limit}
+        olderLabel="Show older battles"
+        onOlder={showMore}
+        empty={battles.length === 0}
+        filtered={mode.length > 0 || tag.length > 0 || player.trim() !== ''}
+        none="No battles recorded yet."
+        noMatch="No battles match these filters."
+      />
       {dialog}
     </div>
   );

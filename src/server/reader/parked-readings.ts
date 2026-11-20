@@ -17,7 +17,7 @@ import { removeFiles, saveImage } from './saved-image.js';
 export const PARK_CAPS: Record<ParkKind, number> = { difference: 150, unsure: 50 };
 
 /** How many readings the list gives at a time. */
-export const PAGE_SIZE = 20;
+const PAGE_SIZE = 20;
 
 /** A tile of a Battle import that could not be learnt from by itself, before it is checked against the caps and the readings already parked. */
 export interface Parkable {

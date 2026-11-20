@@ -6,7 +6,7 @@ const NUMBER_MESSAGE = 'The Tournament number must be a whole number from 1';
 const DATE_MESSAGE = 'The start date must be YYYY-MM-DD';
 
 /** A new Tournament: its number in the current season and, when known, the day it started. Its season is the current season of Admin > General (ADR 0038). */
-export const TournamentBody = z.object(
+const TournamentBody = z.object(
   {
     number: z.number({ error: NUMBER_MESSAGE }).int(NUMBER_MESSAGE).min(1, NUMBER_MESSAGE),
     startDate: z.string({ error: DATE_MESSAGE }).regex(/^\d{4}-\d{2}-\d{2}$/, DATE_MESSAGE).nullish().transform((day) => day ?? null),

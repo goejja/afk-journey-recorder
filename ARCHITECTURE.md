@@ -50,6 +50,12 @@ Every route is described once, in `src/shared/contracts/<topic>.ts`, with `endpo
 - Some bodies and large responses are described with `z.custom<Type>()`: they are typed but not checked at runtime, and the handler keeps validating a body field by field to keep its messages. Query parameters are typed for the client but the handler reads them itself. Files use `Upload` (a raw body the handler reads) and `Binary` (a response sent with `file(bytes, type)`).
 - The Advisor's routes are described in `src/advisor/shared/contracts.ts` and called from `web/advisor/api.ts`, so a build without the Advisor has neither.
 
+## Shared UI and background work
+
+The web app builds its Pages from shared pieces: `web/ui/` (components such as `Tabs`, `Dialog`, `Notice`, `Icon`, `Toast`), `web/hooks/` (`useLoad`, `useAction`, `useConfirmActions`), `web/records/` (the shared record lists of Arena and Dream Hunt) and `web/jobs/` (the job watcher). [docs/ui-conventions.md](./docs/ui-conventions.md) says when to use each and lists them.
+
+Background work has one answer: `GET /api/jobs` (`src/server/agent/job-registry.ts`). Each kind of work (scenario runs, the Review explanation, the two picture queues) registers in a `JobRegistry`, and the Agent is started in the background only through `startAgentJob` (`src/server/agent/agent-job.ts`). The same summary is pushed as Server-Sent Events from `GET /api/jobs/stream` whenever it changes (ADR 0042). The web app listens in one place, `JobsProvider`, and Pages read from it.
+
 ## The Advisor
 
 Everything that estimates a chance or proposes a team (the Win Score, the generated formation, the Counter Advisor and the Dream Hunt plans) is the Advisor. It lives in three directories:

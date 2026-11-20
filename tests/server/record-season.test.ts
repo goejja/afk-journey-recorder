@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../../src/db/open.js';
 import { migration as addSeason } from '../../src/db/migrations/020-attempt-season.js';
 import { TILE, TILE_COUNT } from '../../src/domain/map.js';
-import { heroStats, playerStats, stageStats } from '../../src/query/index.js';
+import { heroStats, playerStats } from '../../src/query/index.js';
 import { createApp } from '../../src/server/app.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
@@ -111,13 +111,6 @@ describe('the played-in filter', () => {
     expect(heroes(['9'])).toEqual([['B', 1]]);
     expect(heroes(['8', '9'])).toHaveLength(2);
     expect(heroes(['7'])).toEqual([]);
-  });
-
-  it('keeps the stages played in a season apart from the stage\'s own season', () => {
-    expect(stageStats(db, { playedIn: ['9'] })).toHaveLength(1);
-    expect(stageStats(db, { playedIn: ['8'] })).toHaveLength(0);
-    expect(stageStats(db, { season: 7, playedIn: ['9'] })).toHaveLength(1);
-    expect(stageStats(db, { season: 9 })).toHaveLength(0); // no stage of season 9
   });
 
   it('applies to the Players view and through the API', async () => {

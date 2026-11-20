@@ -29,7 +29,7 @@ export function selectorHeroes(heroes: Hero[]): Hero[] {
 }
 
 /** The Units a hero puts on the board: the domain rule, so every layer places the same ones. */
-export const unitParts = unitsOf;
+const unitParts = unitsOf;
 
 /** Selector icons that cannot be placed now, mapped to why: already placed (any of its Units), or held elsewhere. */
 export function unitsUnavailable(placed: PlacedRow[], unavailable?: Map<string, string>): Map<string, string> {
@@ -89,14 +89,6 @@ export function addUnit<T extends PlacedRow>(
     }
   }
   return { placed: [...placed, make(row, placed.filter((p) => p.hero === hero))], message: null };
-}
-
-/** Removes the unit on a tile. A pair goes as a whole, and so do a hero's summons with it, since neither stands alone. */
-export function removeUnit<T extends PlacedRow>(placed: T[], tile: number): T[] {
-  const row = placed.find((p) => p.tile === tile);
-  if (!row) return placed;
-  if (PAIR_HEROES[row.hero] || (SUMMONS[row.hero] && !partOf(row))) return placed.filter((p) => p.hero !== row.hero);
-  return placed.filter((p) => p.tile !== tile);
 }
 
 /** The lowest-numbered tile of the given type that nothing stands on, or null when the zone is full. */

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { DisclosureMark } from './ui/Icon.js';
 
 /**
  * The Monday (YYYY-MM-DD) of the week a record's date falls in. Dream Hunt and the Supreme Arena repeat by the week, and the game resets on Sunday
@@ -31,7 +32,7 @@ export function WeekSection({ start, summary, open, onToggle, children }: { star
   return (
     <section className="week" aria-label={weekLabel(start)}>
       <button className="week-head" aria-expanded={open} onClick={onToggle}>
-        <span aria-hidden="true">{open ? '▾' : '▸'}</span> <strong>{weekLabel(start)}</strong> <span className="muted">{summary}</span>
+        <DisclosureMark open={open} /> <strong>{weekLabel(start)}</strong> <span className="muted">{summary}</span>
       </button>
       {open && children}
     </section>

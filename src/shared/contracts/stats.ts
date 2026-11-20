@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ArtifactStat, FactionMismatch, FormationProfileStat, FormationReport, GroupCounterReport, HeroDistribution, HeroStat, MapStat, PairStat, PartnerReport, PartnerTag, PositionalPartnerReport, PlayerStat, RowStat, RuleStat, StageStat, Summary, TrioStat } from '../api.js';
+import type { ArtifactStat, FactionMismatch, FormationGroupStat, FormationProfileStat, FormationReport, GroupCounterReport, HeroDistribution, HeroStat, MapStat, PairStat, PartnerReport, PartnerTag, PositionalPartnerReport, PlayerStat, RowStat, Summary, TrioStat } from '../api.js';
 import { PARTNER_RELATIONS } from '../../domain/partner-relation.js';
 import { endpoint } from '../contract.js';
 
@@ -20,7 +20,8 @@ export const statsContract = {
   heroRows: endpoint({ method: 'GET', path: '/api/stats/heroes/:hero/rows', query: z.object(common), response: list<RowStat>() }),
   artifacts: endpoint({ method: 'GET', path: '/api/stats/artifacts', query: withMin, response: list<ArtifactStat>() }),
   maps: endpoint({ method: 'GET', path: '/api/stats/maps', query: withMin, response: list<MapStat>() }),
-  rules: endpoint({ method: 'GET', path: '/api/stats/rules', query: withMin, response: list<RuleStat>() }),
+  /** The best win-rate Formation groups on one map, from both sides of the PvP records the filters select. */
+  mapFormations: endpoint({ method: 'GET', path: '/api/stats/map-formations', query: z.object({ ...common, map: z.string().min(1) }), response: list<FormationGroupStat>() }),
   /** The Formation groups under their Archetype rows with labels; `hero` (repeated) keeps the groups that hold every hero given. */
   formationReport: endpoint({ method: 'GET', path: '/api/stats/formation-report', query: withMin.extend({ hero: texts }), response: z.custom<FormationReport>() }),
   formationProfile: endpoint({ method: 'GET', path: '/api/stats/formation-profile', query: z.object({ ...common, core: texts }), response: z.custom<FormationProfileStat>() }),
@@ -37,5 +38,4 @@ export const statsContract = {
   partnerTags: endpoint({ method: 'GET', path: '/api/stats/partner-tags', response: list<PartnerTag>() }),
   trios: endpoint({ method: 'GET', path: '/api/stats/trios', query: withMin, response: list<TrioStat>() }),
   players: endpoint({ method: 'GET', path: '/api/stats/players', query: z.object({ mode: texts, playedIn: texts, excludeDefault: text, min: text }), response: list<PlayerStat>() }),
-  stages: endpoint({ method: 'GET', path: '/api/stats/stages', query: z.object({ kind: texts, season: text, playedIn: texts, tag: texts, min: text }), response: list<StageStat>() }),
 };

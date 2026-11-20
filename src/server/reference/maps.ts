@@ -32,11 +32,6 @@ export function mapRoutes(db: Database.Database): Hono {
 
   serve(app, mapsContract.list, () => (db.prepare('SELECT * FROM map ORDER BY name').all() as MapRow[]).map(toJson));
 
-  serve(app, mapsContract.get, ({ params }) => {
-    const row = find(params.name);
-    return row ? toJson(row) : fail(404, 'Unknown map');
-  });
-
   serve(app, mapsContract.create, ({ body }) => {
     const name = body.name;
     if (find(name)) return fail(409, `A map named "${name}" already exists`);

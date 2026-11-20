@@ -1,4 +1,4 @@
-import { DREAM_HUNT_FIGHTS } from '../../src/domain/dream-hunt.js';
+import { DREAM_HUNT_FIGHTS, FIGHT_LIMIT_SECONDS } from '../../src/domain/dream-hunt.js';
 import type { DefaultSlot } from '../../src/domain/defaults.js';
 import type { DreamHuntAttempt } from '../backend.js';
 
@@ -63,12 +63,23 @@ export function groupDays(days: PlayedDay[]): DayGroup[] {
     .sort((a, b) => fastestFirst(a.best, b.best));
 }
 
-/** How the runs of a group came out in one place of the day, or over the whole day: the best, the average and the worst time, and how many runs. */
+/** How the runs of a group came out over the whole day: the best, the average and the worst total, and how many runs. */
 export interface RunStats {
   best: number;
   average: number;
   worst: number;
   runs: number;
+}
+
+/** How one fight formation came out against its boss, over every fight of the week, whichever group or day it was in. */
+export interface FormationRuns {
+  /** The fastest and the average time of its wins; null when it never won. */
+  best: number | null;
+  average: number | null;
+  /** The slowest win, or the fight limit when it lost at least once: a lost fight has no time, it ran out of it. */
+  worst: number;
+  wins: number;
+  lost: number;
 }
 
 /** Where a column of the table ends: the times shown on its bars run from `min` to `max`. */
@@ -77,25 +88,59 @@ export interface Scale {
   max: number;
 }
 
+/** The scale of the fight columns: every fight lasts at most the fight limit, so one scale serves them all. */
+export const FIGHT_SCALE: Scale = { min: 0, max: FIGHT_LIMIT_SECONDS };
+
+/** The key of a fight's formation in `formationRuns`: its boss, rule, units and artifact. */
+export const formationKey = (f: DreamHuntAttempt) => JSON.stringify(fightKey(f));
+
+/**
+ * Every fight formation of the week with how it came out: the won and timed fights give its times, the lost ones count as lost. A fight counts
+ * when it has the boss and rule of one of the weekly default's places, in a finished day or not, and when it is a win with a time or a loss.
+ */
+export function formationRuns(attempts: DreamHuntAttempt[], slots: DefaultSlot[]): Map<string, FormationRuns> {
+  const times = new Map<string, { won: number[]; lost: number }>();
+  for (const f of attempts) {
+    const won = f.outcome === 'Win' && f.timeSeconds !== null;
+    if (!won && f.outcome !== 'Loss') continue;
+    if (!slots.some((slot) => matchesSlot(f, slot))) continue;
+    const key = formationKey(f);
+    const entry = times.get(key) ?? { won: [], lost: 0 };
+    if (won) entry.won.push(f.timeSeconds!);
+    else entry.lost++;
+    times.set(key, entry);
+  }
+  return new Map(
+    [...times].map(([key, { won, lost }]) => [
+      key,
+      {
+        best: won.length ? Math.min(...won) : null,
+        average: won.length ? won.reduce((sum, t) => sum + t, 0) / won.length : null,
+        worst: lost > 0 ? FIGHT_LIMIT_SECONDS : Math.max(...won),
+        wins: won.length,
+        lost,
+      },
+    ]),
+  );
+}
+
 /** The first of the group's columns is the fight against the first boss; `TOTAL` is the whole day, which the table shows first. */
 export const TOTAL = DREAM_HUNT_FIGHTS;
 
-const statsOf = (times: number[]): RunStats => ({ best: Math.min(...times), average: times.reduce((sum, t) => sum + t, 0) / times.length, worst: Math.max(...times), runs: times.length });
-
-/** The runs of a group by fight (index 0 to 4) then, at `TOTAL`, by day. */
-export const groupStats = (group: DayGroup): RunStats[] => [...Array.from({ length: DREAM_HUNT_FIGHTS }, (_, i) => statsOf(group.days.map((d) => d.fights[i]!.timeSeconds!))), statsOf(group.days.map((d) => d.totalSeconds))];
+/** The days of a group by total. */
+export function totalStats(group: DayGroup): RunStats {
+  const times = group.days.map((d) => d.totalSeconds);
+  return { best: Math.min(...times), average: times.reduce((sum, t) => sum + t, 0) / times.length, worst: Math.max(...times), runs: times.length };
+}
 
 /**
- * One scale per column over every run of every group of the week, so a bar shows where a group's runs fall among the others'. A little room
- * is left at each end, so that the best and the worst of the week are not on the edge.
+ * The scale of the Total column over every day of every group of the week, so a bar shows where a group's days fall among the others'. A little
+ * room is left at each end, so that the best and the worst of the week are not on the edge.
  */
-export function weekScales(groups: DayGroup[]): Scale[] {
-  const all = groups.map((g) => g.days);
-  return Array.from({ length: DREAM_HUNT_FIGHTS + 1 }, (_, column) => {
-    const times = all.flatMap((days) => days.map((d) => (column === TOTAL ? d.totalSeconds : d.fights[column]!.timeSeconds!)));
-    const min = Math.min(...times);
-    const max = Math.max(...times);
-    const room = Math.max((max - min) * 0.08, 0.05);
-    return { min: Math.max(0, min - room), max: max + room };
-  });
+export function totalScale(groups: DayGroup[]): Scale {
+  const times = groups.flatMap((g) => g.days.map((d) => d.totalSeconds));
+  const min = Math.min(...times);
+  const max = Math.max(...times);
+  const room = Math.max((max - min) * 0.08, 0.05);
+  return { min: Math.max(0, min - room), max: max + room };
 }

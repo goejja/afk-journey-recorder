@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE } from '../../src/domain/map.js';
 import type { Hero } from '../../web/backend.js';
-import { addHeroUnits, addUnit, removeUnit, resolveUnit, selectorHeroes, swapTiles, unitsUnavailable, type PlacedRow } from '../../web/units.js';
+import { addHeroUnits, addUnit, resolveUnit, selectorHeroes, swapTiles, unitsUnavailable, type PlacedRow } from '../../web/units.js';
 
 const hero = (name: string): Hero => ({ name, tier: 'S', class: 'Support', faction: 'Celestial', damageType: null, imagePath: null, owned: true, rank: 'Mythic+', equipmentLevel: null });
 const cells = Array.from({ length: 45 }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
@@ -30,14 +30,13 @@ describe('the unit selector', () => {
 });
 
 describe('placing a hero places every Unit it owns', () => {
-  it('puts both parts of a pair down at once, and takes them out as a whole', () => {
+  it('puts both parts of a pair down at once', () => {
     const pair = place([], 'Elijah & Lailah', 38);
     expect(pair.message).toBeNull();
     expect(pair.placed).toEqual([
       { tile: 38, hero: 'Elijah & Lailah', part: 'Elijah' },
       { tile: 39, hero: 'Elijah & Lailah', part: 'Lailah' },
     ]);
-    expect(removeUnit(pair.placed, 39)).toEqual([]);
   });
 
   it('puts a hero and all its summons down at once: two turrets for Zanie, one clone for Phraesto', () => {
@@ -79,8 +78,6 @@ describe('placing one unit on its own', () => {
     let placed = unit([], 'Zanie', 40).placed;
     placed = unit(unit(placed, 'Laser Turret', 41).placed, 'Laser Turret', 42).placed;
     expect(unit(placed, 'Laser Turret', 43).message).toBe('Zanie has at most 2 Laser Turret');
-    expect(removeUnit(placed, 41).map((p) => p.tile)).toEqual([40, 42]);
-    expect(removeUnit(placed, 40)).toEqual([]); // the turrets go with Zanie
     expect(resolveUnit('Phraesto clone')).toEqual({ hero: 'Phraesto', part: 'Phraesto clone' });
   });
 });

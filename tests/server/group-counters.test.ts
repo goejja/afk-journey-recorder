@@ -3,7 +3,8 @@ import type { Hono } from 'hono';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../../src/db/open.js';
 import { TILE, TILE_COUNT } from '../../src/domain/map.js';
-import { counterBattles, groupCounters, groupSides, type CounterBattle } from '../../src/query/index.js';
+import { groupCounters, groupSides } from '../../src/query/index.js';
+import { counterBattles, type CounterBattle } from '../../src/query/formations.js';
 import { createApp } from '../../src/server/app.js';
 
 const RULE = { winRate: 0.65, minGames: 5 };

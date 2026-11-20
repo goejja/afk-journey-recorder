@@ -1,22 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { buildLane, defaultPhase, GRID_PHASES, laneId, laneKey, openByDefault, standardPhase, type Lane } from '../../src/domain/stage-grid.js';
 import { isApex, STAGE_KINDS, type StageKind } from '../../src/domain/stage.js';
-import { api, type Artifact, type Attempt, type Enemy, type GameMap, type Hero, type Phantimal } from '../backend.js';
+import { api, type Attempt } from '../backend.js';
 import { useConfirm } from '../ui/Dialog.js';
-import { useLoad } from '../useLoad.js';
+import { useLoad, useReference } from '../hooks/load.js';
 import { AttemptForm, type AttemptFormProps } from './AttemptForm.js';
 import { BoxPanel, type BoxRef } from './BoxPanel.js';
 import { ChangeStageKind } from './ChangeStageKind.js';
 import { usePageState } from './page-state.js';
 import { StageLane } from './StageLane.js';
-
-interface Reference {
-  maps: GameMap[];
-  heroes: Hero[];
-  artifacts: Artifact[];
-  enemies: Enemy[];
-  phantimals: Phantimal[];
-}
+import { TabPanel, Tabs } from '../ui/Tabs.js';
+import { Notice } from '../ui/Notice.js';
+import { Loading } from '../ui/ListStatus.js';
 
 /** How long a box flashes after a jump. */
 const FLASH_MS = 1500;
@@ -26,13 +21,7 @@ const stageLabel = (s: Attempt['stage']) => `S${s.season} · ${s.kind}${isApex(s
 /** The Stages page: a grid of every stage, by phase and lane, and under a clicked box its records. */
 export function StagesPage() {
   const grid = useLoad(() => api.stageGrid(), []);
-  const reference = useLoad<Reference>(
-    async () => {
-      const [maps, heroes, artifacts, enemies, phantimals] = await Promise.all([api.maps(), api.heroes(), api.artifacts(), api.enemies(), api.phantimals()]);
-      return { maps, heroes, artifacts, enemies, phantimals };
-    },
-    [],
-  );
+  const reference = useReference({ maps: api.maps, heroes: api.heroes, artifacts: api.artifacts, enemies: api.enemies, phantimals: api.phantimals });
   const { state, choosePhase, setLane } = usePageState();
   const [selected, setSelected] = useState<{ kind: StageKind; number: number } | null>(null);
   const [form, setForm] = useState<Pick<AttemptFormProps, 'editing' | 'cloneFrom' | 'prefill'> | null>(null);
@@ -138,40 +127,15 @@ export function StagesPage() {
     );
   };
 
-  const moveTab = (e: React.KeyboardEvent, index: number) => {
-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-    if (!step) return;
-    const next = GRID_PHASES[(index + step + GRID_PHASES.length) % GRID_PHASES.length]!;
-    choosePhase(next);
-    setSelected(null);
-    document.getElementById(`stage-phase-tab-${next}`)?.focus();
-  };
-
   return (
     <section>
       {(error || grid.error || reference.error) && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error ?? grid.error ?? reference.error}
-        </p>
+        </Notice>
       )}
       <div className="filters stage-toolbar">
-        <div className="tabs" role="tablist" aria-label="Phase">
-          {GRID_PHASES.map((p, i) => (
-            <button
-              key={p}
-              id={`stage-phase-tab-${p}`}
-              role="tab"
-              aria-selected={phase === p}
-              aria-controls="stage-phase-panel"
-              tabIndex={phase === p ? 0 : -1}
-              className={phase === p ? 'active' : undefined}
-              onClick={() => (choosePhase(p), setSelected(null))}
-              onKeyDown={(e) => moveTab(e, i)}
-            >
-              Phase {p}
-            </button>
-          ))}
-        </div>
+        <Tabs id="stage-phase" label="Phase" tabs={GRID_PHASES.map((p) => ({ key: p, label: `Phase ${p}` }))} value={phase} onChange={(p) => (choosePhase(p), setSelected(null))} />
         <div className="field" role="group" aria-label="Jump to a stage">
           <span className="field-caption">Jump to stage</span>
           <span className="stage-jump">
@@ -199,9 +163,9 @@ export function StagesPage() {
         <li><span className="stage-swatch none" /> no record</li>
       </ul>
 
-      <div role="tabpanel" id="stage-phase-panel" aria-labelledby={`stage-phase-tab-${phase}`}>
+      <TabPanel id="stage-phase" value={phase}>
         {grid.data === undefined ? (
-          !grid.error && <p className="muted">Loading…</p>
+          !grid.error && <Loading />
         ) : (
           lanes.map((lane) => {
             const open = isOpen(lane);
@@ -220,7 +184,7 @@ export function StagesPage() {
             );
           })
         )}
-      </div>
+      </TabPanel>
       {dialog}
     </section>
   );

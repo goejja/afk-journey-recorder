@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useAction } from '../hooks/action.js';
 import { isApex, PHASES } from '../../src/domain/stage.js';
 import { api, type StageKind } from '../backend.js';
 import { useCurrentSeason } from '../seasons.js';
+import { Notice } from '../ui/Notice.js';
 
 /** Which kinds a stage can be turned into: the other one of its family. */
 const OTHER_KIND: Record<StageKind, StageKind> = {
@@ -21,22 +23,19 @@ export function ChangeStageKind({ onChanged, onCancel }: { onChanged: () => void
   const [phase, setPhase] = useState(1);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  const { error, busy, message: status, run } = useAction();
 
-  async function apply() {
-    try {
-      if (from.trim() === '') throw new Error('Enter the first stage number');
-      const first = Number(from);
-      const { stages, attempts } = await api.changeStageKind({ season, phase: isApex(kind) ? phase : 0, kind, newKind: OTHER_KIND[kind], from: first, to: to === '' ? first : Number(to) });
-      setError(null);
-      setStatus(stages === 0 ? 'No such stage was recorded.' : `${stages} stage${stages === 1 ? '' : 's'} and ${attempts} attempt${attempts === 1 ? '' : 's'} are now ${OTHER_KIND[kind]}.`);
-      if (stages > 0) onChanged();
-    } catch (e) {
-      setStatus(null);
-      setError((e as Error).message);
-    }
-  }
+  const apply = () =>
+    run(
+      async () => {
+        if (from.trim() === '') throw new Error('Enter the first stage number');
+        const first = Number(from);
+        return api.changeStageKind({ season, phase: isApex(kind) ? phase : 0, kind, newKind: OTHER_KIND[kind], from: first, to: to === '' ? first : Number(to) });
+      },
+      ({ stages }) => stages > 0 && onChanged(),
+      ({ stages, attempts }) =>
+        stages === 0 ? 'No such stage was recorded.' : `${stages} stage${stages === 1 ? '' : 's'} and ${attempts} attempt${attempts === 1 ? '' : 's'} are now ${OTHER_KIND[kind]}.`,
+    );
 
   return (
     <div className="filters" role="group" aria-label="Change stage kind">
@@ -70,14 +69,14 @@ export function ChangeStageKind({ onChanged, onCancel }: { onChanged: () => void
         To stage (optional)
         <input type="number" min={1} value={to} placeholder="same stage" onChange={(e) => setTo(e.target.value)} />
       </label>
-      <button className="primary" disabled={!from} onClick={() => void apply()}>
+      <button className="primary" disabled={busy || !from} onClick={() => void apply()}>
         Make {OTHER_KIND[kind]}
       </button>
       <button onClick={onCancel}>Close</button>
       {error && (
-        <span className="error" role="alert">
+        <Notice kind="error" as="span">
           {error}
-        </span>
+        </Notice>
       )}
       {status && <span className="muted" role="status">{status}</span>}
     </div>

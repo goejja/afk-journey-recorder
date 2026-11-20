@@ -142,6 +142,21 @@ export function groupSides(
     .sort((a, b) => b.games - a.games || b.winRate - a.winRate || a.core.map((h) => h.hero).join().localeCompare(b.core.map((h) => h.hero).join()));
 }
 
+/** The most played Formation groups of a map are listed from this many records, so one lucky game cannot top the list. */
+const MAP_FORMATION_MIN_GAMES = 3;
+const MAP_FORMATIONS = 5;
+
+/**
+ * The best win-rate Formation groups on a map (`filters.map`): groups with fewer than `MAP_FORMATION_MIN_GAMES` records are left
+ * out, the rest ranked by win rate, then by records. Both sides of a PvP record count, each with its own result, so a group is read
+ * the same wherever it stood.
+ */
+export function mapFormations(db: Database.Database, filters: StatFilters): FormationGroup[] {
+  return groupSides(sideFormations(db, filters), { minGames: MAP_FORMATION_MIN_GAMES })
+    .sort((a, b) => b.winRate - a.winRate || b.games - a.games)
+    .slice(0, MAP_FORMATIONS);
+}
+
 export interface Archetype {
   /** The heroes that are core in every group of the row, with their share of all the row's games. */
   core: GroupHero[];
@@ -197,7 +212,7 @@ export function formationArchetypes(groups: FormationGroup[]): Archetype[] {
 }
 
 /** One side of a PvP battle: its heroes and whether it won. */
-export interface CounterSide {
+interface CounterSide {
   heroes: string[];
   won: number;
 }

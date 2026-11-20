@@ -10,7 +10,7 @@ import { rankFeatures, distance as rankDistance, type RankExample } from '../../
 import { lookExamples, SAME_TILE_DISTANCE } from './look-examples.js';
 import { tileCrop } from './roster-import-tiles.js';
 
-export interface ProposedLook {
+interface ProposedLook {
   rank: string;
   hero: string;
   attemptId: number;

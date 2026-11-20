@@ -2,15 +2,17 @@ import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { DREAM_HUNT_FIGHTS, formatDurationFixed } from '../../src/domain/dream-hunt.js';
 import type { DefaultSlot } from '../../src/domain/defaults.js';
 import { api, type DreamHuntAttempt } from '../backend.js';
-import { finishedDays, groupDays, weekScales } from './week-groups.js';
+import { finishedDays, formationRuns, groupDays, totalScale } from './week-groups.js';
 import { GroupRange } from './GroupRange.js';
-import { useLoad } from '../useLoad.js';
-import { useMaps } from '../useMaps.js';
+import { useLoad } from '../hooks/load.js';
+import { useMaps } from '../hooks/maps.js';
 import { LayoutMap } from './BestTeams.js';
 import { Portrait } from '../Portrait.js';
 import { TeamCell } from '../TeamCell.js';
 import { layoutFrom, type Layout } from '../../src/domain/layout.js';
 import { toggled } from '../format.js';
+import { DisclosureMark } from '../ui/Icon.js';
+import { Notice } from '../ui/Notice.js';
 
 /** How many groups are listed before `Show N more`. */
 const GROUPS = 7;
@@ -46,13 +48,14 @@ function FightCell({ fight, worst }: { fight: DreamHuntAttempt; worst: number | 
  * The best days of this week's Dream Hunt: the five bosses are the columns (the weekly default in Admin > Weekly default, or else the bosses
  * of the best day) and each line below is a group of the days played this week with the same five teams, since the same formation is retried
  * for the luck of the fight. A group shows its fastest day (the team used against each boss and the time of the fight), its best and average
- * total and how many days it holds; opened, it shows where the heroes stood on that best day and the range of the group's runs. Groups are ranked by
+ * total and how many days it holds; opened, it shows where the heroes stood on that best day, the range of the group's totals and the range of each of its teams against its boss over the whole week. Groups are ranked by
  * their best total, fastest first.
  */
 export function ThisWeek({ slots }: { slots: DefaultSlot[] }) {
   const attempts = useLoad(() => api.dreamHuntAttempts({ limit: '100000' }), []);
   const groups = useMemo(() => (attempts.data ? groupDays(finishedDays(attempts.data, slots)) : null), [attempts.data, slots]);
-  const scales = useMemo(() => (groups ? weekScales(groups) : null), [groups]); // over every group, so the bars do not move on Show more
+  const scale = useMemo(() => (groups ? totalScale(groups) : null), [groups]); // over every group, so the bars do not move on Show more
+  const formations = useMemo(() => (attempts.data ? formationRuns(attempts.data, slots) : null), [attempts.data, slots]);
   const error = attempts.error;
   const { maps, error: mapsError } = useMaps();
   const [open, setOpen] = useState<Set<number>>(new Set());
@@ -70,14 +73,14 @@ export function ThisWeek({ slots }: { slots: DefaultSlot[] }) {
   return (
     <div>
       {mapsError && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {mapsError}
-        </p>
+        </Notice>
       )}
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       <table className="week-table" aria-label="This week">
         <thead>
@@ -111,7 +114,7 @@ export function ThisWeek({ slots }: { slots: DefaultSlot[] }) {
                   <td>
                     <button className="week-toggle" aria-expanded={shown} aria-label={`${shown ? 'Hide' : 'Show'} the days of group ${rank + 1}`}>
                       <span>
-                        <span aria-hidden="true">{shown ? '▾' : '▸'}</span> <strong className="week-time">{formatDurationFixed(group.best.totalSeconds)}</strong>
+                        <DisclosureMark open={shown} /> <strong className="week-time">{formatDurationFixed(group.best.totalSeconds)}</strong>
                       </span>
                       <span className="muted week-group-facts">
                         avg {formatDurationFixed(group.averageSeconds)} · ×{group.days.length}
@@ -134,7 +137,7 @@ export function ThisWeek({ slots }: { slots: DefaultSlot[] }) {
                         </td>
                       ))}
                     </tr>
-                    {scales && <GroupRange group={group} scales={scales} />}
+                    {scale && formations && <GroupRange group={group} formations={formations} totalScale={scale} />}
                   </>
                 )}
               </Fragment>
@@ -153,7 +156,7 @@ export function ThisWeek({ slots }: { slots: DefaultSlot[] }) {
         groups?.length === 0 && <p className="muted">No complete day (five won, timed fights) against this weekly default's bosses and rule recorded yet.</p>
       )}
       <p className="muted">
-        The fastest days played against the weekly default's bosses and rule, by the total of their five fight times. Days that fielded the same five teams (same heroes and artifact, wherever they stood) are one group, shown by its best day with the average total and the number of days; open a group to see where the heroes stood on its best day and, for the total and each boss, the range of its runs (best, average and worst, on the scale of all the week's groups). A day with a lost or untimed fight is not counted. The week changes when you change the weekly default.
+        The fastest days played against the weekly default's bosses and rule, by the total of their five fight times. Days that fielded the same five teams (same heroes and artifact, wherever they stood) are one group, shown by its best day with the average total and the number of days; open a group to see where the heroes stood on its best day and, the range (best, average and worst) of the group's totals on the scale of all the week's groups and, for each boss, of that team against it in every fight of the week, in other groups and unfinished days too, on a scale from 0 to 90 seconds. A lost fight has no time: it counts as a run, is shown as lost, and makes the worst 90 seconds; best and average are those of the wins. A day with a lost or untimed fight is not counted in the groups. The week changes when you change the weekly default.
       </p>
     </div>
   );

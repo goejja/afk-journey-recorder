@@ -71,7 +71,7 @@ export function unplacedUnit(placed: { tile: number; hero: string; part?: string
 }
 
 /** The name a phantimal is kept under: a pair is kept under its first part, whichever part the report showed. */
-export const phantimalKey = (name: string): string => Object.entries(PAIR_PHANTIMALS).find(([, partner]) => partner === name)?.[0] ?? name;
+const phantimalKey = (name: string): string => Object.entries(PAIR_PHANTIMALS).find(([, partner]) => partner === name)?.[0] ?? name;
 
 /** The phantimal of a report on free tiles of a zone after the heroes (both parts of a pair, each on its own), or null when the report showed
  * none or the zone has no room for both parts: a Phantimal is never placed in part (ADR 0028). */

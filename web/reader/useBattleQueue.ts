@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type ArenaMode, type BattleImportState, type Profile } from '../backend.js';
 import { groupPictures, pictureKey } from './battle-import.js';
 import { applyEdits, pruneEdits, readEdits, writeEdits, type Edits } from './battle-import-edits.js';
-import { usePolling } from '../useLoad.js';
+import { useJobChange } from '../jobs/JobsProvider.js';
 
 /** Runs one action at a time for a wizard: `busy` while it runs, and its failure in `error`. */
 export function useAttempt() {
@@ -25,7 +25,7 @@ export function useAttempt() {
 type PictureRef = { id: number; key?: string };
 
 /**
- * The Battle import queue: the pictures the agent reads (followed while any is going), the groups they make with what the player
+ * The Battle import queue: the pictures the agent reads (asked for again when the job watcher says the queue changed), the groups they make with what the player
  * changed (fight numbers, moved pictures, profiles given to names, kept in the browser by the picture's key), and the profiles.
  */
 export function useBattleQueue({ attempt, setError, onProfileCreated }: { attempt: (action: () => Promise<unknown>) => Promise<void>; setError: (message: string | null) => void; onProfileCreated?: (profile: Profile) => void }) {
@@ -52,7 +52,8 @@ export function useBattleQueue({ attempt, setError, onProfileCreated }: { attemp
   }, [state]);
 
   const reading = state?.queue.some((q) => q.state === 'running' || q.state === 'queued') ?? false;
-  usePolling(refresh, reading);
+  // the app's job watcher follows the pictures being read; the details are asked for again when the queue changed
+  useJobChange('battle', () => void refresh());
 
   const groups = useMemo(() => groupPictures(applyEdits(state?.queue ?? [], edits, profiles), edits.moved), [state, edits, profiles]);
   const failed = (state?.queue ?? []).filter((q) => q.state === 'failed');

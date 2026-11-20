@@ -424,7 +424,7 @@ describe('the batch table of a Super League Round', () => {
     expect(await screen.findByText(/Saved 1 battle in Season 8, Tournament 2, Group stage/)).toBeTruthy();
     await waitFor(() => expect(requests.some((r) => r.url === '/api/import-feedback')).toBe(true));
     await new Promise((r) => setTimeout(r, 20));
-    expect(toasts()).toBe('');
+    expect(toasts()).toBe('Saved 1 battle in Season 8, Tournament 2, Group stage.'); // the saved line only, nothing about the readings
     expect(screen.queryByRole('alert')).toBeNull();
   });
 

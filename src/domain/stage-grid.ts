@@ -7,7 +7,7 @@ export const GRID_PHASES = [1, 2, 3] as const;
  * How many boxes of a lane each phase holds. The Apex split is confirmed in the game and may become 334 and 666: change it here.
  * Normal and Phantisomal numbers run on across the phases; Apex numbers restart in every phase.
  */
-export const LANE_SIZE: Record<StageKind, number> = { Normal: 300, Phantisomal: 600, 'Apex Normal': 333, 'Apex Phantisomal': 667 };
+const LANE_SIZE: Record<StageKind, number> = { Normal: 300, Phantisomal: 600, 'Apex Normal': 333, 'Apex Phantisomal': 667 };
 
 /** A stage the grid has a record for: the aggregate of the stage rows of one kind, phase (0 for the standard kinds) and number across seasons. */
 export interface GridBox {
@@ -20,7 +20,7 @@ export interface GridBox {
 }
 export type BoxState = GridBox['state'] | 'none';
 
-export interface LaneBox {
+interface LaneBox {
   number: number;
   state: BoxState;
   newestSeason: number | null;

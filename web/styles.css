@@ -67,9 +67,23 @@
   --sp-3: 12px;
   --sp-4: 16px;
   --sp-5: 24px;
+  /* The hairline gap between the tiles of a compact cluster, off the 4px scale */
+  --gap-hair: 2px;
   /* Room kept at the right edge of every scrolling box, so its scrollbar (also the overlay kind that floats over the content) never covers what is inside */
   --scroll-room: var(--sp-4);
   --stage-box: 44px;
+  /* The columns the rows of a record list share, so their texts line up from one row to the next (.day-info, .fight-line, .battle-info) */
+  --col-icon: 2rem;
+  --col-chip: 2.5rem;
+  --col-time: 5rem;
+  --col-result: 7rem;
+  --col-rule: 8rem;
+  --col-id: 8rem;
+  --col-date: 9.5rem;
+  --col-boss: 12rem;
+  --col-position: 4.5rem;
+  /* The picture of a card or a map that has none */
+  --thumb: 72px;
   --stage-card-min: 11rem;
   --stage-cleared: color-mix(in srgb, var(--win) 40%, var(--panel));
   --stage-older: color-mix(in srgb, var(--warn) 40%, var(--panel));
@@ -140,7 +154,7 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 /* The icon strip sits left of the portrait; an empty third column keeps the portrait centred. */
 .card-top { display: grid; grid-template-columns: var(--icon-size) minmax(0, 1fr) var(--icon-size); align-items: start; gap: var(--sp-1); padding: var(--sp-2) var(--sp-1) 0; }
 .card-main { grid-column: 2; display: flex; flex-direction: column; align-items: center; width: 100%; border: 0; border-radius: 0; background: transparent; padding: var(--sp-1) 0 var(--sp-2); gap: var(--sp-1); }
-.card-main img, .no-image { width: 72px; height: 72px; object-fit: contain; }
+.card-main img { width: var(--thumb); height: var(--thumb); object-fit: contain; }
 .name { font-weight: 600; text-align: center; }
 .meta { color: var(--muted); font-size: var(--font-sm); text-align: center; }
 .hero-icons { grid-column: 1; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding-top: var(--sp-1); }
@@ -227,7 +241,6 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 h3 { font-size: var(--font-base); margin: var(--sp-4) 0 var(--sp-2); }
 .panel > h3:first-child { margin-top: 0; }
 .portrait { object-fit: contain; flex: none; }
-.portrait-missing { display: inline-flex; align-items: center; justify-content: center; background: var(--panel-hi); border-radius: 50%; color: var(--muted); font-weight: 700; }
 .with-portrait { display: inline-flex; align-items: center; gap: var(--sp-2); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); align-items: center; }
 .chip { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: var(--control-h-compact); background: var(--panel-hi); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 0 var(--sp-1) 0 var(--sp-3); }
@@ -315,7 +328,6 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .battle-fights { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: grid; gap: var(--sp-2); }
 .battle-note { margin-bottom: 0; } /* the card's own padding is the space below the last line */
 .battle-map { display: flex; justify-content: center; padding: var(--sp-1) 0; }
-.attempt-form h3 { margin-top: var(--sp-5); }
 
 .card-main.static { cursor: default; display: flex; flex-direction: column; align-items: center; padding: var(--sp-3) var(--sp-2) var(--sp-2); gap: var(--sp-1); }
 .upload { display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--r-control); cursor: pointer; background: var(--panel-hi); }
@@ -354,7 +366,7 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 /* A time coloured from green (the fastest of those compared against the same boss) to red (the slowest): --worst runs from 0 to 1. */
 .ranked { font-weight: 600; color: color-mix(in hsl, var(--danger) calc(var(--worst) * 100%), var(--win)); }
 .week-team { display: flex; flex-direction: column; gap: var(--sp-1); }
-.week-team-units { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+.week-team-units { display: flex; flex-wrap: wrap; gap: var(--gap-hair); align-items: center; }
 .board { width: 100%; border-collapse: collapse; }
 .board th, .board td { text-align: left; padding: var(--sp-2) var(--sp-2); border-bottom: 1px solid var(--border); vertical-align: middle; }
 .board tr.low { opacity: 0.75; }
@@ -413,8 +425,6 @@ button.link { background: none; border: 0; color: inherit; font: inherit; font-w
 .icon-choice { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 260px; }
 .choice-head { display: flex; align-items: center; gap: var(--sp-2); }
 .choice-body { max-width: 420px; }
-.sides-extras { display: flex; flex-wrap: wrap; gap: var(--sp-5); margin-top: var(--sp-3); }
-.sides-extras h4 { margin: 0 0 var(--sp-2); }
 .hex .portrait { background: var(--portrait-bg); border-radius: 50%; box-shadow: 0 0 0 1px var(--shadow-strong); }
 .enemy-chips { list-style: none; margin: 0 0 var(--sp-2); padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 .enemy-chip { font-size: var(--font-sm); border-radius: var(--r-pill); }
@@ -464,6 +474,10 @@ a.button:hover { background: var(--panel-hi); }
 .workspace-row .record-note { flex: 1 1 8rem; min-width: 6rem; }
 .workspace-row .record-note input { width: 100%; }
 .hint-icon { align-self: center; color: var(--muted); cursor: help; }
+/* The shared Icon (web/ui/Icon.tsx): one em square, in the colour of the text around it; thin rounded strokes, and solid for the disclosure triangles */
+.icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.icon-solid { fill: currentColor; stroke: none; }
+.icon-star { fill: currentColor; }
 .deployment-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); margin-bottom: var(--sp-2); padding: var(--sp-1) var(--sp-3); }
 .deployment-bar .deployment-title { margin: 0; font-size: var(--font-sm); }
 .deployment-bar .deployment-profile { display: contents; }
@@ -523,15 +537,15 @@ a.button:hover { background: var(--panel-hi); }
 
 /* The same columns on every collapsed row, so the texts line up from one row to the next. */
 .day-info, .battle-info { display: grid; align-items: center; column-gap: var(--sp-3); }
-.day-info { grid-template-columns: auto 7rem 6.5rem 10rem 9.5rem 2.5rem 8rem minmax(0, 1fr); }
+.day-info { grid-template-columns: auto var(--col-result) 6.5rem 10rem var(--col-date) var(--col-chip) var(--col-id) minmax(0, 1fr); }
 /* A fight on its own line: portrait, boss, result, time, rule, date, season, Formation ID, tags; one cell for each, empty when it has no value, so the columns line up from row to row. */
-.fight-line { display: grid; grid-template-columns: 2rem 12rem 7rem 5rem 8rem 9.5rem 2.5rem 8rem minmax(0, 1fr); column-gap: var(--sp-3); align-items: center; }
+.fight-line { display: grid; grid-template-columns: var(--col-icon) var(--col-boss) var(--col-result) var(--col-time) var(--col-rule) var(--col-date) var(--col-chip) var(--col-id) minmax(0, 1fr); column-gap: var(--sp-3); align-items: center; }
 /* In a day's card the fight's number leads, and the date, season and tags belong to the day. */
-.fight-line.in-battle { grid-template-columns: 4.5rem 2rem 12rem 7rem 5rem 8rem; }
+.fight-line.in-battle { grid-template-columns: var(--col-position) var(--col-icon) var(--col-boss) var(--col-result) var(--col-time) var(--col-rule); }
 .fight-line > .badge { justify-self: start; white-space: nowrap; }
 .fight-boss { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.battle-info { grid-template-columns: 2.5rem 16rem 3.5rem 11rem minmax(0, 1fr); }
-.mode-chip { flex: none; justify-self: start; width: 2.5rem; padding: 1px 0; text-align: center; border-radius: var(--r-pill); font-size: var(--font-sm); font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--mode) 22%, var(--panel)); border: 1px solid color-mix(in srgb, var(--mode) 60%, var(--border)); }
+.battle-info { grid-template-columns: var(--col-chip) 16rem 3.5rem 11rem minmax(0, 1fr); }
+.mode-chip { flex: none; justify-self: start; width: var(--col-chip); padding: 1px 0; text-align: center; border-radius: var(--r-pill); font-size: var(--font-sm); font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--mode) 22%, var(--panel)); border: 1px solid color-mix(in srgb, var(--mode) 60%, var(--border)); }
 .mode-arena { --mode: var(--mode-arena); }
 .mode-supreme-arena { --mode: var(--mode-supreme); }
 .mode-super-league { --mode: var(--mode-league); }
@@ -589,7 +603,7 @@ a.button:hover { background: var(--panel-hi); }
 .map-picker-button { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); width: 100%; padding: var(--sp-2) var(--sp-1); }
 .map-picker-name { max-width: 100%; text-align: center; line-height: 1.2; overflow-wrap: anywhere; } /* the whole name, on as many lines as it needs */
 .map-thumb { display: block; }
-.map-thumb-none { display: grid; place-items: center; width: 72px; height: 66px; border: 1px dashed var(--border); border-radius: var(--r-control); color: var(--muted); font-size: var(--font-xl); }
+.map-thumb-none { display: grid; place-items: center; width: var(--thumb); height: 66px; border: 1px dashed var(--border); border-radius: var(--r-control); color: var(--muted); font-size: var(--font-xl); }
 .map-picker-list { position: absolute; z-index: var(--z-popover); top: 100%; left: 0; width: 330px; max-height: 24rem; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); padding: var(--sp-2); margin-top: var(--sp-1); background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-control); scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .map-choice { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); min-width: 0; padding: var(--sp-1); font-size: var(--font-sm); line-height: 1.2; }
 .map-choice span:last-child { max-width: 100%; text-align: center; overflow-wrap: anywhere; }
@@ -645,7 +659,7 @@ a.button:hover { background: var(--panel-hi); }
 .deployment-name { flex: 1 1 12ch; min-width: 8ch; }
 .deployment-ident { display: inline-flex; align-items: center; gap: var(--sp-2); flex: 1 1 12ch; flex-wrap: wrap; }
 .deployment-ident .deployment-name { flex: 0 1 auto; }
-.deployment-boxes { display: inline-flex; gap: 2px; }
+.deployment-boxes { display: inline-flex; gap: var(--gap-hair); }
 .deployment-box { display: inline-grid; place-items: center; width: 1.7rem; height: 1.7rem; padding: 0; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--bg); color: var(--muted); font-size: var(--font-sm); font-weight: 700; cursor: default; }
 .deployment-box:disabled { cursor: default; opacity: 0.5; }
 .deployment-box.ok, .deployment-box.confirmed { border-color: var(--win); color: var(--win); }
@@ -676,6 +690,7 @@ a.button:hover { background: var(--panel-hi); }
 .group-heroes { display: flex; gap: var(--sp-1); align-items: flex-start; }
 .group-hero { display: inline-flex; flex-direction: column; align-items: center; min-width: var(--slot); }
 .group-hero small { font-size: var(--font-xs); color: var(--muted); }
+.map-formation { display: flex; gap: var(--sp-4); align-items: flex-start; }
 .group-sep { width: 1px; align-self: stretch; background: var(--border); }
 /* one column template for the column titles, the Archetype headings and the group rows */
 .group-row { --slot: 2.5rem; display: grid; grid-template-columns: 1.5rem calc(var(--core-n, 3) * (var(--slot) + var(--sp-1))) calc(var(--flex-n, 3) * (var(--slot) + var(--sp-1))) minmax(6rem, 1fr) 4rem 5rem 4rem 4rem 6rem; align-items: center; gap: var(--sp-3); width: 100%; padding: var(--sp-1) var(--sp-2); border: 0; border-radius: var(--r-control); background: none; color: inherit; font: inherit; text-align: left; }
@@ -696,6 +711,7 @@ button.group-row:hover { background: var(--panel-hi); }
 /* Toasts: a short message at the top right that fades by itself; above every other layer, and the stack never blocks what is under the gaps */
 .toasts { position: fixed; top: var(--sp-4); right: var(--sp-4); z-index: var(--z-toast); display: grid; gap: var(--sp-2); width: min(360px, calc(100vw - 2 * var(--sp-4))); pointer-events: none; }
 .toast { pointer-events: auto; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); background: var(--panel-hi); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: 0 4px 16px var(--shadow-strong); font-size: var(--font-md); animation: toast-in 0.15s ease-out; }
+.toast-error { border-color: var(--danger); }
 .toast.leaving { opacity: 0; transition: opacity 0.2s; }
 .toast button { border: 0; background: transparent; padding: 0 var(--sp-1); color: var(--muted); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(calc(-1 * var(--sp-2))); } }

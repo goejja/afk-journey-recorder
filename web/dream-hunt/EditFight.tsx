@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAction } from '../hooks/action.js';
 import { api, type DreamHuntAttempt } from '../backend.js';
 import { RecordShell } from '../RecordShell.js';
 import { FormationIdField } from '../FormationIdField.js';
@@ -7,17 +8,12 @@ import { FightIdentity, FightResult, FightBoard } from './FightParts.js';
 
 export function EditFight({ fight, reference, onSaved, onCancel }: { fight: DreamHuntAttempt; reference: Reference; onSaved: () => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(() => draftFromFight(fight));
-  const [error, setError] = useState<string | null>(null);
+  const { error, busy, setError, run } = useAction();
 
   async function save() {
     const built = toFight(draft);
     if ('error' in built) return setError(built.error);
-    try {
-      await api.updateDreamHuntAttempt(fight.id, built.fight);
-      onSaved();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    await run(() => api.updateDreamHuntAttempt(fight.id, built.fight), onSaved);
   }
 
   return (
@@ -33,6 +29,7 @@ export function EditFight({ fight, reference, onSaved, onCancel }: { fight: Drea
       error={error}
       status={null}
       saveLabel="Save changes"
+      saving={busy}
       onSave={() => void save()}
       onCancel={onCancel}
     >

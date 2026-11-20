@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { isSmallSample } from '../../src/domain/stats.js';
 import { Portrait } from '../Portrait.js';
 import { percent, toggled } from '../format.js';
+import { DisclosureMark } from '../ui/Icon.js';
 
 export function WinBar({ wins, games }: { wins: number; games: number }) {
   const rate = games === 0 ? 0 : wins / games;
@@ -71,7 +72,7 @@ export function StatsTable<Row extends { games: number; wins: number }>({ rows, 
                     <td key={c.key}>
                       {detail && i === 0 ? (
                         <button className="link" aria-expanded={opened} onClick={() => toggle(key)}>
-                          {opened ? '▾' : '▸'} {cell}
+                          <DisclosureMark open={opened} /> {cell}
                         </button>
                       ) : (
                         cell

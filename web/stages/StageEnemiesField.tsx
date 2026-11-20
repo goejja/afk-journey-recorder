@@ -1,5 +1,7 @@
 import { useId, useState } from 'react';
 import type { Enemy, Hero, StageEnemy } from '../backend.js';
+import { IconButton } from '../ui/Icon.js';
+import { Notice } from '../ui/Notice.js';
 
 interface Props {
   enemies: Enemy[];
@@ -42,13 +44,9 @@ export function StageEnemiesField({ enemies, heroes, value, onChange }: Props) {
           <span key={`${entry.enemy ? 'enemy' : 'hero'}:${nameOf(entry)}`} className="badge tag" title={entry.hero ? 'Hero' : 'Enemy'}>
             {nameOf(entry)} ×{entry.count}
             {entry.count > 1 && (
-              <button type="button" className="tag-remove" aria-label={`One fewer ${nameOf(entry)}`} onClick={() => fewer(entry)}>
-                −
-              </button>
+              <IconButton icon="minus" className="tag-remove" label={`One fewer ${nameOf(entry)}`} onClick={() => fewer(entry)} />
             )}
-            <button type="button" className="tag-remove" aria-label={`Remove ${nameOf(entry)}`} onClick={() => onChange(value.filter((e) => e !== entry))}>
-              ×
-            </button>
+            <IconButton icon="close" className="tag-remove" label={`Remove ${nameOf(entry)}`} onClick={() => onChange(value.filter((e) => e !== entry))} />
           </span>
         ))}
         <input
@@ -73,7 +71,7 @@ export function StageEnemiesField({ enemies, heroes, value, onChange }: Props) {
             <option key={`hero:${h.name}`} value={h.name} label="Hero" />
           ))}
         </datalist>
-        {message && <span className="error" role="alert">{message}</span>}
+        {message && <Notice kind="error" as="span">{message}</Notice>}
       </div>
     </div>
   );

@@ -9,12 +9,12 @@ export interface ReaderTally {
 }
 
 /** Which looks a count is about: the ones already saved, or the ones a battle report proposes. */
-export type LookGroup = 'known' | 'proposed';
+type LookGroup = 'known' | 'proposed';
 
 /** For each filed rank, how often the reader named each rank (null when it was not sure). */
 export type ReadAs = Map<string, Map<string | null, number>>;
 
-export interface ReaderScore {
+interface ReaderScore {
   overall: ReaderTally;
   byRank: Map<string, ReaderTally>;
   /** What the looks of each rank were read as, apart for the known and the proposed looks. */

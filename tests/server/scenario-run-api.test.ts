@@ -42,6 +42,8 @@ const send = (method: string, url: string, body?: unknown, headers: Record<strin
   });
 };
 const json = async (response: Response | Promise<Response>) => (await response).json() as Promise<any>;
+/** The scenarios that have a job, as the job list tells it. */
+const runs = async () => (await json(send('GET', '/api/jobs'))).scenarios;
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const newScenario = async () =>
   (await json(send('POST', '/api/scenarios', { name: 'Rival', mode: 'Arena', slots: [{ mapName: 'Duel', mine: [], enemy: [{ tile: 0, hero: 'X' }] }] }))).id as number;
@@ -50,9 +52,9 @@ describe('running the agent on a scenario', () => {
   it('lists only the scenarios that have a job, in one response', async () => {
     const a = await newScenario();
     await newScenario();
-    expect(await json(send('GET', '/api/scenarios/runs'))).toEqual({});
+    expect(await runs()).toEqual({});
     await send('POST', `/api/scenarios/${a}/run`);
-    expect(await json(send('GET', '/api/scenarios/runs'))).toEqual({ [a]: { state: 'running' } });
+    expect(await runs()).toEqual({ [a]: { state: 'running' } });
   });
 
   it('only starts or cancels a run when asked from this app, not by a request that any web page could send', async () => {
@@ -64,7 +66,7 @@ describe('running the agent on a scenario', () => {
 
     await send('POST', `/api/scenarios/${id}/run`);
     expect((await blind(`/api/scenarios/${id}/run/cancel`)).status).toBe(400);
-    expect((await json(send('GET', '/api/scenarios/runs')))[id]).toMatchObject({ state: 'running' });
+    expect((await runs())[id]).toMatchObject({ state: 'running' });
   });
 
   it('starts the agent in the background and saves its reply as the estimate when it finishes', async () => {
@@ -72,14 +74,14 @@ describe('running the agent on a scenario', () => {
 
     const started = await send('POST', `/api/scenarios/${id}/run`);
     expect(started.status).toBe(202);
-    expect((await json(send('GET', '/api/scenarios/runs')))[id]).toMatchObject({ state: 'running' });
+    expect((await runs())[id]).toMatchObject({ state: 'running' });
     expect(calls).toHaveLength(1);
     expect(calls[0]![0].command).toBe('claude');
 
     finish.resolve('  Put A in front.  ');
     await settle();
 
-    expect((await json(send('GET', '/api/scenarios/runs')))[id]).toMatchObject({ state: 'done' });
+    expect((await runs())[id]).toMatchObject({ state: 'done' });
     const saved = await json(send('GET', '/api/scenarios'));
     expect(saved[0]).toMatchObject({ estimate: 'Put A in front.' });
     expect(saved[0].estimateAt).not.toBeNull();
@@ -107,7 +109,7 @@ describe('running the agent on a scenario', () => {
     expect((await send('POST', `/api/scenarios/${id}/run/cancel`)).status).toBe(200);
     await settle();
 
-    expect((await json(send('GET', '/api/scenarios/runs')))[id]).toEqual({ state: 'failed', error: 'Cancelled' });
+    expect((await runs())[id]).toEqual({ state: 'failed', error: 'Cancelled' });
     expect((await json(send('GET', '/api/scenarios')))[0].estimate).toBe('Old answer');
     expect((await send('POST', `/api/scenarios/${id}/run`)).status).toBe(202);
   });
@@ -130,7 +132,7 @@ describe('running the agent on a scenario', () => {
     finish.resolve('  \n ');
     await settle();
 
-    expect((await json(send('GET', '/api/scenarios/runs')))[id]).toMatchObject({ state: 'failed', error: expect.stringMatching(/empty/i) });
+    expect((await runs())[id]).toMatchObject({ state: 'failed', error: expect.stringMatching(/empty/i) });
     expect((await json(send('GET', '/api/scenarios')))[0].estimate).toBe('Old answer');
   });
 
@@ -147,7 +149,7 @@ describe('running the agent on a scenario', () => {
     );
     await settle();
 
-    expect((await json(send('GET', '/api/scenarios/runs')))[id]).toMatchObject({ state: 'done' });
+    expect((await runs())[id]).toMatchObject({ state: 'done' });
     expect((await json(send('GET', '/api/scenarios')))[0].estimate).toBe('Put B in front.');
   });
 
@@ -159,7 +161,7 @@ describe('running the agent on a scenario', () => {
     finish.reject(new Error('claude: not logged in'));
     await settle();
 
-    expect((await json(send('GET', '/api/scenarios/runs')))[id]).toEqual({ state: 'failed', error: 'claude: not logged in' });
+    expect((await runs())[id]).toEqual({ state: 'failed', error: 'claude: not logged in' });
     expect((await json(send('GET', '/api/scenarios')))[0].estimate).toBe('Old answer');
   });
 });

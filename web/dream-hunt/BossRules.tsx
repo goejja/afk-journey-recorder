@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { api, type BossRule } from '../backend.js';
-import { useCrud } from '../useCrud.js';
+import { useAction } from '../hooks/action.js';
+import { useConfirmActions } from '../hooks/confirm.js';
 import { RecordRow } from '../ui/RecordRow.js';
+import { Notice } from '../ui/Notice.js';
 
 /** The shared list of rules that boost you (fifth Dream Hunt fight, Supreme Arena maps); the list is yours to edit. */
 export function BossRules({ rules, onChanged }: { rules: BossRule[]; onChanged: () => void }) {
@@ -9,8 +11,8 @@ export function BossRules({ rules, onChanged }: { rules: BossRule[]; onChanged: 
   const [description, setDescription] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<BossRule>({ name: '', description: '' });
-  const { error, run: act, confirmDelete, dialog } = useCrud();
-  const run = (action: () => Promise<unknown>) => act(action, onChanged);
+  const { error, busy, run } = useAction({ then: onChanged });
+  const { confirmDelete, dialog } = useConfirmActions(run);
 
   async function remove(rule: BossRule) {
     if (await confirmDelete(`Delete the rule "${rule.name}"?`)) await run(() => api.deleteBossRule(rule.name));
@@ -23,16 +25,16 @@ export function BossRules({ rules, onChanged }: { rules: BossRule[]; onChanged: 
         Dream Hunt fights and Arena battles can then be tagged with it. Rules are managed here only, not from the Dream Hunt or Arena pages.
       </p>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       <div className="filters">
         <input placeholder="Rule name" aria-label="Rule name" value={name} onChange={(e) => setName(e.target.value)} />
         <input placeholder="What it does (optional)" aria-label="Rule description" value={description} onChange={(e) => setDescription(e.target.value)} />
         <button
           className="primary"
-          disabled={name.trim() === ''}
+          disabled={busy || name.trim() === ''}
           onClick={() =>
             void run(async () => {
               await api.createBossRule({ name, description });
@@ -54,6 +56,7 @@ export function BossRules({ rules, onChanged }: { rules: BossRule[]; onChanged: 
                   <>
                     <button
                       className="primary"
+                      disabled={busy}
                       onClick={() =>
                         void run(async () => {
                           await api.saveBossRule(rule.name, draft);
@@ -82,7 +85,7 @@ export function BossRules({ rules, onChanged }: { rules: BossRule[]; onChanged: 
                     >
                       Edit
                     </button>
-                    <button className="danger" onClick={() => void remove(rule)}>
+                    <button className="danger" disabled={busy} onClick={() => void remove(rule)}>
                       Delete
                     </button>
                   </>

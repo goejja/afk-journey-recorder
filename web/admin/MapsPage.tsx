@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { MAP_TAGS, TILE, TILE_COUNT } from '../../src/domain/map.js';
 import { api, type GameMap } from '../backend.js';
 import { HexMap, Legend } from '../HexMap.js';
 import { useNameDialog } from '../ui/Dialog.js';
-import { useCrud } from '../useCrud.js';
+import { useAction } from '../hooks/action.js';
+import { useConfirmActions } from '../hooks/confirm.js';
+import { useLoad } from '../hooks/load.js';
 import { MasterDetail } from '../ui/MasterDetail.js';
+import { Notice } from '../ui/Notice.js';
 
 interface Draft {
   name: string;
@@ -12,36 +15,40 @@ interface Draft {
   cells: number[];
 }
 
+const NO_MAPS: GameMap[] = [];
 const blankDraft = (): Draft => ({ name: '', tags: ['Stage'], cells: Array(TILE_COUNT).fill(TILE.OPEN) });
 const toDraft = (map: GameMap): Draft => ({ name: map.name, tags: map.tags, cells: map.cells });
 const sameDraft = (a: Draft, b: Draft) =>
   a.name === b.name && a.tags.join() === b.tags.join() && a.cells.join() === b.cells.join();
 
 export function MapsPage() {
-  const [maps, setMaps] = useState<GameMap[]>([]);
+  const loaded = useLoad(() => api.maps(), []);
+  const maps = loaded.data ?? NO_MAPS;
   const [selected, setSelected] = useState<string | null>(null); // null while creating a new map
   const [draft, setDraft] = useState<Draft>(blankDraft());
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('');
-  const { error, setError, run: act, confirm, confirmDelete, confirmDiscard, dialog } = useCrud();
+  const { error: actionError, busy, setError, run: act } = useAction();
+  const error = loaded.error ?? actionError;
+  const { confirmDelete, confirmDiscard, confirmRun, dialog } = useConfirmActions(act);
   const { name: askName, dialog: nameDialog } = useNameDialog();
 
   const current = maps.find((m) => m.name === selected) ?? null;
   const dirty = current ? !sameDraft(draft, toDraft(current)) : draft.name !== '' || draft.cells.some((c) => c !== TILE.OPEN);
 
-  const reload = useCallback(async (select?: string | null) => {
-    const loaded = await api.maps();
-    setMaps(loaded);
-    if (select !== undefined) {
-      setSelected(select);
-      const map = loaded.find((m) => m.name === select);
-      setDraft(map ? toDraft(map) : blankDraft());
-    }
-  }, []);
-
-  useEffect(() => {
-    void act(() => reload());
-  }, [act, reload]);
+  // reads the maps again; with `select` (a saved map's name, or null for a new one) the page then opens it
+  const reloadMaps = loaded.reload;
+  const reload = useCallback(
+    async (select?: string | null) => {
+      const list = await reloadMaps();
+      if (list && select !== undefined) {
+        setSelected(select);
+        const map = list.find((m) => m.name === select);
+        setDraft(map ? toDraft(map) : blankDraft());
+      }
+    },
+    [reloadMaps],
+  );
 
   const run = (action: () => Promise<string | null | undefined>) => act(action, reload);
 
@@ -79,17 +86,8 @@ export function MapsPage() {
     }
   };
 
-  const restore = async () => {
-    if (
-      await confirm({
-        title: `Replace your edits to "${current!.name}" with the imported original?`,
-        confirmLabel: 'Replace',
-        danger: true,
-      })
-    ) {
-      void run(async () => (await api.restoreMap(current!.name)).name);
-    }
-  };
+  const restore = () =>
+    confirmRun({ title: `Replace your edits to "${current!.name}" with the imported original?`, confirmLabel: 'Replace' }, async () => (await api.restoreMap(current!.name)).name, reload);
 
   const visible = useMemo(
     () =>
@@ -146,9 +144,9 @@ export function MapsPage() {
         detail={
           <div className="map-editor">
             {error && (
-              <p className="error" role="alert">
+              <Notice kind="error">
                 {error}
-              </p>
+              </Notice>
             )}
             <div className="filters">
               <input
@@ -173,16 +171,16 @@ export function MapsPage() {
             <Legend />
 
             <div className="actions">
-              <button className="primary" onClick={() => void save()} disabled={!dirty || draft.name.trim() === ''}>
+              <button className="primary" onClick={() => void save()} disabled={busy || !dirty || draft.name.trim() === ''}>
                 {current ? 'Save' : 'Create map'}
               </button>
               {current && (
                 <>
-                  <button onClick={() => void duplicate()}>Duplicate</button>
-                  <button onClick={() => void restore()} disabled={!current.canRestore}>
+                  <button disabled={busy} onClick={() => void duplicate()}>Duplicate</button>
+                  <button onClick={() => void restore()} disabled={busy || !current.canRestore}>
                     Restore original
                   </button>
-                  <button className="danger" onClick={() => void remove()}>
+                  <button className="danger" disabled={busy} onClick={() => void remove()}>
                     Delete
                   </button>
                 </>

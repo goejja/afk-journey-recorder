@@ -135,7 +135,7 @@ describe('adding, renaming an artifact and deleting', () => {
 
 describe('the query command', () => {
   it('reads a layout from the command line, a pair part, a summon and a phantimal on two tiles', async () => {
-    const { parseLayout } = await import('../../src/query/index.js');
+    const { parseLayout } = await import('../../src/query/deployments.js');
     expect(parseLayout('Alna@31, Elijah & Lailah/Elijah@30,Zanie/Laser Turret@12', 'Wedge of Matter@30+31')).toEqual({
       units: [
         { kind: 'hero', hero: 'Alna', part: '', tile: 31 },

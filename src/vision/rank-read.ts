@@ -24,7 +24,7 @@ export const MIN_EXAMPLES = 3;
 /** The distance (the grid's mean colour difference, 0 to 1, plus the weighted ornament and background differences) above which the closest example is not close. Taken from the owner's 339 Rank Looks, each read from all the others: 0.15 with a margin of 0.3 reads 199 of them with 8 wrong, against 206 with 15 wrong before the background colours were added. */
 export const RANK_MAX_DISTANCE = 0.15;
 /** How much closer the best rank's closest example must be than the closest example of any other rank, as a share of that distance. */
-export const RANK_MARGIN = 0.3;
+const RANK_MARGIN = 0.3;
 
 /**
  * The version of what `rankFeatures` computes. Vectors are stored with it (`rank_look_feature`), so a change to the extractor, its sizes,

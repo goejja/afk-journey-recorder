@@ -1,7 +1,9 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { api, learnedLookUrl, type ReviewExplainJob, type ReviewFinding, type ReviewRun, type ThinningKind } from '../backend.js';
+import { memo, useCallback, useEffect, useState } from 'react';
+import { api, learnedLookUrl, type ReviewFinding, type ReviewRun, type ThinningKind } from '../backend.js';
 import { ReviewFindingsView } from './ReviewFindings.js';
-import { usePolling } from '../useLoad.js';
+import { useJobFinished, useJobs } from '../jobs/JobsProvider.js';
+import { Notice } from '../ui/Notice.js';
+import { useToast } from '../ui/Toast.js';
 
 /** One picture of a Thinning group; it renders again only when its own tick changes, not each time another is ticked among the many. */
 const ThinningTile = memo(function ThinningTile({ id, remove, ticked, onToggle }: { id: number; remove: boolean; ticked: boolean; onToggle: (id: number) => void }) {
@@ -21,18 +23,17 @@ const ThinningTile = memo(function ThinningTile({ id, remove, ticked, onToggle }
 
 /** The Reader review (ADR 0031): what the code finds in the reader's data, here the near-identical pictures Thinning would remove. */
 export function ReviewPage() {
+  const toast = useToast();
   // undefined while the last run is being fetched, null when there is none yet
   const [run, setRun] = useState<ReviewRun | null | undefined>(undefined);
   const [running, setRunning] = useState(false);
-  const [job, setJob] = useState<ReviewExplainJob | null>(null);
-  // only an explanation seen going and then done reloads the run; one found finished on arrival is already in it
-  const seenRunning = useRef(false);
+  const { summary } = useJobs();
+  const job = summary?.review ?? null;
   // undefined until the player asks: the proposal compares every Rank Look with the others, which keeps the server busy for seconds
   const [rank, setRank] = useState<ThinningKind | null | undefined>(undefined);
   const [looking, setLooking] = useState(false);
   const [ticked, setTicked] = useState<Set<number>>(new Set());
   const [distance, setDistance] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -59,28 +60,12 @@ export function ReviewPage() {
     }
   }, []);
 
-  const lookJob = useCallback(async () => {
-    try {
-      const next = await api.reviewExplainJob();
-      const was = seenRunning.current;
-      seenRunning.current = next?.state === 'running';
-      setJob(next);
-      if (was && next?.state === 'done') void loadRun();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, [loadRun]);
-
-  useEffect(() => {
-    void lookJob();
-  }, [lookJob]);
-  usePolling(lookJob, job?.state === 'running');
+  // only an explanation seen going and then done reloads the run; one found finished on arrival is already in it
+  useJobFinished('review', (event) => event.state === 'done' && void loadRun());
 
   async function askAgent() {
     try {
-      const next = await api.askAgentAboutReview(run!.id);
-      seenRunning.current = next.state === 'running';
-      setJob(next);
+      await api.askAgentAboutReview(run!.id);
       setError(null);
     } catch (e) {
       setError(`Could not ask the Agent: ${(e as Error).message}`);
@@ -108,7 +93,6 @@ export function ReviewPage() {
   async function saveDistance() {
     try {
       setDistance(String((await api.saveThinningSettings(Number(distance))).rank));
-      setMessage(null);
       if (rank !== undefined) await load();
     } catch (e) {
       setError(`Could not save the distance: ${(e as Error).message}`);
@@ -118,7 +102,7 @@ export function ReviewPage() {
   async function apply() {
     try {
       const { deleted } = await api.applyThinning('rank', [...ticked].sort((a, b) => a - b));
-      setMessage(`Removed ${deleted} Rank Looks.`);
+      toast(`Removed ${deleted} Rank Looks.`);
       await load();
     } catch (e) {
       setError(`Could not remove the pictures: ${(e as Error).message}`);
@@ -137,7 +121,6 @@ export function ReviewPage() {
 
   /** What the player did to some findings is done: they leave the run shown, and nothing is looked at again until the player asks. */
   function resolved(done: ReviewFinding[]) {
-    setMessage(null);
     const gone = new Set(done.map((f) => `${f.code}\u0000${f.subject}`));
     const without = (list: ReviewFinding[]) => list.filter((f) => !gone.has(`${f.code}\u0000${f.subject}`));
     setRun((current) => {
@@ -200,11 +183,10 @@ export function ReviewPage() {
 
   return (
     <section>
-      {message && <p role="status">{message}</p>}
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       <div className="toolbar">
         <button disabled={running} onClick={() => void startRun()}>
@@ -218,9 +200,9 @@ export function ReviewPage() {
         {run && <span className="muted">Last run: {run.createdAt.slice(0, 16)}</span>}
       </div>
       {job?.state === 'failed' && job.runId === run?.id && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           Could not explain the run: {job.error}
-        </p>
+        </Notice>
       )}
       {run?.explanation && (
         <section aria-label="Agent's explanation">

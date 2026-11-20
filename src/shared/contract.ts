@@ -48,7 +48,7 @@ export const Upload = z.custom<Blob>((value) => typeof Blob !== 'undefined' && v
 export const Binary = z.custom<Uint8Array>((value) => value instanceof Uint8Array);
 
 /** The names of the `:name` segments of a path. */
-export type ParamNames<P extends string> = P extends `${string}:${infer Name}/${infer Rest}` ? Name | ParamNames<`/${Rest}`> : P extends `${string}:${infer Name}` ? Name : never;
+type ParamNames<P extends string> = P extends `${string}:${infer Name}/${infer Rest}` ? Name | ParamNames<`/${Rest}`> : P extends `${string}:${infer Name}` ? Name : never;
 
 type ParamsInput<P extends string> = [ParamNames<P>] extends [never] ? unknown : { params: Record<ParamNames<P>, string> };
 type BodyInput<B extends z.ZodType | undefined, Side extends 'in' | 'out'> = B extends z.ZodType ? { body: Side extends 'in' ? z.input<B> : z.output<B> } : unknown;

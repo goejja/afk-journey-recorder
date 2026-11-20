@@ -14,6 +14,8 @@ describe('validateDreamHuntResult', () => {
     expect(validateDreamHuntResult({ outcome: 'Win', timeSeconds: 83 })).toBeNull();
     expect(validateDreamHuntResult({ outcome: 'Loss', timeSeconds: null })).toBeNull();
     expect(validateDreamHuntResult({ outcome: 'Win', timeSeconds: null })).toMatch(/needs a time/);
+    expect(validateDreamHuntResult({ outcome: 'Win', timeSeconds: 90 })).toBeNull(); // the fight limit
+    expect(validateDreamHuntResult({ outcome: 'Win', timeSeconds: 90.01 })).toMatch(/up to 90 seconds/);
     expect(validateDreamHuntResult({ outcome: 'Win', timeSeconds: 0 })).toMatch(/needs a time/);
     expect(validateDreamHuntResult({ outcome: 'Win', timeSeconds: 99999 })).toMatch(/needs a time/);
     expect(validateDreamHuntResult({ outcome: 'Loss', timeSeconds: 40 })).toMatch(/no clear time/);

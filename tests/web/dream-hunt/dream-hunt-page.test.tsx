@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import { columnsOf } from '../css-columns.js';
 import { DreamHuntPage } from '../../../web/dream-hunt/DreamHuntPage.js';
+import { ToastProvider } from '../../../web/ui/Toast.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
 const hero = (name: string) => ({ name, tier: 'S', class: 'Mage', faction: 'Wilder', damageType: 'Magic', imagePath: null, owned: true, rank: 'Mythic+', equipmentLevel: 10 });
@@ -54,8 +55,8 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const openForm = async (user: ReturnType<typeof userEvent.setup>) => {
-  render(<DreamHuntPage />);
+const openForm = async (user: ReturnType<typeof userEvent.setup>, toasts = false) => {
+  render(toasts ? <ToastProvider><DreamHuntPage /></ToastProvider> : <DreamHuntPage />);
   await user.click(await screen.findByRole('tab', { name: 'Fights' }));
   await user.click(await screen.findByRole('button', { name: 'New fights' }));
 };
@@ -193,13 +194,16 @@ describe('Dream Hunt page', () => {
     await user.click(within(rows[0]!).getByRole('button', { name: /Show the days of group 1/ }));
     expect(await table.findAllByRole('group', { name: 'Layout on Open' })).toHaveLength(5); // where the heroes stood on the best day
     expect(table.queryAllByRole('row').filter((r) => r.getAttribute('aria-label') === 'Day of group 1')).toHaveLength(0); // the other days are not listed
-    // The range of the group's runs: the total first, then each boss. Days 1, 2 and 3 took 56.57, 45 and 150 in all.
+    // The range of the group's days for the total, then of its team against each boss over the whole week, whatever the group or day. Days 1, 2 and 3 took 56.57, 45 and 150 in all.
     const range = within(table.getByRole('row', { name: 'Range of the group' }));
     const bars = range.getAllByRole('img');
     expect(bars).toHaveLength(6);
     expect(bars[0]!.getAttribute('aria-label')).toBe('best 45.00s, average 1:23.86, worst 2:30.00');
-    expect(bars[5]!.getAttribute('aria-label')).toBe('best 9.00s, average 18.52s, worst 30.00s'); // the last boss: 16.57, 9 and 30
-    expect(range.getByText('3 runs')).toBeTruthy(); // said once, under the total
+    expect(bars[1]!.getAttribute('aria-label')).toBe('best 1.00s, average 14.00s, worst 1:30.00'); // the first boss: 10, 9, 30, 20 (day 7, another group) and 1 (day 8, unfinished) won, and day 9 lost
+    expect(bars[5]!.getAttribute('aria-label')).toBe('best 9.00s, average 18.52s, worst 1:30.00'); // the last boss: 16.57, 9 and 30 won, and day 9 lost
+    expect(range.getByText('3 runs')).toBeTruthy(); // under the total, said of the group's days
+    expect(range.getAllByText('6 runs · 1 lost')).toHaveLength(4);
+    expect(range.getByText('4 runs · 1 lost')).toBeTruthy();
     expect(range.getAllByText(/^best$/)).toHaveLength(6);
   });
 
@@ -221,10 +225,10 @@ describe('Dream Hunt page', () => {
     await table.findByText('Mirage Frostspike');
     expect(table.getAllByRole('row').slice(1)).toHaveLength(7);
     await user.click(table.getByRole('button', { name: /Show the days of group 1/ }));
-    expect(table.getByText('1 run')).toBeTruthy(); // a group of one day
-    const barBefore = within(table.getByRole('row', { name: 'Range of the group' })).getAllByRole('img')[1]!.firstElementChild!.getAttribute('style');
+    expect(table.getAllByText('1 run')).toHaveLength(6); // a group of one day, and of one fight against each boss
+    const barBefore = within(table.getByRole('row', { name: 'Range of the group' })).getAllByRole('img')[0]!.firstElementChild!.getAttribute('style');
     await user.click(screen.getByRole('button', { name: 'Show 2 more' }));
-    expect(within(table.getByRole('row', { name: 'Range of the group' })).getAllByRole('img')[1]!.firstElementChild!.getAttribute('style')).toBe(barBefore); // the scale is the week's, not the listed groups'
+    expect(within(table.getByRole('row', { name: 'Range of the group' })).getAllByRole('img')[0]!.firstElementChild!.getAttribute('style')).toBe(barBefore); // the scale is the week's, not the listed groups'
     await user.click(table.getByRole('button', { name: /Hide the days of group 1/ }));
     expect(table.getAllByRole('row').slice(1)).toHaveLength(9);
     await user.click(screen.getByRole('button', { name: 'Show fewer' }));
@@ -454,12 +458,10 @@ describe('Dream Hunt page', () => {
       expect(fights.map((f: any) => [f.position, f.timeSeconds])).toEqual([[1, 9.69], [2, null]]);
     });
 
-    it('ungroups or deletes a day, and clones it into the same fight numbers', async () => {
+    it('deletes a day, offers no way to ungroup it, and clones it into the same fight numbers', async () => {
       const user = userEvent.setup();
       const day = within(await open(user));
-      await user.click(day.getByRole('button', { name: 'Ungroup' }));
-      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Ungroup' }));
-      await waitFor(() => expect(requests.find((r) => r.method === 'DELETE')?.url).toBe('/api/battles/4'));
+      expect(day.queryByRole('button', { name: 'Ungroup' })).toBeNull();
       await user.click(day.getByRole('button', { name: 'Delete' }));
       await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
       await waitFor(() => expect(requests.filter((r) => r.method === 'DELETE').at(-1)?.url).toBe('/api/battles/4?fights=delete'));
@@ -492,7 +494,7 @@ describe('Dream Hunt page', () => {
 
   it('saves the bosses, maps and the last fight’s rule as the week’s default', async () => {
     const user = userEvent.setup();
-    await openForm(user);
+    await openForm(user, true);
     await user.click(screen.getByRole('button', { name: /Set as this week/ }));
     await waitFor(() => expect(requests.find((r) => r.method === 'PUT')?.url).toBe('/api/defaults/Dream%20Hunt'));
     const slots = requests.find((r) => r.method === 'PUT')!.body.slots;

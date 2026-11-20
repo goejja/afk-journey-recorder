@@ -196,16 +196,6 @@ describe('the Formation ID of a battle (ADR 0007)', () => {
     expect((await library())[0].records).toBe(0);
   });
 
-  it('suggests a code for the first teams placed, and for the whole battle turned upside down', async () => {
-    await send('POST', '/api/pvp/battle-groups', withCodes([team('A', 38), team('B', 39)], { formationId: 'A1B2C3D4' }));
-    const find = (teams: unknown[]) => json(send('POST', '/api/formation-ids/find', { teams }));
-    const placed = (hero: string, tile: number) => ({ heroes: [{ hero, tile }] });
-    expect(await find([placed('A', 38)])).toMatchObject([{ code: 'A1B2C3D4', match: 'same' }]);
-    expect(await find([placed('A', 38), placed('B', 39)])).toMatchObject([{ match: 'same' }]);
-    expect(await find([placed('A', 6), placed('B', 5)])).toMatchObject([{ match: 'rotated' }]);
-    expect(await find([placed('A', 38), placed('B', 5)])).toEqual([]); // one team turned and the other not
-  });
-
   it('keeps the code of the battle when one of its fights is edited alone, and takes none for that fight', async () => {
     const created = await json(send('POST', '/api/pvp/battle-groups', withCodes([team('A', 38), team('B', 39)], { formationId: 'A1B2C3D4' })));
     const typed = { ...team('A', 38), mode: 'Supreme Arena' } as any;

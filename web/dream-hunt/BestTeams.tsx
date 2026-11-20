@@ -3,14 +3,16 @@ import { formatDuration, isRuleOnly, MIN_CLEARS_FOR_CONFIDENCE } from '../../src
 import type { LayoutSummary, RuleTimes } from '../../src/domain/dream-hunt.js';
 import type { Layout } from '../../src/domain/layout.js';
 import { api, type Boss, type BossRule, type Composition, type GameMap } from '../backend.js';
-import { useLoad } from '../useLoad.js';
-import { useMaps } from '../useMaps.js';
+import { useLoad } from '../hooks/load.js';
+import { useMaps } from '../hooks/maps.js';
 import { UnitsOnMap, type MapUnit } from '../admin/UnitsOnMap.js';
 import { TeamOverview } from '../stats/TeamOverview.js';
 import { TagFilter } from '../Tags.js';
 import { weekStart } from '../weeks.js';
 import { toggled } from '../format.js';
 import { HeroFilter } from './HeroFilter.js';
+import { DisclosureMark } from '../ui/Icon.js';
+import { Notice } from '../ui/Notice.js';
 
 const MINI_TILE_WIDTH = 26;
 
@@ -211,7 +213,7 @@ export function CompositionTable({ boss, compositions, maps, send }: { boss: str
               >
                 <TeamOverview heroes={c.latest.heroes} artifact={c.latest.artifact} size={32} />
                 <span className="muted" aria-hidden="true">
-                  {open.has(c.key) ? '▾' : '▸'}
+                  <DisclosureMark open={open.has(c.key)} />
                 </span>
               </div>
             </td>
@@ -295,14 +297,14 @@ export function BestTeams({ bosses, rules, send }: { bosses: Boss[]; rules: Boss
         under a Rule is ranked last of the cleared ones and flagged. The same heroes and artifact count as one team wherever they stand; open a team to see where its heroes stood, fastest placement first.
       </p>
       {mapsError && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {mapsError}
-        </p>
+        </Notice>
       )}
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       {board && board.compositions.length === 0 && (
         <p className="muted">{include.length + exclude.length > 0 ? 'No recorded team matches these heroes.' : 'No fights recorded for this boss yet.'}</p>

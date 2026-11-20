@@ -5,7 +5,7 @@ import { PAIR_PHANTIMALS, checkPhantimalPartner, checkUnits, partOf } from './un
  * What a Unit is: the hero itself or one of its parts, a Summon, or part of the Phantimal (ADR 0028). A hero and a
  * Phantimal may share a name, so the kind keeps them apart.
  */
-export type UnitKind = 'hero' | 'phantimal';
+type UnitKind = 'hero' | 'phantimal';
 
 /** One Unit on one tile. `part` is '' for a lone hero or a one-part Phantimal. */
 export interface LayoutUnit {

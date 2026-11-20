@@ -3,6 +3,7 @@ import { matchTeam, type Change, type RoundTeam, type TeamMatch } from '../../sr
 import type { Round } from '../../src/domain/tournament.js';
 import type { RoundDeploymentEntry } from '../backend.js';
 import { readSideOfTeam } from './round-deployment.js';
+import { Notice } from '../ui/Notice.js';
 
 type Side = 'A' | 'B';
 
@@ -95,10 +96,10 @@ export function RoundDeploymentBar({ tournament, round, sides, entries, busy, er
                 </strong>
                 {openDiffers && (
                   <span className="deployment-note">
-                    <span className="badge few" role="status">
+                    <Notice kind="warning" as="span">
                       Team {openSlot! + 1}
                       {openDiffers.recorded ? ' (saved battle)' : ''}: Deployment changed? {openDiffers.match.changes.map(describe).join('; ')}
-                    </span>
+                    </Notice>
                     <button className="small" onClick={() => onUse(side, openSlot!, openDiffers.deployed)} disabled={busy}>
                       Use the Deployment’s team {openSlot! + 1}
                     </button>
@@ -136,9 +137,9 @@ export function RoundDeploymentBar({ tournament, round, sides, entries, busy, er
         );
       })}
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
     </section>
   );

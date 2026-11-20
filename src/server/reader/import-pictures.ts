@@ -19,7 +19,7 @@ const NAME_REGIONS: Partial<Record<ImportScreen, [number, number, number, number
 const REPORT_TABS: [number, number, number, number] = [0.3, 0.83, 0.4, 0.05];
 
 /** A row of tiles the Agent is asked to read: `id` names it in the Agent's reply. */
-export interface CropPlan {
+interface CropPlan {
   id: string;
   boxes: TileBox[];
 }

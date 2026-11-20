@@ -1,7 +1,8 @@
 import { useId, useMemo, useState } from 'react';
 import { MultiSelect } from './MultiSelect.js';
 import { api } from './backend.js';
-import { useLoad } from './useLoad.js';
+import { useLoad } from './hooks/load.js';
+import { IconButton } from './ui/Icon.js';
 
 /** Every tag in use, for suggestions. A failed load just means no suggestions. */
 function useKnownTags(): string[] {
@@ -33,9 +34,7 @@ export function TagInput({ value, onChange, locked = [] }: { value: string[]; on
         {value.map((tag) => (
           <span key={tag} className="badge tag">
             {tag}
-            <button type="button" className="tag-remove" aria-label={`Remove tag ${tag}`} onClick={() => onChange(value.filter((t) => t !== tag))}>
-              ×
-            </button>
+            <IconButton icon="close" className="tag-remove" label={`Remove tag ${tag}`} onClick={() => onChange(value.filter((t) => t !== tag))} />
           </span>
         ))}
         <input

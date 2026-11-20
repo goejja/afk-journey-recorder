@@ -6,8 +6,10 @@ export interface Loaded<T> {
   /** The message of the failure of the latest request, or null. */
   error: string | null;
   loading: boolean;
-  /** Asks again now, with the same function. */
-  reload: () => Promise<void>;
+  /** Asks again now, with the same function, and answers what came; nothing when the request failed or a newer one overtook it. */
+  reload: () => Promise<T | undefined>;
+  /** Changes the answer in place, for a page that learns of a change without asking again; nothing happens before the first answer. */
+  setData: (change: (old: T) => T) => void;
 }
 
 /**
@@ -21,16 +23,21 @@ export function useLoad<T>(load: () => Promise<T>, deps: DependencyList, enabled
   const loader = useRef(load);
   loader.current = load;
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (): Promise<T | undefined> => {
     const mine = ++latest.current;
     setState((old) => ({ ...old, loading: true }));
     try {
       const data = await loader.current();
-      if (mine === latest.current) setState({ data, error: null, loading: false });
+      if (mine !== latest.current) return undefined;
+      setState({ data, error: null, loading: false });
+      return data;
     } catch (e) {
       if (mine === latest.current) setState((old) => ({ ...old, error: (e as Error).message, loading: false }));
+      return undefined;
     }
   }, []);
+
+  const setData = useCallback((change: (old: T) => T) => setState((old) => (old.data === undefined ? old : { ...old, data: change(old.data) })), []);
 
   useEffect(() => {
     if (enabled) void run();
@@ -41,7 +48,26 @@ export function useLoad<T>(load: () => Promise<T>, deps: DependencyList, enabled
   }, deps); // oxlint-disable-line react/exhaustive-deps
 
   // A request still on its way when `enabled` turns false is dropped (the cleanup above), so nothing is waited for: not loading.
-  return { ...state, loading: state.loading && enabled, reload: run };
+  return { ...state, loading: state.loading && enabled, reload: run, setData };
+}
+
+/** What each loader of `useReference` answers, under the loader's name. */
+export type ReferenceOf<L extends Record<string, () => Promise<unknown>>> = { [K in keyof L]: Awaited<ReturnType<L[K]>> };
+
+/**
+ * The reference data a page needs before it can show anything, such as the maps and the heroes: every loader runs at once on mount and
+ * the answers are kept under the loaders' names, so a page keeps its own field names (`{ maps: api.maps, rules: api.bossRules }`). It is
+ * a `useLoad`, so a failure of any loader is the `error` and only the latest answer counts. `patch` changes some fields in place, from
+ * an object or from a function of the data, for when the page already knows the new value.
+ */
+export function useReference<L extends Record<string, () => Promise<unknown>>>(loaders: L) {
+  const loaded = useLoad<ReferenceOf<L>>(async () => {
+    const entries = await Promise.all(Object.entries(loaders).map(async ([name, load]) => [name, await load()] as const));
+    return Object.fromEntries(entries) as ReferenceOf<L>;
+  }, []);
+  const { setData } = loaded;
+  const patch = useCallback((change: Partial<ReferenceOf<L>> | ((old: ReferenceOf<L>) => Partial<ReferenceOf<L>>)) => setData((old) => ({ ...old, ...(typeof change === 'function' ? change(old) : change) })), [setData]);
+  return { ...loaded, patch };
 }
 
 /**
@@ -55,22 +81,4 @@ export function useNewest(): () => () => boolean {
     const mine = ++count.current;
     return () => mine === count.current;
   }, []);
-}
-
-/** Calls `poll` every `ms` while `active`, until it turns false or the component is gone. The poll that is still running is not overlapped. */
-export function usePolling(poll: () => Promise<unknown> | void, active: boolean, ms = 2000): void {
-  const current = useRef(poll);
-  current.current = poll;
-  useEffect(() => {
-    if (!active) return;
-    let busy = false;
-    const timer = setInterval(() => {
-      if (busy) return;
-      busy = true;
-      void Promise.resolve(current.current()).finally(() => {
-        busy = false;
-      });
-    }, ms);
-    return () => clearInterval(timer);
-  }, [active, ms]);
 }

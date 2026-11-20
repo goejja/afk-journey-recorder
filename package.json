@@ -7,7 +7,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint web",
+    "lint": "oxlint web src tests scripts",
     "db:init": "tsx scripts/db-init.ts",
     "import:reference": "tsx scripts/import-reference.ts",
     "import:artifact-images": "tsx scripts/import-artifact-images.ts",

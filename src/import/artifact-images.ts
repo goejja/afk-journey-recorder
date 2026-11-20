@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { safeFileName } from '../domain/file-name.js';
 import type { Fetcher } from './fetch.js';
 
-export const ORIGIN = 'https://www.afk.global';
-export const PAGE = `${ORIGIN}/afk-journey/artifacts`;
+const ORIGIN = 'https://www.afk.global';
+const PAGE = `${ORIGIN}/afk-journey/artifacts`;
 const IMAGE_DIR = '/images/afk-journey/game/artifacts/';
 const MAX_CONSECUTIVE_FAILURES = 3;
 

@@ -23,14 +23,15 @@ const send = (method: string, url: string, body?: unknown) =>
     headers: { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-const get = async (name: string) => (await send('GET', `/api/maps/${encodeURIComponent(name)}`)).json() as Promise<any>;
+const list = async () => (await (await send('GET', '/api/maps')).json()) as any[];
+const get = async (name: string) => (await list()).find((m) => m.name === name);
 
 describe('maps API', () => {
   it('lists maps with their tags and no restore option when untouched', async () => {
-    const list = (await (await send('GET', '/api/maps')).json()) as any[];
-    expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({ name: 'Arena I', tags: ['Arena'], source: 'import', canRestore: false });
-    expect(list[0].rowLengths).toEqual([2, 5, 6, 6, 7, 6, 6, 5, 2]);
+    const maps = await list();
+    expect(maps).toHaveLength(1);
+    expect(maps[0]).toMatchObject({ name: 'Arena I', tags: ['Arena'], source: 'import', canRestore: false });
+    expect(maps[0].rowLengths).toEqual([2, 5, 6, 6, 7, 6, 6, 5, 2]);
   });
 
   it('creates a map', async () => {
@@ -66,7 +67,7 @@ describe('maps API', () => {
     await send('POST', '/api/maps', { name: 'B', tags: [], cells: open });
     expect((await send('PUT', '/api/maps/B', { name: 'Arena I', tags: [], cells: open })).status).toBe(409);
     expect((await send('PUT', '/api/maps/B', { name: 'C', tags: [], cells: open })).status).toBe(200);
-    expect((await send('GET', '/api/maps/B')).status).toBe(404);
+    expect(await get('B')).toBeUndefined();
   });
 
   it('duplicates a map as the player\'s own, without an original', async () => {
@@ -79,6 +80,6 @@ describe('maps API', () => {
 
   it('deletes a map', async () => {
     expect((await send('DELETE', '/api/maps/Arena%20I')).status).toBe(204);
-    expect((await send('GET', '/api/maps/Arena%20I')).status).toBe(404);
+    expect(await get('Arena I')).toBeUndefined();
   });
 });

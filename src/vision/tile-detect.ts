@@ -5,7 +5,7 @@ import type { TileBox } from './tile-image.js';
  * A row of equal hero tiles lying along one axis. Sizes are fractions of the picture width, so the same layout fits
  * pictures of any resolution from the same phone shape.
  */
-export interface RowLayout {
+interface RowLayout {
   /** 'x' for tiles side by side, 'y' for tiles stacked. */
   axis: 'x' | 'y';
   count: number;

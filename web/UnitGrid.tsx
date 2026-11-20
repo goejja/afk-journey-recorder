@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Portrait, type ImageKind } from './Portrait.js';
 import { dragProps } from './placement.js';
 
-export interface Unit {
+interface Unit {
   name: string;
   /** A category the grid can be narrowed by, for example an enemy's Common / Elite / Boss. */
   group?: string | null;

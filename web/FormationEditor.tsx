@@ -19,6 +19,7 @@ import { derivePhantimal, type PhantimalOption } from './phantimal.js';
 import { PhantimalField } from './PhantimalField.js';
 import { useConfirm } from './ui/Dialog.js';
 import { HeroStateButtons } from './ui/HeroStateButtons.js';
+import { Notice } from './ui/Notice.js';
 
 export interface FormationState {
   placed: PlacedRow[];
@@ -224,7 +225,7 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
   return (
     <div>
       {playerTileCount === 0 ? (
-        <p className="error" role="alert">This map has no player deployment tiles. Paint some in Admin → Maps first.</p>
+        <Notice kind="error">This map has no player deployment tiles. Paint some in Admin → Maps first.</Notice>
       ) : (
         <div className="two-col">
           <div>
@@ -268,8 +269,8 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
                 return undefined;
               }}
             />
-            {missingPhantimalPart(value.phantimal) && <p className="error" role="alert">{missingPhantimalPart(value.phantimal)} still has to be placed: the wedges always stand together.</p>}
-            {message && <p className="error" role="alert">{message}</p>}
+            {missingPhantimalPart(value.phantimal) && <Notice kind="error">{missingPhantimalPart(value.phantimal)} still has to be placed: the wedges always stand together.</Notice>}
+            {message && <Notice kind="error">{message}</Notice>}
           </div>
           <div className="picker">
             <div className="picker-fixed">
@@ -345,7 +346,7 @@ export function placeHero(value: FormationState, name: string, tile: number, una
  * Adds every Unit of a hero at once, the first on `tile` and the rest on the first free tiles of the zone (ADR 0028). A hero
  * whose Units do not all fit is refused whole. `occupied` says which tiles are taken, the Phantimal's included.
  */
-export function placeWholeHero(
+function placeWholeHero(
   value: FormationState,
   hero: string,
   tile: number,
@@ -424,7 +425,7 @@ interface DetailsProps {
 }
 
 /** What goes with the placed heroes besides the map: the assist hero (the artifact has its own slot on the map). */
-export function FormationDetails({ value, onChange, heroes, owned, unavailable, rules, everyone, heroesOnly, withAssist = true }: DetailsProps) {
+function FormationDetails({ value, onChange, heroes, owned, unavailable, rules, everyone, heroesOnly, withAssist = true }: DetailsProps) {
   const placedNames = new Set(value.placed.map((p) => p.hero));
   const assistState = heroState(value, heroes, value.assist, everyone);
   return (

@@ -21,9 +21,6 @@ export const WEAPON_CAPS: EquipmentCap[] = [
   { rank: 'Paragon 4', minLevel: null, maxLevel: 29 },
 ];
 
-/** What older versions stored for the Resonance levels (Yaphalla's steps of five), mapped to R1 to R4. */
-export const OLD_RESONANCE_LEVELS: Record<number, number> = { 30: 26, 35: 27, 40: 28, 45: 29 };
-
 /** How a level is written: +10, or R1 to R4 for the Resonance levels. */
 export const weaponLabel = (level: number): string => (level >= FIRST_RESONANCE ? `R${level - FIRST_RESONANCE + 1}` : `+${level}`);
 

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { api, learnedLookUrl } from '../backend.js';
 import type { LearnedView } from '../../src/shared/api.js';
 import { LookTile } from './LookTile.js';
+import { Notice } from '../ui/Notice.js';
+import { ListStatus } from '../ui/ListStatus.js';
 
 /** The Rank Looks under each rank: a frame filed under the wrong rank makes the reader mistake the two. */
 export function LearnedRanks({ view, onChanged }: { view: LearnedView; onChanged: () => void }) {
@@ -45,11 +47,11 @@ export function LearnedRanks({ view, onChanged }: { view: LearnedView; onChanged
           <input type="checkbox" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} /> Looks like another rank
         </label>
       </div>
-      {message && <p role="status">{message}</p>}
+      {message && <Notice kind="success">{message}</Notice>}
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       {ranks.map((r) => (
         <article key={r.rank} className="panel reader-hero" aria-label={r.rank}>
@@ -76,7 +78,7 @@ export function LearnedRanks({ view, onChanged }: { view: LearnedView; onChanged
           </ul>
         </article>
       ))}
-      {ranks.length === 0 && <p className="muted">{total === 0 ? 'The rank reader has learnt no look yet.' : 'No look matches.'}</p>}
+      <ListStatus loaded failed={false} empty={ranks.length === 0} filtered={total !== 0} none="The rank reader has learnt no look yet." noMatch="No look matches." />
     </section>
   );
 }

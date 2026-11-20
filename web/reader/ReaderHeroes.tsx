@@ -1,28 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api, readerExampleUrl, type ReaderExample, type ReaderView } from '../backend.js';
+import { useState } from 'react';
+import { api, readerExampleUrl, type ReaderExample } from '../backend.js';
+import { useLoad } from '../hooks/load.js';
 import { LookTile } from './LookTile.js';
+import { Notice } from '../ui/Notice.js';
+import { ListStatus } from '../ui/ListStatus.js';
 
 const KIND_LABEL: Record<ReaderExample['kind'], string> = { example: 'Example', look: 'Look' };
 
 /** What the hero reader learnt: the tiles filed under each hero, so a tile filed under the wrong hero can be found and deleted. */
 export function ReaderHeroes({ heroNames, onChanged }: { heroNames: string[]; onChanged: () => void }) {
-  const [view, setView] = useState<ReaderView | null>(null);
+  const loaded = useLoad(() => api.readerExamples(), []);
+  const view = loaded.data ?? null;
   const [search, setSearch] = useState('');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    try {
-      setView(await api.readerExamples());
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  // a move or a delete that failed, worded for the tile; a load that failed is the load's own
+  const [actionError, setError] = useState<string | null>(null);
+  const error = loaded.error ?? actionError;
+  const reload = loaded.reload;
 
   async function move(example: ReaderExample, hero: string) {
     try {
@@ -62,9 +56,9 @@ export function ReaderHeroes({ heroNames, onChanged }: { heroNames: string[]; on
         other tiles would read as another hero, which is where to look first. {view ? `${view.withoutExamples} heroes have no tile yet, so the reader cannot name them.` : ''}
       </p>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       <div className="filters">
         <input placeholder="Search" aria-label="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -72,7 +66,7 @@ export function ReaderHeroes({ heroNames, onChanged }: { heroNames: string[]; on
           <input type="checkbox" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} /> Looks like another hero
         </label>
       </div>
-      {view && heroes.length === 0 && <p className="muted">{total === 0 ? 'The reader has learnt no tile yet.' : 'No tile matches.'}</p>}
+      {view && <ListStatus loaded failed={false} empty={heroes.length === 0} filtered={total !== 0} none="The reader has learnt no tile yet." noMatch="No tile matches." />}
       {heroes.map((h) => (
         <article key={h.hero} className="panel reader-hero" aria-label={h.hero}>
           <h3>

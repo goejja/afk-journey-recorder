@@ -12,9 +12,9 @@ const INNER = 0.8;
 const SIZE = 16;
 
 /** The mean difference (0 to 1 of a colour channel) under which a crop is taken for the look's name. */
-export const UNIT_MAX_DISTANCE = 0.04;
+const UNIT_MAX_DISTANCE = 0.04;
 /** How much closer the best name's closest look must be than the closest look of any other name, as a share of that distance. */
-export const UNIT_MARGIN = 0.25;
+const UNIT_MARGIN = 0.25;
 /** The reader gives a name only once it has this many looks, as the rank reader does. */
 const MIN_LOOKS = 3;
 /** Two names with looks closer than this are told apart by the Agent: the reader confused them in the trial (Soulbound and Soulshock, 0.019). */

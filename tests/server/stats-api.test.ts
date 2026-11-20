@@ -23,26 +23,6 @@ const json = async (response: Response | Promise<Response>) => (await response).
 const team = (names: string[]) => ({ heroes: names.map((hero, i) => ({ tile: 38 + i, hero })), phantimal: null, assistHero: null, artifact: null});
 
 describe('stats', () => {
-  it('gives win rate per stage with filters and a minimum', async () => {
-    const a = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 10, mapName: 'Open' }));
-    const b = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Phantisomal', number: 3, mapName: 'Open' }));
-    // The API only records clears; a Loss can still be in an old database, so two are written straight to the table.
-    for (const outcome of ['Loss', 'Loss', 'Win']) {
-      const saved = await json(send('POST', '/api/attempts', { stageId: a.id, formation: team(['A']), tags: ['mine'] }));
-      db.prepare('UPDATE attempt SET outcome = ? WHERE id = ?').run(outcome, saved.id);
-    }
-    await send('POST', '/api/attempts', { stageId: b.id, formation: team(['A']) });
-
-    const all = await json(send('GET', '/api/stats/stages'));
-    expect(all.map((s: any) => [s.kind, s.number, s.games, s.wins, s.winRate])).toEqual([
-      ['Normal', 10, 3, 1, 0.333],
-      ['Phantisomal', 3, 1, 1, 1],
-    ]);
-    expect(await json(send('GET', '/api/stats/stages?kind=Phantisomal'))).toHaveLength(1);
-    expect(await json(send('GET', '/api/stats/stages?min=2'))).toHaveLength(1);
-    expect(await json(send('GET', '/api/stats/stages?tag=mine'))).toHaveLength(1);
-  });
-
   it('gives hero and pair win rates from both Arena sides, and the summary', async () => {
     await send('POST', '/api/pvp/battles', { mode: 'Arena', mapName: 'Open', outcome: 'Win', formation: team(['A', 'B']), opponent: { heroes: [{ tile: 0, hero: 'H' }] } });
     const heroes = await json(send('GET', '/api/stats/heroes?mode=Arena'));

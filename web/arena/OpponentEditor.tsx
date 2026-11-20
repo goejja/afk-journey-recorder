@@ -1,6 +1,6 @@
 import type { ArenaBattle, Hero, OpponentInput } from '../backend.js';
 import { isSummon } from '../../src/domain/units.js';
-import { addHeroUnits, addUnit, resolveUnit, type PlacedRow } from '../units.js';
+import { addHeroUnits, type PlacedRow } from '../units.js';
 
 export interface OpponentState {
   placed: (PlacedRow & { rank: string; equipment: string })[];
@@ -55,18 +55,6 @@ export function withRosterOpponent(value: OpponentState, heroes: Hero[], overwri
     return { ...p, rank: roster.rank!, equipment };
   });
   return changed ? { ...value, placed } : value;
-}
-
-/** Adds a hero to Side B unless it is already there or the side is full. */
-export function placeOpponent(value: OpponentState, name: string, tile: number): { value: OpponentState; message: string | null } {
-  const { hero } = resolveUnit(name); // the icon may be a part of a pair or a summon
-  // The parts of a pair share rank and equipment, so a new part takes them from the one already placed.
-  const result = addUnit(value.placed, name, tile, (row, siblings) => ({ ...row, rank: siblings[0]?.rank ?? '', equipment: siblings[0]?.equipment ?? '' }));
-  if (result.message || result.placed === value.placed) return { value, message: result.message };
-  return {
-    value: { ...value, placed: result.placed, assist: value.assist.hero === hero ? { hero: '', rank: '', equipment: '' } : value.assist },
-    message: null,
-  };
 }
 
 /**

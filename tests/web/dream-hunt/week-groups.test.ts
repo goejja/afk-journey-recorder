@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { DreamHuntAttempt } from '../../../web/backend.js';
-import { finishedDays, groupDays, groupStats, TOTAL, weekScales } from '../../../web/dream-hunt/week-groups.js';
+import { FIGHT_SCALE, finishedDays, formationKey, formationRuns, groupDays, totalScale, totalStats } from '../../../web/dream-hunt/week-groups.js';
 
 const bosses = ['A', 'B', 'C', 'D', 'E'];
 const slots = bosses.map((boss) => ({ boss, mapName: 'Open', rule: null }));
 
 /** A day of five fights against the bosses; `teams` names the hero and `tile` where it stands, per fight. */
-function day(battleId: number, seconds: number, teams: { hero: string; tile?: number; artifact?: string | null }[] = bosses.map(() => ({ hero: 'Evie' })), outcome = 'Win'): DreamHuntAttempt[] {
+function day(battleId: number, seconds: number, teams: { hero: string; tile?: number; artifact?: string | null }[] = bosses.map(() => ({ hero: 'Evie' })), outcome: 'Win' | 'Loss' = 'Win'): DreamHuntAttempt[] {
   return bosses.map((boss, i) => ({
     id: battleId * 10 + i, season: 8, createdAt: `2026-01-0${battleId} 10:00:00`, outcome, note: null, boss, mapName: 'Open', timeSeconds: seconds, bossRule: null, tags: [], battleId, battlePosition: i + 1, battleFormationId: null,
     formation: { artifact: teams[i]!.artifact ?? null, phantimal: null, assist: null, formationId: null, heroes: [{ tile: teams[i]!.tile ?? 38, name: teams[i]!.hero, part: '', rank: null, equipmentLevel: null }] },
@@ -45,29 +45,59 @@ describe('finishedDays', () => {
   });
 });
 
-describe('groupStats', () => {
-  it('gives the best, average and worst time and the number of runs for each fight and for the day', () => {
+describe('totalStats', () => {
+  it('gives the best, average and worst total and the number of days of a group', () => {
     const [group] = groupDays(finishedDays([...day(1, 10), ...day(2, 20), ...day(3, 30)], slots));
-    const stats = groupStats(group!);
-    expect(stats).toHaveLength(6);
-    expect(stats[0]).toEqual({ best: 10, average: 20, worst: 30, runs: 3 });
-    expect(stats[TOTAL]).toEqual({ best: 50, average: 100, worst: 150, runs: 3 });
+    expect(totalStats(group!)).toEqual({ best: 50, average: 100, worst: 150, runs: 3 });
   });
 });
 
-describe('weekScales', () => {
-  it('runs from just under the fastest to just over the slowest time of every group, per column', () => {
-    const groups = groupDays(finishedDays([...day(1, 10), ...day(2, 20, bosses.map(() => ({ hero: 'Evie', artifact: 'Bladestorm' })))], slots));
-    const scales = weekScales(groups);
-    expect(scales).toHaveLength(6);
-    expect(scales[0]!.min).toBeCloseTo(10 - 0.8); // the room is 8% of the 10 s between the runs
-    expect(scales[0]!.max).toBeCloseTo(20 + 0.8);
-    expect(scales[TOTAL]!.min).toBeCloseTo(50 - 4);
+describe('formationRuns', () => {
+  const evie = (battleId: number) => day(battleId, 10)[0]!;
+  const key = formationKey(evie(1));
+
+  it('gathers the fights of a formation from every group, whatever the rest of its day', () => {
+    const other = bosses.map((_, i) => ({ hero: 'Evie', artifact: i === 4 ? 'Bladestorm' : null }));
+    const runs = formationRuns([...day(1, 10), ...day(2, 20), ...day(3, 30, other)], slots).get(key)!;
+    expect(runs).toEqual({ best: 10, average: 20, worst: 30, wins: 3, lost: 0 }); // the first boss's formation is the same in both groups
   });
 
-  it('keeps a little room when every run took the same time, and never goes below 0', () => {
-    const [scale] = weekScales(groupDays(finishedDays(day(1, 0.01), slots)));
-    expect(scale!.min).toBe(0);
-    expect(scale!.max).toBeCloseTo(0.06);
+  it('counts the fights of an unfinished day, and a loss as a worst of the fight limit with its count', () => {
+    const lost = day(2, 20).map((f, i) => (i === 0 ? { ...f, outcome: 'Loss' as const, timeSeconds: null } : f));
+    const runs = formationRuns([...day(1, 10), ...lost, ...day(3, 30).slice(0, 1)], slots).get(key)!;
+    expect(runs).toEqual({ best: 10, average: 20, worst: 90, wins: 2, lost: 1 });
+  });
+
+  it('has no best or average for a formation that only lost', () => {
+    const lost = day(1, 20).map((f) => ({ ...f, outcome: 'Loss' as const, timeSeconds: null }));
+    expect(formationRuns(lost, slots).get(key)).toEqual({ best: null, average: null, worst: 90, wins: 0, lost: 1 });
+  });
+
+  it('leaves out an untimed win, and a fight against a boss or rule that is not the weekly default’s', () => {
+    const untimed = { ...evie(1), timeSeconds: null };
+    const wrongBoss = { ...evie(2), boss: 'Z' };
+    const wrongRule = { ...evie(3), bossRule: 'Frail' };
+    expect(formationRuns([untimed, wrongBoss, wrongRule], slots).size).toBe(0);
+  });
+});
+
+describe('totalScale', () => {
+  it('runs from just under the fastest to just over the slowest total of every group', () => {
+    const groups = groupDays(finishedDays([...day(1, 10), ...day(2, 20, bosses.map(() => ({ hero: 'Evie', artifact: 'Bladestorm' })))], slots));
+    const scale = totalScale(groups);
+    expect(scale.min).toBeCloseTo(50 - 4); // the room is 8% of the 50 s between the totals
+    expect(scale.max).toBeCloseTo(100 + 4);
+  });
+
+  it('keeps a little room when every day took the same time, and never goes below 0', () => {
+    const scale = totalScale(groupDays(finishedDays(day(1, 0.01), slots)));
+    expect(scale.min).toBe(0);
+    expect(scale.max).toBeCloseTo(0.1);
+  });
+});
+
+describe('FIGHT_SCALE', () => {
+  it('runs from 0 to the fight limit', () => {
+    expect(FIGHT_SCALE).toEqual({ min: 0, max: 90 });
   });
 });

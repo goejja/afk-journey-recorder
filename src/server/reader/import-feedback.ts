@@ -87,7 +87,7 @@ export function learnable(read: SideReading, final: SideReading, tiles: TileCrop
 }
 
 /** A rank with fewer looks than this still learns from a reading the player kept. */
-export const SPARSE_RANK_LOOKS = 10;
+const SPARSE_RANK_LOOKS = 10;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 

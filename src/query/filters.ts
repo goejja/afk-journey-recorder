@@ -19,6 +19,8 @@ export type StatFilters = Omit<Filters, 'mode' | 'tag'> & {
   player?: string | string[];
   /** Seasons the records were played in (`attempt.season`, ADR 0038), as numbers or numbers written out: only records of these seasons. */
   playedIn?: string | string[] | number | number[];
+  /** Map names: only records played on these maps. */
+  map?: string | string[];
   /** Leave out the sides of the default profile's Player ID, to see what other Players use. Nothing is left out when it has no Player ID. */
   excludeDefault?: boolean;
 };
@@ -36,7 +38,7 @@ export const MAX_ROWS = 500;
  */
 export const PVP_BY_DEFAULT = new Set([
   'hero-stats', 'pair-stats', 'trio-stats', 'partner-stats', 'hero-rows', 'hero-distribution', 'layout-report',
-  'formation-stats', 'formation-groups', 'formation-report', 'formation-profile', 'artifact-stats', 'map-stats', 'rule-stats',
+  'formation-stats', 'formation-groups', 'formation-report', 'formation-profile', 'artifact-stats', 'map-stats', 'map-formations',
 ]);
 
 /** The modes a CLI statistic reads: the ones given, else the PvP modes for the commands of `PVP_BY_DEFAULT`, else every mode (undefined). */
@@ -57,6 +59,8 @@ export function whereFor(filters: StatFilters, params: unknown[]): string {
   if (tags.length) (clauses.push(`EXISTS (SELECT 1 FROM attempt_tag t WHERE t.attempt_id = x.attempt_id AND t.tag IN (${placeholders(tags)}))`), params.push(...tags));
   const players = listOf(filters.player);
   if (players.length) (clauses.push(`EXISTS (SELECT 1 FROM attempt_player p WHERE p.attempt_id = x.attempt_id AND p.side = x.side AND p.player_id IN (${placeholders(players)}))`), params.push(...players));
+  const maps = listOf(filters.map);
+  if (maps.length) (clauses.push(`EXISTS (SELECT 1 FROM v_side mp WHERE mp.attempt_id = x.attempt_id AND mp.side = x.side AND mp.map_name IN (${placeholders(maps)}))`), params.push(...maps));
   const seasons = seasonsOf(filters.playedIn);
   if (seasons.length) (clauses.push(`EXISTS (SELECT 1 FROM attempt sn WHERE sn.id = x.attempt_id AND sn.season IN (${placeholders(seasons.map(String))}))`), params.push(...seasons));
   if (filters.excludeDefault) clauses.push(`NOT EXISTS (SELECT 1 FROM attempt_player p JOIN profile pr ON pr.player_id = p.player_id AND pr.is_default = 1 WHERE p.attempt_id = x.attempt_id AND p.side = x.side)`);

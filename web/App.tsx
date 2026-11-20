@@ -6,6 +6,7 @@ import { RosterPage } from './reader/RosterPage.js';
 import { ScenariosPage } from './scenarios/ScenariosPage.js';
 import { StatsPage } from './stats/StatsPage.js';
 import { StagesPage } from './stages/StagesPage.js';
+import { JobsProvider } from './jobs/JobsProvider.js';
 import { ToastProvider } from './ui/Toast.js';
 
 const PAGES = {
@@ -40,20 +41,22 @@ export function App() {
 
   return (
     <ToastProvider>
-      <header className="app-header">
-        <div className="brand">AFK Journey Recorder</div>
-        <nav>
-          {(Object.keys(PAGES) as PageKey[]).map((key) => (
-            <a key={key} href={`#${key}`} className={key === page ? 'active' : undefined}>
-              {PAGES[key].label}
-            </a>
-          ))}
-        </nav>
-      </header>
-      <main>
-        <h1 className="sr-only">{PAGES[page].label}</h1>
-        <Page />
-      </main>
+      <JobsProvider page={page}>
+        <header className="app-header">
+          <div className="brand">AFK Journey Recorder</div>
+          <nav>
+            {(Object.keys(PAGES) as PageKey[]).map((key) => (
+              <a key={key} href={`#${key}`} className={key === page ? 'active' : undefined}>
+                {PAGES[key].label}
+              </a>
+            ))}
+          </nav>
+        </header>
+        <main>
+          <h1 className="sr-only">{PAGES[page].label}</h1>
+          <Page />
+        </main>
+      </JobsProvider>
     </ToastProvider>
   );
 }

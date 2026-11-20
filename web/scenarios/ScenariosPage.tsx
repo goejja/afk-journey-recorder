@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { ARENA_MODES, FIXED_MAP, heroesAlreadyUsed, TEAMS_PER_MODE } from '../../src/domain/arena.js';
 import { api, type AgentJob, type ArenaMode, type Artifact, type BossRule, type GameMap, type Hero, type Rules, type Scenario } from '../backend.js';
-import { usePolling } from '../useLoad.js';
+import { useAction } from '../hooks/action.js';
+import { useReference } from '../hooks/load.js';
+import { useJobFinished, useJobs } from '../jobs/JobsProvider.js';
 import { BattleEditor } from '../arena/BattleEditor.js';
 import { emptyFormation, type FormationState } from '../FormationEditor.js';
 import { keepOnMap } from '../relocate.js';
@@ -9,6 +11,10 @@ import { CounterAdvisor, TeamGenerator } from '../advisor/index.js';
 import { emptyOpponent, type OpponentState } from '../arena/OpponentEditor.js';
 import { useConfirm } from '../ui/Dialog.js';
 import { RecordRow } from '../ui/RecordRow.js';
+import { TabPanel, Tabs } from '../ui/Tabs.js';
+import { Notice } from '../ui/Notice.js';
+
+const NO_SCENARIOS: Scenario[] = [];
 
 interface Reference {
   maps: GameMap[];
@@ -59,7 +65,8 @@ function ScenarioForm({ reference, editing, onSaved, onCancel }: { reference: Re
     editing ? editing.slots.map(slotFromScenario) : Array.from({ length: TEAMS_PER_MODE['Supreme Arena'] }, () => newSlot(reference)),
   );
   const [current, setCurrent] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const teamsId = useId();
+  const { error, busy, run } = useAction();
 
   const arenaMaps = reference.maps.filter((m) => m.tags.includes('Arena'));
   const slot = slots[current]!;
@@ -97,45 +104,11 @@ function ScenarioForm({ reference, editing, onSaved, onCancel }: { reference: Re
         enemy: s.enemy.placed.map((p) => ({ tile: p.tile, hero: p.hero, ...(p.part ? { part: p.part } : {}), rank: p.rank || null, equipmentLevel: p.equipment === '' ? null : Number(p.equipment) })),
       })),
     };
-    try {
-      await (editing ? api.updateScenario(editing.id, input) : api.createScenario(input));
-      onSaved();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    await run(() => (editing ? api.updateScenario(editing.id, input) : api.createScenario(input)), onSaved);
   }
 
-  return (
-    <section className="panel">
-      <h3>{editing ? 'Edit scenario' : 'New scenario'}</h3>
-      <div className="filters">
-        <label className="field">
-          Name
-          <input value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="field">
-          Mode
-          <select value={mode} onChange={(e) => changeMode(e.target.value as ArenaMode)}>
-            {ARENA_MODES.map((m) => (
-              <option key={m}>{m}</option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          Note
-          <input value={note} onChange={(e) => setNote(e.target.value)} />
-        </label>
-      </div>
-      {slots.length > 1 && (
-        <div className="tabs" role="tablist" aria-label="Teams">
-          {slots.map((s, i) => (
-            <button key={i} role="tab" aria-selected={i === current} className={i === current ? 'active' : undefined} onClick={() => setCurrent(i)}>
-              Team {i + 1}
-              {s.enemy.placed.length > 0 ? ` (${s.enemy.placed.length} enemy)` : ''}
-            </button>
-          ))}
-        </div>
-      )}
+  const teamView = (
+    <>
       <div className="filters" key={current}>
         <label className="field">
           Map
@@ -177,12 +150,40 @@ function ScenarioForm({ reference, editing, onSaved, onCancel }: { reference: Re
           />
         </div>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
+    </>
+  );
+
+  return (
+    <section className="panel">
+      <h3>{editing ? 'Edit scenario' : 'New scenario'}</h3>
+      <div className="filters">
+        <label className="field">
+          Name
+          <input value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="field">
+          Mode
+          <select value={mode} onChange={(e) => changeMode(e.target.value as ArenaMode)}>
+            {ARENA_MODES.map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          Note
+          <input value={note} onChange={(e) => setNote(e.target.value)} />
+        </label>
+      </div>
+      {slots.length > 1 && (
+        <Tabs id={teamsId} label="Teams" tabs={slots.map((s, i) => ({ key: i, label: `Team ${i + 1}${s.enemy.placed.length > 0 ? ` (${s.enemy.placed.length} enemy)` : ''}` }))} value={current} onChange={setCurrent} />
       )}
-      <button className="primary" onClick={() => void save()}>
+      {slots.length > 1 ? <TabPanel id={teamsId} value={current}>{teamView}</TabPanel> : teamView}
+      {error && (
+        <Notice kind="error">
+          {error}
+        </Notice>
+      )}
+      <button className="primary" disabled={busy} onClick={() => void save()}>
         {editing ? 'Save changes' : 'Save scenario'}
       </button>
       <button onClick={onCancel}>Cancel</button>
@@ -193,44 +194,15 @@ function ScenarioForm({ reference, editing, onSaved, onCancel }: { reference: Re
 const requestFor = (s: Scenario) =>
   `Answer scenario ${s.id} ("${s.name}"): run \`npm run query -- scenario --id ${s.id}\`, use the recorded history as AGENTS.md describes, then save your answer with \`npm run scenario:estimate\`.`;
 
-const POLL_MS = 2000;
-
-/** The agent's runs on all scenarios: one request and one poll while any is going, and a reload when a run seen going has finished. */
+/** The agent's runs on all scenarios, from the app's job watcher: the list reloads when a run seen going has finished. */
 function useAgentRuns(onFinished: () => void) {
-  const [jobs, setJobs] = useState<Record<number, AgentJob>>({});
+  const { summary, error: lookError } = useJobs();
   const [errors, setErrors] = useState<Record<number, string>>({});
-  const [lookError, setLookError] = useState<string | null>(null);
-  const running = Object.values(jobs).some((job) => job.state === 'running');
-  // Only a run seen going and then done reloads the list; a finished run found on arrival does not.
-  const seenRunning = useRef(new Set<number>());
-  const finished = useRef(onFinished);
-  finished.current = onFinished;
-
-  const look = useCallback(
-    () =>
-      api.scenarioRuns().then(
-        (next) => {
-          setJobs(next);
-          setLookError(null);
-          const before = seenRunning.current;
-          seenRunning.current = new Set(Object.keys(next).map(Number).filter((id) => next[id]!.state === 'running'));
-          if (Object.keys(next).some((id) => next[Number(id)]!.state === 'done' && before.has(Number(id)))) finished.current();
-        },
-        (e: Error) => setLookError(e.message),
-      ),
-    [],
-  );
-  useEffect(() => {
-    void look();
-  }, [look]);
-  usePolling(look, running, POLL_MS);
+  useJobFinished('scenario', (event) => event.state === 'done' && onFinished());
 
   async function act(id: number, action: (id: number) => Promise<AgentJob>) {
     try {
-      const next = await action(id);
-      if (next.state === 'running') seenRunning.current.add(id);
-      else seenRunning.current.delete(id);
-      setJobs((old) => ({ ...old, [id]: next }));
+      await action(id);
       setErrors(({ [id]: _cleared, ...rest }) => rest);
     } catch (e) {
       setErrors((old) => ({ ...old, [id]: (e as Error).message }));
@@ -239,7 +211,7 @@ function useAgentRuns(onFinished: () => void) {
 
   return {
     lookError,
-    jobOf: (id: number): AgentJob => jobs[id] ?? { state: 'idle' },
+    jobOf: (id: number): AgentJob => summary?.scenarios[id] ?? { state: 'idle' },
     errorOf: (id: number) => errors[id] ?? null,
     start: (id: number) => act(id, api.runScenario),
     cancel: (id: number) => act(id, api.cancelScenarioRun),
@@ -303,15 +275,15 @@ function ScenarioCard({ scenario, run, onEdit, onDelete }: { scenario: Scenario;
       )}
       {run.job.state === 'running' && <p role="status">The agent is working on this. It can take a few minutes.</p>}
       {run.job.state === 'failed' && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           The last run failed: {run.job.error}
           {scenario.estimate ? ' The previous estimate is kept.' : ''}
-        </p>
+        </Notice>
       )}
       {run.error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {run.error}
-        </p>
+        </Notice>
       )}
       <p className="muted">
         {scenario.slots.map((s) => `Team ${s.position}: ${s.enemy.map((h) => h.name).join(', ')}${s.mine.length ? ` vs ${s.mine.map((h) => h.name).join(', ')}` : ''}`).join(' · ')}
@@ -332,29 +304,16 @@ function ScenarioCard({ scenario, run, onEdit, onDelete }: { scenario: Scenario;
 }
 
 function ScenarioPlanner() {
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
-  const [reference, setReference] = useState<Reference | null>(null);
+  const loaded = useReference({ scenarios: api.scenarios, maps: api.maps, heroes: api.heroes, artifacts: api.artifacts, rules: api.bossRules, heroRules: api.rules });
+  const scenarios = loaded.data?.scenarios ?? NO_SCENARIOS;
+  const reference: Reference | null = loaded.data ?? null;
+  const reload = loaded.reload;
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Scenario | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { error: actionError, run } = useAction({ then: reload });
+  const error = loaded.error ?? actionError;
   const { confirm, dialog } = useConfirm();
 
-  const reload = useCallback(async () => {
-    try {
-      const [loaded, maps, heroes, artifacts, rules, heroRules] = await Promise.all([
-        api.scenarios(), api.maps(), api.heroes(), api.artifacts(), api.bossRules(), api.rules(),
-      ]);
-      setScenarios(loaded);
-      setReference({ maps, heroes, artifacts, rules, heroRules });
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
   const runs = useAgentRuns(() => void reload());
 
   async function remove(scenario: Scenario) {
@@ -366,12 +325,7 @@ function ScenarioPlanner() {
       }))
     )
       return;
-    try {
-      await api.deleteScenario(scenario.id);
-      await reload();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    await run(() => api.deleteScenario(scenario.id));
   }
 
   const done = () => {
@@ -393,9 +347,9 @@ function ScenarioPlanner() {
         with your recorded battles and writes its estimate here (choose the agent in Admin). It cannot simulate a fight; it can only say what the history suggests.
       </p>
       {(error ?? runs.lookError) && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error ?? runs.lookError}
-        </p>
+        </Notice>
       )}
       {reference && adding && <ScenarioForm reference={reference} onSaved={done} onCancel={() => setAdding(false)} />}
       {reference && editing && <ScenarioForm key={editing.id} reference={reference} editing={editing} onSaved={done} onCancel={() => setEditing(null)} />}
@@ -424,14 +378,10 @@ export function ScenariosPage() {
   const [tool, setTool] = useState<Tool>('generator');
   return (
     <section>
-      <div className="tabs" role="tablist" aria-label="Scenarios">
-        {(Object.keys(TOOLS) as Tool[]).map((key) => (
-          <button key={key} role="tab" aria-selected={tool === key} className={tool === key ? 'active' : undefined} onClick={() => setTool(key)}>
-            {TOOLS[key]}
-          </button>
-        ))}
-      </div>
-      {tool === 'generator' ? <TeamGenerator /> : tool === 'advisor' ? <CounterAdvisor /> : <ScenarioPlanner />}
+      <Tabs id="scenarios" label="Scenarios" tabs={(Object.keys(TOOLS) as Tool[]).map((key) => ({ key, label: TOOLS[key] }))} value={tool} onChange={setTool} />
+      <TabPanel id="scenarios" value={tool}>
+        {tool === 'generator' ? <TeamGenerator /> : tool === 'advisor' ? <CounterAdvisor /> : <ScenarioPlanner />}
+      </TabPanel>
     </section>
   );
 }

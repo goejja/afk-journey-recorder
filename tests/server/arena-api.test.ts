@@ -226,14 +226,6 @@ describe('formation ids', () => {
     expect(db.prepare('SELECT count(*) FROM attempt').pluck().get()).toBe(1);
   });
 
-  it('suggests the codes of the units placed, as they are or turned upside down', async () => {
-    await send('POST', '/api/pvp/battles', withId(['A', 'B'], 'A1B2C3D4'));
-    const find = (heroes: { tile: number; hero: string }[]) => json(send('POST', '/api/formation-ids/find', { teams: [{ heroes }] }));
-    expect(await find([{ tile: 38, hero: 'A' }, { tile: 39, hero: 'B' }])).toMatchObject([{ code: 'A1B2C3D4', match: 'same', maps: ['Duel'] }]);
-    expect(await find([{ tile: 6, hero: 'A' }, { tile: 5, hero: 'B' }])).toMatchObject([{ code: 'A1B2C3D4', match: 'rotated' }]);
-    expect(await find([{ tile: 38, hero: 'A' }])).toEqual([]);
-  });
-
   it('adds and deletes codes by hand', async () => {
     const layout = { units: [{ kind: 'hero', hero: 'A', part: '', tile: 38 }] };
     const deployment = { teams: [{ ...layout, artifact: null }] };

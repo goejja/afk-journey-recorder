@@ -1,13 +1,16 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { isSmallSample } from '../../src/domain/stats.js';
-import { useLoad } from '../useLoad.js';
+import { useLoad } from '../hooks/load.js';
 import { api, type ArchetypeStat, type GameMap, type PlacementMap, type FormationGroupRow, type FormationReport, type GroupCounterReport, type GroupCounterRow, type GroupHero, type Matchup, type RateRecord } from '../backend.js';
-import { useMaps } from '../useMaps.js';
+import { useMaps } from '../hooks/maps.js';
 import { HexMap } from '../HexMap.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { Portrait } from '../Portrait.js';
 import { Dialog } from '../ui/Dialog.js';
 import { percent, points, record, toggled } from '../format.js';
+import { DisclosureMark } from '../ui/Icon.js';
+import { Notice } from '../ui/Notice.js';
+import { Loading } from '../ui/ListStatus.js';
 
 interface Filters {
   mode: string[];
@@ -22,7 +25,7 @@ const plain = (heroes: string[]) => heroes.join(' + ');
 const coreNames = (core: GroupHero[]) => core.map((h) => h.hero);
 
 /** Portraits of a group's heroes, each with its share of the group's appearances under it. */
-function GroupHeroes({ heroes, size }: { heroes: GroupHero[]; size: number }) {
+export function GroupHeroes({ heroes, size }: { heroes: GroupHero[]; size: number }) {
   return (
     <span className="group-heroes">
       {heroes.map((h) => (
@@ -93,7 +96,7 @@ const nameOf = (g: GroupCounterRow) => plain(g.core);
 
 /** Which groups a group beats and loses to, from the head-to-head records under the same filters. */
 function Counters({ core, report }: { core: string[]; report: GroupCounterReport | null }) {
-  if (!report) return <p className="muted">Loading…</p>;
+  if (!report) return <Loading />;
   const key = core.join('/');
   const group = report.groups.find((g) => g.core.join('/') === key);
   const { winRate, minGames } = report.rule;
@@ -193,8 +196,8 @@ function Profile({ core, filters, maps, counters }: { core: string[]; filters: F
     [core.join('/'), filters],
   );
 
-  if (error) return <p className="error" role="alert">{error}</p>;
-  if (!profile) return <p className="muted">Loading…</p>;
+  if (error) return <Notice kind="error">{error}</Notice>;
+  if (!profile) return <Loading />;
   const gaps = [['ahead', 'Ahead'], ['near', 'Near level'], ['behind', 'Behind'], ['unknown', 'Unknown gap']] as const;
   return (
     <>
@@ -282,8 +285,8 @@ function GamesBar({ group, most }: { group: { games: number; winRate: number }; 
 /** The pairs of the group's own heroes, from the pairs statistics under the same mode and season filters. */
 function GroupPairs({ heroes, filters }: { heroes: Set<string>; filters: Filters }) {
   const pairs = useLoad(() => api.statsPairs({ mode: filters.mode, playedIn: filters.playedIn }), [filters.mode, filters.playedIn]);
-  if (pairs.error) return <p className="error" role="alert">{pairs.error}</p>;
-  if (!pairs.data) return <p className="muted">Loading…</p>;
+  if (pairs.error) return <Notice kind="error">{pairs.error}</Notice>;
+  if (!pairs.data) return <Loading />;
   const own = pairs.data.filter((p) => heroes.has(p.heroA) && heroes.has(p.heroB)).sort((a, b) => b.games - a.games).slice(0, PAIRS_SHOWN);
   return (
     <>
@@ -356,7 +359,7 @@ function ArchetypeSection({ row, most, opened, toggle, children }: { row: Archet
   return (
     <section className="group-archetype">
       <button className="group-row group-archetype-head" aria-expanded={opened} aria-label={`Archetype: ${plain(coreNames(row.core))}`} title={`${row.groups.length} groups`} onClick={toggle}>
-        <span aria-hidden="true">{opened ? '▾' : '▸'}</span>
+        <DisclosureMark open={opened} />
         <GroupHeroes heroes={row.core} size={32} />
         <GroupHeroes heroes={row.flex} size={22} />
         <Figures stat={row} most={most} evidence={false} />
@@ -420,8 +423,8 @@ export function FormationGroups({ filters }: { filters: Filters }) {
       <div className="filters">
         <MultiSelect label="Hero" options={heroes} value={picked} onChange={setPicked} />
       </div>
-      {mapsError && <p className="error" role="alert">{mapsError}</p>}
-      {error && <p className="error" role="alert">{error}</p>}
+      {mapsError && <Notice kind="error">{mapsError}</Notice>}
+      {error && <Notice kind="error">{error}</Notice>}
       {report && report.rows.length === 0 && <p className="muted">Nothing to show with these filters.</p>}
       {report && report.rows.length > 0 && (
         <div className="group-table" style={slots}>
@@ -450,7 +453,7 @@ export function FormationGroups({ filters }: { filters: Filters }) {
           <GroupCard group={chosen} baseline={report.baseline} filters={filters} maps={maps} counters={counters.data ?? null} />
         </Dialog>
       )}
-      {counters.error && <p className="error" role="alert">{counters.error}</p>}
+      {counters.error && <Notice kind="error">{counters.error}</Notice>}
       {counters.data && report && report.rows.length > 0 && <CounterMatrix report={counters.data} />}
     </>
   );

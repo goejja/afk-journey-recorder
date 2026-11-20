@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 
 /** What a table is, without how it was written: its columns, indexes and CHECK rules, so that column order and quoting do not matter. */
-export interface TableShape {
+interface TableShape {
   columns: string[];
   foreignKeys: string[];
   indexes: string[];

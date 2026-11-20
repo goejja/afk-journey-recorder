@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ARENA_MODES } from './arena.js';
-import { numberFrom, problemWith } from './schema.js';
+import { numberFrom } from './schema.js';
 
 /** Fewer comparable records than this is anecdote: a win rate from it says little. */
 export const SMALL_SAMPLE = 5;
@@ -22,15 +22,12 @@ export const StatsModesSchema = z
   })
   .transform((modes) => modes as string[]);
 
-/** An error message when this is not a list of known modes. */
-export const validateStatsModes = (modes: unknown): string | null => problemWith(StatsModesSchema, modes);
-
 /** The modes of a valid list, each once, in the order of `STATS_MODES`. */
 export const orderedStatsModes = (modes: string[]): string[] => STATS_MODES.filter((m) => modes.includes(m));
 
 /** A Formation group counters another when its head-to-head record is at least this win rate, over at least this many games, until the player chooses others in Admin (ADR 0039). */
-export const DEFAULT_COUNTER_WIN_RATE = 0.65;
-export const DEFAULT_COUNTER_MIN_GAMES = SMALL_SAMPLE;
+const DEFAULT_COUNTER_WIN_RATE = 0.65;
+const DEFAULT_COUNTER_MIN_GAMES = SMALL_SAMPLE;
 
 export const CounterRuleSchema = z.object(
   {

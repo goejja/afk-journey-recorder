@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { RECORD_MODES } from '../../src/domain/arena.js';
 import { api, type CleanupPreview, type CleanupRequest } from '../backend.js';
 import { TagSelect } from '../Tags.js';
+import { useAction } from '../hooks/action.js';
 import { useConfirm } from '../ui/Dialog.js';
+import { Notice } from '../ui/Notice.js';
 
 const kb = (bytes: number) => `${(bytes / 1024).toFixed(0)} KB`;
 
@@ -12,23 +14,22 @@ export function CleanupPage() {
   const [days, setDays] = useState('90');
   const [tag, setTag] = useState('');
   const [preview, setPreview] = useState<{ selection: CleanupRequest; result: CleanupPreview } | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { error, busy, run } = useAction({ toast: true });
   const { confirm, dialog } = useConfirm();
 
   const selection = (): CleanupRequest => ({ ...(mode ? { mode } : {}), olderThanDays: Number(days), ...(tag ? { tag } : {}) });
-  const fail = (e: unknown) => (setError((e as Error).message), setMessage(null));
 
   async function runPreview() {
-    try {
-      const chosen = selection();
-      setPreview({ selection: chosen, result: await api.previewCleanup(chosen) });
-      setError(null);
-      setMessage(null);
-    } catch (e) {
-      setPreview(null);
-      fail(e);
-    }
+    const worked = await run(
+      async () => {
+        const chosen = selection();
+        return { selection: chosen, result: await api.previewCleanup(chosen) };
+      },
+      (found) => {
+        setPreview(found);
+      },
+    );
+    if (!worked) setPreview(null);
   }
 
   async function remove() {
@@ -43,26 +44,15 @@ export function CleanupPage() {
       }))
     )
       return;
-    try {
-      const { deleted } = await api.deleteCleanup(preview.selection, count);
-      setPreview(null);
-      setError(null);
-      setMessage(`Deleted ${deleted} record${deleted === 1 ? '' : 's'}. Optimize the database below to reclaim the space.`);
-    } catch (e) {
-      setPreview(null);
-      fail(e);
-    }
+    await run(
+      () => api.deleteCleanup(preview.selection, count),
+      undefined,
+      ({ deleted }) => `Deleted ${deleted} record${deleted === 1 ? '' : 's'}. Optimize the database below to reclaim the space.`,
+    );
+    setPreview(null);
   }
 
-  async function optimize() {
-    try {
-      const { bytesBefore, bytesAfter } = await api.optimizeDatabase();
-      setError(null);
-      setMessage(`Database compacted: ${kb(bytesBefore)} → ${kb(bytesAfter)}.`);
-    } catch (e) {
-      fail(e);
-    }
-  }
+  const optimize = () => run(() => api.optimizeDatabase(), undefined, ({ bytesBefore, bytesAfter }) => `Database compacted: ${kb(bytesBefore)} → ${kb(bytesAfter)}.`);
 
   return (
     <section>
@@ -89,14 +79,13 @@ export function CleanupPage() {
           Tag
           <TagSelect value={tag} onChange={(t) => (setTag(t), setPreview(null))} />
         </div>
-        <button onClick={() => void runPreview()}>Preview</button>
+        <button disabled={busy} onClick={() => void runPreview()}>Preview</button>
       </div>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
-      {message && <p role="status">{message}</p>}
       {preview && (
         <div className="panel">
           {preview.result.count === 0 ? (
@@ -107,7 +96,7 @@ export function CleanupPage() {
                 <strong>{preview.result.count}</strong> record{preview.result.count === 1 ? '' : 's'} match, entered between {preview.result.oldest} and{' '}
                 {preview.result.newest}.
               </p>
-              <button className="danger" onClick={() => void remove()}>
+              <button className="danger" disabled={busy} onClick={() => void remove()}>
                 Delete {preview.result.count} record{preview.result.count === 1 ? '' : 's'}
               </button>
             </>
@@ -116,7 +105,7 @@ export function CleanupPage() {
       )}
       <h3>Database file</h3>
       <p className="muted">Compacting rewrites the file to reclaim space left by deleted records and refreshes its statistics. Your records are not changed.</p>
-      <button onClick={() => void optimize()}>Optimize database</button>
+      <button disabled={busy} onClick={() => void optimize()}>Optimize database</button>
       {dialog}
     </section>
   );

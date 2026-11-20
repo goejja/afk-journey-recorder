@@ -1,9 +1,9 @@
 import type Database from 'better-sqlite3';
 import { Hono, type Context } from 'hono';
-import type { ArtifactStat, HeroStat, PairStat, PartnerReport, PositionalPartnerReport, StageStat, Summary, TrioStat } from '../../shared/api.js';
+import type { ArtifactStat, HeroStat, PairStat, PartnerReport, PositionalPartnerReport, FormationGroupStat, Summary, TrioStat } from '../../shared/api.js';
 import { statsContract } from '../../shared/contracts/stats.js';
 import { formationProfile, formationReport } from '../../query/formation-profile.js';
-import { artifactStats, groupCounterReport, heroDistribution, heroRowStats, heroStats, mapStats, ruleStats, pairStats, partnerStats, partnerTags, positionalPartners, playerStats, trioStats, stageStats, summary } from '../../query/index.js';
+import { artifactStats, groupCounterReport, heroDistribution, heroRowStats, heroStats, mapStats, mapFormations, pairStats, partnerStats, partnerTags, positionalPartners, playerStats, trioStats, summary } from '../../query/index.js';
 import { isPartnerRelation, PARTNER_RELATIONS } from '../../domain/partner-relation.js';
 import { factionMismatches } from '../../query/faction-mismatches.js';
 import { fail, serve } from '../contract.js';
@@ -25,7 +25,7 @@ export function statsRoutes(db: Database.Database): Hono {
 
   serve(app, statsContract.artifacts, (_, c) => artifactStats(db, withMin(c)) as ArtifactStat[]);
   serve(app, statsContract.maps, (_, c) => mapStats(db, withMin(c)));
-  serve(app, statsContract.rules, (_, c) => ruleStats(db, withMin(c)));
+  serve(app, statsContract.mapFormations, (_, c) => (c.req.query('map') ? (mapFormations(db, { ...common(c), map: c.req.query('map') }) as FormationGroupStat[]) : fail(400, 'A map is required')));
   serve(app, statsContract.formationReport, (_, c) => formationReport(db, { ...withMin(c), hero: listParam(c, 'hero') }));
   serve(app, statsContract.formationProfile, (_, c) => formationProfile(db, listParam(c, 'core') ?? [], common(c)) ?? fail(404, 'No formation group has these core heroes'));
   serve(app, statsContract.groupCounters, (_, c) => groupCounterReport(db, withMin(c)));
@@ -47,16 +47,6 @@ export function statsRoutes(db: Database.Database): Hono {
   serve(app, statsContract.trios, (_, c) => trioStats(db, withMin(c)) as TrioStat[]);
 
   serve(app, statsContract.players, (_, c) => playerStats(db, { mode: listParam(c, 'mode'), playedIn: listParam(c, 'playedIn'), excludeDefault: c.req.query('excludeDefault') === 'true', minGames: number(c.req.query('min')) }));
-
-  serve(app, statsContract.stages, (_, c) =>
-    stageStats(db, {
-      kind: listParam(c, 'kind'),
-      season: number(c.req.query('season')),
-      playedIn: listParam(c, 'playedIn'),
-      tag: listParam(c, 'tag'),
-      minGames: number(c.req.query('min')),
-    }) as StageStat[],
-  );
 
   return app;
 }

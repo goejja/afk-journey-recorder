@@ -17,7 +17,7 @@ export interface RoundHero {
   equipmentLevel: number | null;
 }
 
-export interface RoundPhantimal {
+interface RoundPhantimal {
   name: string;
   tile: number | null;
   partnerTile?: number | null;
@@ -40,7 +40,7 @@ export interface RoundTeam {
 export type RoundDeployment = (RoundTeam | null)[];
 
 /** What a picture says of one side. A rank or equipment level is set only where the picture was sure of it. */
-export interface ReadHero {
+interface ReadHero {
   hero: string;
   rank: string | null;
   equipmentLevel: number | null;

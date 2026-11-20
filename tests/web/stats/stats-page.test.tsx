@@ -27,7 +27,18 @@ beforeEach(() => {
       if (url.startsWith('/api/stats/heroes/Evie/rows')) return Response.json([{ row: 1, games: 6, wins: 5, winRate: 0.833 }, { row: 2, games: 4, wins: 1, winRate: 0.25 }]);
       if (url.startsWith('/api/stats/artifacts')) return Response.json([{ artifact: 'Bladestorm', games: 12, wins: 9, winRate: 0.75 }, { artifact: 'Awakening', games: 2, wins: 0, winRate: 0 }]);
       if (url.startsWith('/api/stats/maps')) return Response.json([{ map: 'Arena V', games: 9, wins: 6, winRate: 0.667 }]);
-      if (url.startsWith('/api/stats/rules')) return Response.json([{ rule: 'Berserk', games: 5, wins: 4, winRate: 0.8 }]);
+      if (url.startsWith('/api/stats/map-formations')) {
+        const group = (core: string[], flex: string[], games: number, wins: number) => ({
+          core: core.map((hero) => ({ hero, share: 1 })),
+          flex: flex.map((hero) => ({ hero, share: 0.4 })),
+          games,
+          wins,
+          winRate: Math.round((wins / games) * 1000) / 1000,
+          players: 1,
+          variants: [],
+        });
+        return Response.json(url.includes('map=Empty') ? [] : [group(['Evie', 'Fay', 'Zed'], ['Gus'], 8, 6), group(['Hal', 'Ivy', 'Jon'], [], 3, 1)]);
+      }
       if (url.startsWith('/api/stats/heroes/Evie/distribution')) {
         return Response.json({
           hero: 'Evie', players: 7, unknown: 1,
@@ -49,9 +60,6 @@ beforeEach(() => {
       }
       if (url.startsWith('/api/stats/trios')) return Response.json([{ heroA: 'Evie', heroB: 'Fay', heroC: 'Zed', games: 4, wins: 3, winRate: 0.75 }]);
       if (url.startsWith('/api/stats/pairs')) return Response.json([{ heroA: 'Evie', heroB: 'Fay', games: 6, wins: 5, winRate: 0.833 }]);
-      if (url.startsWith('/api/stats/stages')) {
-        return Response.json([{ season: 8, phase: 0, kind: 'Normal', number: 120, games: 5, wins: 2, winRate: 0.4, last: '2026-10-29' }]);
-      }
       return Response.json({}, { status: 404 });
     }),
   );
@@ -154,9 +162,9 @@ describe('Statistics page', () => {
     expect(list.queryByLabelText('Season 9')).toBeNull(); // the current season has no record yet
     await user.click(list.getByLabelText('Season 8'));
     await waitFor(() => expect(requests.some((u) => u.startsWith('/api/stats/heroes?') && u.includes('playedIn=8'))).toBe(true));
-    await user.click(screen.getByRole('tab', { name: 'Stages' }));
+    await user.click(screen.getByRole('tab', { name: 'Maps' }));
     expect(await screen.findByRole('button', { name: 'Played in season: Season 8' })).toBeTruthy();
-    await waitFor(() => expect(requests.some((u) => u.startsWith('/api/stats/stages') && u.includes('playedIn=8'))).toBe(true));
+    await waitFor(() => expect(requests.some((u) => u.startsWith('/api/stats/maps') && u.includes('playedIn=8'))).toBe(true));
   });
 
   it('can still show every mode: the default is a starting choice, not a restriction', async () => {
@@ -190,16 +198,35 @@ describe('Statistics page', () => {
     await waitFor(() => expect(requests.some((u) => u.startsWith('/api/stats/artifacts') && u.includes('mode=Arena'))).toBe(true));
   });
 
-  it('shows the win rate of Side A per map and per rule, and says why only Side A', async () => {
+  it('shows the win rate of Side A per map, says why only Side A, and has no Rules or Stages tab', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
-    await user.click(screen.getByRole('tab', { name: 'Maps & rules' }));
-    expect(await screen.findByText('Arena V')).toBeTruthy();
-    expect(await screen.findByText('Berserk')).toBeTruthy();
-    expect(screen.getByText(/only Side A is counted/)).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: 'Stages' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Maps & rules' })).toBeNull();
+    await user.click(screen.getByRole('tab', { name: 'Maps' }));
+    expect(await screen.findByRole('button', { name: /Arena V/ })).toBeTruthy();
+    expect(screen.queryByText('Rules')).toBeNull();
+    expect(screen.getByText(/counting both would always give half/)).toBeTruthy();
   });
 
-  it('filters heroes by Player, naming each Player by Profile or bare ID, and has no Player filter on Players or Stages', async () => {
+  it('opens a map to its best formations with their record and flags a small sample', async () => {
+    const user = userEvent.setup();
+    render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Maps' }));
+    expect(requests.some((u) => u.startsWith('/api/stats/map-formations'))).toBe(false); // nothing is asked until a map is opened
+    await user.click(await screen.findByRole('button', { name: /Arena V/ }));
+    const table = await screen.findByRole('table', { name: 'Best formations on Arena V' });
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getByText('6–2 of 8')).toBeTruthy();
+    expect(within(rows[0]!).getByText('75%')).toBeTruthy();
+    expect(within(rows[0]!).queryByText('small sample')).toBeNull();
+    expect(within(rows[1]!).getByText('1–2 of 3')).toBeTruthy();
+    expect(within(rows[1]!).getByText('small sample')).toBeTruthy(); // fewer than 5 records
+    expect(requests.some((u) => u.startsWith('/api/stats/map-formations') && u.includes('map=Arena+V'))).toBe(true);
+  });
+
+  it('filters heroes by Player, naming each Player by Profile or bare ID, and has no Player filter on Players', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
     await user.click(screen.getByRole('tab', { name: 'Heroes' }));
@@ -208,8 +235,6 @@ describe('Statistics page', () => {
     await user.click(screen.getByRole('checkbox', { name: 'ID 10000001' }));
     await waitFor(() => expect(requests.some((u) => u.startsWith('/api/stats/heroes?') && u.includes('player=10000001'))).toBe(true));
     await user.click(screen.getByRole('tab', { name: 'Players' }));
-    expect(screen.queryByRole('button', { name: /^Player:/ })).toBeNull();
-    await user.click(screen.getByRole('tab', { name: 'Stages' }));
     expect(screen.queryByRole('button', { name: /^Player:/ })).toBeNull();
   });
 
@@ -298,12 +323,10 @@ describe('Statistics page', () => {
     await waitFor(() => expect(requests.at(-1)).toBe('/api/stats/trios?min=7'));
   });
 
-  it('shows pairs and stages', async () => {
+  it('shows pairs', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
     await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
     expect(await screen.findByText('83%')).toBeTruthy();
-    await user.click(screen.getByRole('tab', { name: 'Stages' }));
-    expect(await screen.findByText('S8 · Normal · 120')).toBeTruthy();
   });
 });

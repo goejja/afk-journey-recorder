@@ -6,7 +6,7 @@ import { problemWith } from '../src/domain/schema.js';
 import { formationProfile, formationReport } from '../src/query/formation-profile.js';
 import { factionMismatches } from '../src/query/faction-mismatches.js';
 import { reviewRun } from '../src/query/review-run.js';
-import { dreamHuntBest, formationIds, parseDeployment, profiles, heroInfo, heroStats, pairStats, partnerStats, positionalPartners, artifactStats, formationGroups, formationStats, groupCounterReport, counterSummary, counterRule, heroDistribution, heroRowStats, mapStats, ruleStats, playerIds, modesFor, playerStats, roster, trioStats, runSelect, scenario, scenarios, stageHistory, stageStats, summary } from '../src/query/index.js';
+import { dreamHuntBest, formationIds, parseDeployment, profiles, heroInfo, heroStats, pairStats, partnerStats, positionalPartners, artifactStats, formationGroups, formationStats, groupCounterReport, counterSummary, counterRule, heroDistribution, heroRowStats, mapStats, mapFormations, playerIds, modesFor, playerStats, roster, trioStats, runSelect, scenario, scenarios, stageHistory, summary } from '../src/query/index.js';
 import { cliCommands, cliUsage } from '../src/advisor/index.js';
 
 const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run query -- <command> [options]
@@ -19,7 +19,7 @@ const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run quer
   partner-stats --name HERO [--relation R] [--mode M[,M]] [--tag T ...] [--min N]   the heroes fielded on the same side as HERO (games, win rate, share of its games); team membership only, not the target of a skill. With --relation behind|front|adjacent|within2|sameRow|mirror|rearmost|rearmost2|daimon: who stood there at the start, with the Players and exact layouts behind each (a statistic of positions, not the target of a skill)
   artifact-stats [--mode M[,M]] [--tag T ...] [--min N]   win rate per artifact, from the side that used it
   map-stats     [--mode M[,M]] [--tag T ...] [--min N]   win rate of Side A per map (both sides share the map, so Side A only)
-  rule-stats    [--mode M[,M]] [--tag T ...] [--min N]   win rate of Side A per rule
+  map-formations --map NAME [--mode M[,M]] [--tag T ...]   the 5 best win-rate Formation groups on a map (3 records or more; both sides of each record count)
   faction-check                               stored records whose Phantimal its heroes cannot have brought (read only)
   review [--run N]                            the findings of the last Reader review run (or run N) in Admin > Review: new ones marked, dismissed ones counted
   hero-rows     --name HERO [--mode M[,M]] [--tag T ...]   win rate of a hero by game row (the diagonal rows of ADR 0036) from its own back edge (1 = back, 15 = front)
@@ -31,9 +31,8 @@ const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run quer
   trio-stats    [--mode M[,M]] [--tag T ...] [--min N]   win rate per trio of heroes on one side
   hero-distribution --name HERO [--mode M[,M]] [--tag T ...]   how many Players fielded a hero at each rank and equipment level (latest record of each Player)
   player-stats  [--mode M[,M]] [--min N]   win rate per Player (Player ID on a side of a PvP record), with their most used formations
-  stage-stats   [--kind K[,K]] [--season N] [--tag T ...] [--min N]   win rate per stage
   stage         --season N --kind K --number N [--phase P]    attempts on one stage
-  Every statistics command above (hero-stats to stage-stats) also takes --played-in N[,N]: only records played in those seasons (the season of Admin > General when they were saved; stage-stats keeps --season for the stage's own season)
+  Every statistics command above (hero-stats to player-stats) also takes --played-in N[,N]: only records played in those seasons (the season of Admin > General when they were saved)
   dream-hunt    --boss NAME [--rule any|none|NAME] [--tag T]  team comparison for a boss
   formation-ids [--units "Alna@31,Rolan@27|Mira@30"] [--phantimal "Orson@30|"]
                                               the player's Formation IDs (the game's codes for a Deployment of 1 to 5 teams); with units,
@@ -47,9 +46,9 @@ const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run quer
 ${cliUsage}
   sql           "SELECT ..."                  one read-only SELECT
 
-The statistics (hero-stats, pair-stats, trio-stats, formation-stats, formation-groups, artifact-stats, map-stats, rule-stats, hero-rows, hero-distribution) also take --player ID_OR_PROFILE_NAME, repeated: only the sides of those Players. They and player-stats also take --exclude-default: leave out the sides of the default profile's Player ID.
+The statistics (hero-stats, pair-stats, trio-stats, formation-stats, formation-groups, artifact-stats, map-stats, map-formations, hero-rows, hero-distribution) also take --player ID_OR_PROFILE_NAME, repeated: only the sides of those Players. They and player-stats also take --exclude-default: leave out the sides of the default profile's Player ID.
 
-Modes: Stage, Dream Hunt, Arena, Supreme Arena, Super League, Guild Duel, Treasure Rush. With no --mode, hero-stats, pair-stats, trio-stats, partner-stats, hero-rows, hero-distribution, layout-report, the formation-* commands, artifact-stats, map-stats and rule-stats read the PvP modes only (Arena, Supreme Arena, Super League, Guild Duel, Treasure Rush): Dream Hunt reuses the same formations all week and a Stage is a fixed puzzle, so neither says how strong a hero is. Give --mode (a comma-separated list) to read others. Database: data/afk.db, or --db PATH or AFK_DB.`;
+Modes: Stage, Dream Hunt, Arena, Supreme Arena, Super League, Guild Duel, Treasure Rush. With no --mode, hero-stats, pair-stats, trio-stats, partner-stats, hero-rows, hero-distribution, layout-report, the formation-* commands, artifact-stats, map-stats and map-formations read the PvP modes only (Arena, Supreme Arena, Super League, Guild Duel, Treasure Rush): Dream Hunt reuses the same formations all week and a Stage is a fixed puzzle, so neither says how strong a hero is. Give --mode (a comma-separated list) to read others. Database: data/afk.db, or --db PATH or AFK_DB.`;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -57,7 +56,7 @@ const { values, positionals } = parseArgs({
     db: { type: 'string' }, mode: { type: 'string' }, tag: { type: 'string', multiple: true }, player: { type: 'string', multiple: true }, 'played-in': { type: 'string' }, 'exclude-default': { type: 'boolean' }, 'no-gap': { type: 'boolean' }, 'archetype-similarity': { type: 'string' }, min: { type: 'string' }, 'min-win-rate': { type: 'string' }, 'min-games': { type: 'string' }, relation: { type: 'string' },
     enemy: { type: 'string' }, core: { type: 'string' }, hero: { type: 'string', multiple: true }, team: { type: 'string' }, 'min-similarity': { type: 'string' }, limit: { type: 'string' },
     run: { type: 'string' }, season: { type: 'string' }, kind: { type: 'string' }, number: { type: 'string' }, phase: { type: 'string' },
-    boss: { type: 'string' }, profile: { type: 'string' }, against: { type: 'string' }, 'min-sample': { type: 'string' }, 'prior-strength': { type: 'string' }, 'stronger-weight': { type: 'string' }, rule: { type: 'string' }, id: { type: 'string' }, scenario: { type: 'string' }, name: { type: 'string' }, units: { type: 'string' }, phantimal: { type: 'string' },
+    map: { type: 'string' }, boss: { type: 'string' }, profile: { type: 'string' }, against: { type: 'string' }, 'min-sample': { type: 'string' }, 'prior-strength': { type: 'string' }, 'stronger-weight': { type: 'string' }, rule: { type: 'string' }, id: { type: 'string' }, scenario: { type: 'string' }, name: { type: 'string' }, units: { type: 'string' }, phantimal: { type: 'string' },
   },
 });
 
@@ -96,7 +95,7 @@ try {
       }
       case 'artifact-stats': return artifactStats(db, { ...statFilters, minGames: num(values.min) });
       case 'map-stats': return mapStats(db, { ...statFilters, minGames: num(values.min) });
-      case 'rule-stats': return ruleStats(db, { ...statFilters, minGames: num(values.min) });
+      case 'map-formations': return mapFormations(db, { ...statFilters, map: need('map') });
       case 'faction-check': return factionMismatches(db);
       case 'review': return reviewRun(db, values.run === undefined ? undefined : num(values.run));
       case 'hero-rows': return heroRowStats(db, need('name'), statFilters);
@@ -117,7 +116,6 @@ try {
       case 'stage':
         return stageHistory(db, { season: Number(need('season')), kind: need('kind'), number: Number(need('number')), phase: num(values.phase) });
       case 'dream-hunt': return dreamHuntBest(db, need('boss'), { rule: values.rule, tag: values.tag?.at(-1) });
-      case 'stage-stats': return stageStats(db, { kind: values.kind?.split(',').map((k) => k.trim()), season: num(values.season), playedIn: statFilters.playedIn, tag: values.tag, minGames: num(values.min) });
       case 'formation-ids': return formationIds(db, values.units === undefined && values.phantimal === undefined ? undefined : parseDeployment(values.units ?? '', values.phantimal));
       case 'hero-info': return heroInfo(db, need('name')) ?? (() => { throw new Error('Unknown hero'); })();
       case 'scenarios': return scenarios(db);

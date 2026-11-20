@@ -3,8 +3,10 @@ import { matchFiles } from '../../src/domain/image-match.js';
 import { api, type ImageSource } from '../backend.js';
 import { CropEditor } from './CropEditor.js';
 import { bumpImageVersion, Portrait, type ImageKind } from '../Portrait.js';
-import { useLoad } from '../useLoad.js';
+import { useAction } from '../hooks/action.js';
+import { useLoad } from '../hooks/load.js';
 import { ListStatus } from '../ui/ListStatus.js';
+import { Notice } from '../ui/Notice.js';
 
 const KINDS: { kind: ImageKind; label: string }[] = [
   { kind: 'hero', label: 'Heroes' },
@@ -22,7 +24,7 @@ export function ImagesPage() {
   const [kind, setKind] = useState<ImageKind>('hero');
   const [search, setSearch] = useState('');
   const [missingOnly, setMissingOnly] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { error, busy, setError, run } = useAction();
   const [report, setReport] = useState<string | null>(null);
   const [cropping, setCropping] = useState<{ name: string; file: File } | null>(null);
 
@@ -32,17 +34,13 @@ export function ImagesPage() {
   // an answer clears what an action here failed to do, as the answer of the list did before
   useEffect(() => {
     if (loaded.data) setError(null);
-  }, [loaded.data]);
+  }, [loaded.data, setError]);
 
-  async function change(action: () => Promise<void>) {
-    try {
-      await action();
+  const change = (action: () => Promise<void>) =>
+    run(action, async () => {
       bumpImageVersion(); // every portrait on screen reloads
       await reload();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
+    });
 
   /** Uploads picked files to the units their file names match, and says what it could not place. */
   async function uploadMany(files: File[]) {
@@ -77,9 +75,9 @@ export function ImagesPage() {
         <span className="muted">{missing} of {units.length} have none</span>
       </div>
       {(error ?? loaded.error) && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error ?? loaded.error}
-        </p>
+        </Notice>
       )}
       <div className="filters">
         <select aria-label="Kind" value={kind} onChange={(e) => (setKind(e.target.value as ImageKind), setReport(null))}>
@@ -108,7 +106,7 @@ export function ImagesPage() {
           <input type="checkbox" checked={missingOnly} onChange={(e) => setMissingOnly(e.target.checked)} /> Missing only
         </label>
       </div>
-      {report && <p role="status">{report}</p>}
+      {report && <Notice kind="success">{report}</Notice>}
       <p className="muted">Name the files after the units (for example Bladestorm.png) to upload many at once; "Item Bladestorm Spell (Veil of Memories).png" works too. PNG, JPEG, WebP or GIF, up to 2 MB. Your image replaces the imported one; removing it brings the imported one back. "Crop and frame" lets you drag and zoom a picture into the hexagonal frame the imported portraits have; "Upload image" keeps the file as it is.</p>
 
       {cropping && (
@@ -163,7 +161,7 @@ export function ImagesPage() {
                 </label>
               )}
               {u.source === 'custom' && (
-                <button onClick={() => void change(() => api.removeImage(kind, u.name))}>Remove mine</button>
+                <button disabled={busy} onClick={() => void change(() => api.removeImage(kind, u.name))}>Remove mine</button>
               )}
             </div>
           </article>

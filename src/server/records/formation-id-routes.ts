@@ -1,19 +1,17 @@
 import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
-import { addFormationId, deleteFormationId, findFormationIds, getFormationId, listFormationIds } from '../../db/formation-ids.js';
-import { deploymentFrom, deploymentProblem, isFormationId, layoutFrom, normalizeFormationId, phantimalOf, type Deployment, type LayoutUnit, type PlacedFormation } from '../../domain/layout.js';
+import { addFormationId, deleteFormationId, getFormationId, listFormationIds } from '../../db/formation-ids.js';
+import { deploymentProblem, isFormationId, layoutFrom, normalizeFormationId, phantimalOf, type Deployment, type LayoutUnit, type PlacedFormation } from '../../domain/layout.js';
 import { checkFactionRequirement } from '../../domain/units.js';
 import { formationIdsContract } from '../../shared/contracts/formation-ids.js';
 import { fail, serve } from '../contract.js';
 
 const CODE_MESSAGE = 'A Formation ID is 8 characters: digits or capital letters';
 
-/** The library: list it, find the codes of some placed teams, add a code by hand, delete one. */
+/** The library: list it, add a code by hand, delete one. */
 export function formationIdRoutes(db: Database.Database): Hono {
   const app = new Hono();
   serve(app, formationIdsContract.list, () => listFormationIds(db));
-  // The body never fails: what is not a list of teams looks up nothing.
-  serve(app, formationIdsContract.find, ({ body }) => findFormationIds(db, deploymentFrom(body.teams?.map((t) => (t as object | null) ?? null) ?? [])));
   serve(app, formationIdsContract.create, ({ body }) => {
     const code = normalizeFormationId(body.code ?? '');
     const teams = body.deployment?.teams as unknown;

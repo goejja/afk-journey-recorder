@@ -7,7 +7,7 @@ import { keepPicture, picturesDir } from './picture-store.js';
 /** A battle report folder is named after its mode: `Guild_Duel_Battle_Report` holds the pictures of the Guild Duel. */
 const REPORT_FOLDER = /^(.+)_Battle_Report$/;
 
-export interface PictureFile {
+interface PictureFile {
   /** The path of the file under the folder searched. */
   path: string;
   /** The mode the folder name says, or null for a folder that does not hold battle reports. */

@@ -5,8 +5,11 @@ import { MultiSelect } from '../MultiSelect.js';
 import { PlacementRulesAdmin } from '../advisor/index.js';
 import { Portrait } from '../Portrait.js';
 import { refreshUnitRules } from '../unit-rules.js';
-import { useCrud } from '../useCrud.js';
+import { useAction } from '../hooks/action.js';
+import { useConfirmActions } from '../hooks/confirm.js';
+import { useLoad } from '../hooks/load.js';
 import { MasterDetail } from '../ui/MasterDetail.js';
+import { Notice } from '../ui/Notice.js';
 
 type Stands = 'alone' | 'pair' | 'summoner';
 
@@ -74,9 +77,19 @@ const usageText = (u: HeroUsage) =>
 
 const standsText = (h: HeroAdmin) => (h.pair ? `${h.pair.part1} & ${h.pair.part2}` : h.summon ? `${h.summon.count} × ${h.summon.part}` : '');
 
+const NO_ITEMS: HeroAdmin[] = [];
+const NO_TIER_CHECKS: TierCheck[] = [];
+
 /** Admin > Units > Heroes: the information of every standard hero and the units it brings. Pictures are the Images tab's. */
 export function HeroAdminPage() {
-  const [items, setItems] = useState<HeroAdmin[]>([]);
+  const loaded = useLoad(async () => {
+    const items = await api.adminHeroes();
+    const tierChecks = await api.tierCheck();
+    await refreshUnitRules();
+    return { items, tierChecks };
+  }, []);
+  const items = loaded.data?.items ?? NO_ITEMS;
+  const tierChecks = loaded.data?.tierChecks ?? NO_TIER_CHECKS;
   const [selected, setSelected] = useState<string | null>(null); // null while creating
   const [draft, setDraft] = useState<Draft>(blank());
   const [usage, setUsage] = useState<HeroUsage | null>(null);
@@ -88,9 +101,10 @@ export function HeroAdminPage() {
   const [pvpTiers, setPvpTiers] = useState<string[]>([]);
   const [hint, setHint] = useState({ pvpTier: '', pvpRole: '' });
   const [attributes, setAttributes] = useState(attributesDraft(null));
-  const [tierChecks, setTierChecks] = useState<TierCheck[]>([]);
   const [departing, setDeparting] = useState(false);
-  const { error, setError, run: act, confirmDelete, confirmDiscard, dialog } = useCrud();
+  const { error: actionError, busy, setError, run: act } = useAction();
+  const error = loaded.error ?? actionError;
+  const { confirmDelete, confirmDiscard, dialog } = useConfirmActions(act);
 
   const current = items.find((h) => h.name === selected) ?? null;
   const hintOf = (h: HeroAdmin | null) => ({ pvpTier: h?.pvpTier ?? '', pvpRole: h?.pvpRole ?? '' });
@@ -98,23 +112,18 @@ export function HeroAdminPage() {
   const attributesDirty = current !== null && JSON.stringify(attributes) !== JSON.stringify(attributesDraft(current));
   const dirty = current ? !same(draft, toDraft(current)) : !same(draft, blank());
 
+  // reads the heroes again; with `select` (a saved hero's name, or null for a new one) the page then opens it
+  const reloadHeroes = loaded.reload;
   const reload = useCallback(async (select?: string | null) => {
-    const loaded = await api.adminHeroes();
-    setItems(loaded);
-    setTierChecks(await api.tierCheck());
-    await refreshUnitRules();
-    if (select !== undefined) {
+    const answer = await reloadHeroes();
+    if (answer && select !== undefined) {
       setSelected(select);
-      const item = loaded.find((h) => h.name === select);
+      const item = answer.items.find((h) => h.name === select);
       setDraft(item ? toDraft(item) : blank());
       setHint({ pvpTier: item?.pvpTier ?? '', pvpRole: item?.pvpRole ?? '' });
       setAttributes(attributesDraft(item ?? null));
     }
-  }, []);
-
-  useEffect(() => {
-    void act(() => reload());
-  }, [act, reload]);
+  }, [reloadHeroes]);
 
   // What uses the selected hero decides whether its units can change and whether it can be deleted.
   useEffect(() => {
@@ -233,9 +242,9 @@ export function HeroAdminPage() {
         detail={
           <div className="map-editor">
             {error && (
-              <p className="error" role="alert">
+              <Notice kind="error">
                 {error}
-              </p>
+              </Notice>
             )}
             <div className="filters">
               <input placeholder="Name" aria-label="Name" value={draft.name} disabled={current !== null} onChange={(e) => set({ name: e.target.value })} />
@@ -292,7 +301,7 @@ export function HeroAdminPage() {
                       <option key={r}>{r}</option>
                     ))}
                   </select>
-                  <button onClick={() => void saveHint()} disabled={!hintDirty}>
+                  <button onClick={() => void saveHint()} disabled={busy || !hintDirty}>
                     Save hint
                   </button>
                 </div>
@@ -316,7 +325,7 @@ export function HeroAdminPage() {
                 </div>
                 <input className="wide" placeholder="Mechanic tags, separated by commas" aria-label="Mechanic tags" value={attributes.mechanics} onChange={(e) => setAttributes({ ...attributes, mechanics: e.target.value })} />
                 <div className="actions">
-                  <button onClick={() => void saveAttributes()} disabled={!attributesDirty}>
+                  <button onClick={() => void saveAttributes()} disabled={busy || !attributesDirty}>
                     Save attributes
                   </button>
                 </div>
@@ -339,11 +348,11 @@ export function HeroAdminPage() {
             )}
 
             <div className="actions">
-              <button className="primary" onClick={() => void save()} disabled={!dirty || draft.name.trim() === ''}>
+              <button className="primary" onClick={() => void save()} disabled={busy || !dirty || draft.name.trim() === ''}>
                 {current ? 'Save' : 'Create hero'}
               </button>
               {current && (
-                <button className="danger" onClick={() => void remove()}>
+                <button className="danger" disabled={busy} onClick={() => void remove()}>
                   Delete
                 </button>
               )}

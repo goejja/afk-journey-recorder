@@ -254,13 +254,15 @@ describe('StagesPage', () => {
     expect(laneHead('Apex Normal').getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('moves between the Phase tabs with the arrow keys', async () => {
+  it('moves between the Phase tabs with the arrow keys, and selects the focused one with Enter', async () => {
     const user = userEvent.setup();
     render(<StagesPage />);
     (await screen.findByRole('tab', { name: 'Phase 1' })).focus();
     await user.keyboard('{ArrowRight}');
-    expect(screen.getByRole('tab', { name: 'Phase 2' }).getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Phase 2' }));
+    expect(screen.getByRole('tab', { name: 'Phase 1' }).getAttribute('aria-selected')).toBe('true');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('tab', { name: 'Phase 2' }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('opens the panel of a box right under it, lists the five newest records and reveals the rest, and Escape closes it', async () => {

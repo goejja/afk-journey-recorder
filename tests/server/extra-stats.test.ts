@@ -28,18 +28,17 @@ const send = (method: string, url: string, body?: unknown) =>
   app.request(url, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
 const json = async (response: Response | Promise<Response>) => (await response).json() as Promise<any>;
 
-describe('artifact, map, rule, row and pick rate statistics', () => {
+describe('artifact, map, row and pick rate statistics', () => {
   it('gives the win rate of each artifact from the side that used it', async () => {
     expect(await json(send('GET', '/api/stats/artifacts'))).toEqual([{ artifact: 'Bladestorm', games: 2, wins: 1, winRate: 0.5 }]);
     expect(await json(send('GET', '/api/stats/artifacts?mode=Supreme+Arena'))).toEqual([]);
   });
 
-  it('gives the win rate of each map and rule from Side A, since counting both sides would always give half', async () => {
+  it('gives the win rate of each map from Side A, since counting both sides would always give half', async () => {
     expect(await json(send('GET', '/api/stats/maps'))).toEqual([
       { map: 'Open', games: 2, wins: 1, winRate: 0.5 },
       { map: 'Other', games: 1, wins: 1, winRate: 1 },
     ]);
-    expect(await json(send('GET', '/api/stats/rules'))).toEqual([{ rule: 'Berserk', games: 1, wins: 1, winRate: 1 }]);
     expect(await json(send('GET', '/api/stats/maps?mode=Arena'))).toEqual([{ map: 'Open', games: 2, wins: 1, winRate: 0.5 }]);
   });
 

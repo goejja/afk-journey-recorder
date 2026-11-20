@@ -4,6 +4,7 @@ import type { Round } from '../../src/domain/tournament.js';
 import type { Artifact, GameMap, Hero, Phantimal, Profile, Rules } from '../backend.js';
 import { TeamEditorDialog } from '../TeamEditorDialog.js';
 import { toggled } from '../format.js';
+import { DisclosureMark } from '../ui/Icon.js';
 
 /** The reference data a team is placed with: the form's own controls, not a second editor. */
 export interface TeamEditorReference {
@@ -56,7 +57,7 @@ export function RoundDeploymentsView({ tournament, round, rows, profiles, busy, 
     <section className="panel" aria-label="Round Deployments">
       <div className="deployment-head">
         <button className="deployment-toggle" aria-expanded={open} aria-controls="round-deployments-list" onClick={() => setOpen((old) => !old)}>
-          <span aria-hidden="true">{open ? '▾' : '▸'}</span> Round Deployments · {tournament}, {round}
+          <DisclosureMark open={open} /> Round Deployments · {tournament}, {round}
         </button>
         <span className="muted">
           {rows.length} {rows.length === 1 ? 'Player' : 'Players'} · {confirmed} confirmed

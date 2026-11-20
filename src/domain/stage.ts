@@ -33,14 +33,14 @@ export function validateStageKey(input: StageKeyInput): string | null {
 }
 
 /** An entry of a stage's Stage Enemies: an enemy or a hero, with how many of it stand there. Exactly one of the two names is set. */
-export interface StageEnemyEntry {
+interface StageEnemyEntry {
   enemy?: string | null;
   hero?: string | null;
   count: number;
 }
 
 /** The most of one enemy a stage may hold. */
-export const MAX_ENEMY_COUNT = 99;
+const MAX_ENEMY_COUNT = 99;
 
 /** Returns an error message, or null when every entry names a known enemy or hero once, with a count from 1. The same one may stand several times through its count. */
 export function validateStageEnemies(entries: unknown, knownEnemies: Set<string>, knownHeroes: Set<string> = new Set()): string | null {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, learnedLookUrl } from '../backend.js';
 import type { LearnedView } from '../../src/shared/api.js';
 import { LookTile } from './LookTile.js';
+import { Notice } from '../ui/Notice.js';
 
 const KIND_LABEL = { artifact: 'Artifact', phantimal: 'Phantimal' } as const;
 
@@ -26,9 +27,9 @@ export function LearnedUnits({ view, onChanged }: { view: LearnedView; onChanged
         right one, or delete it.
       </p>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       {view.units.length === 0 && <p className="muted">No crop has been saved yet.</p>}
       {view.units.map((u) => (

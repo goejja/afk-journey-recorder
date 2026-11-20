@@ -7,11 +7,11 @@
 export { type Filters, type StatFilters, APPEARANCES, whereFor, playerIds, runSelect, modesFor } from './filters.js';
 export { summary, profileIdOf, roster, profiles } from './overview.js';
 export { partnerStats, partnerTags, positionalPartners } from './partners.js';
-export { heroStats, pairStats, heroDistribution, trioStats, artifactStats, mapStats, ruleStats, heroRowStats } from './hero-stats.js';
-export { formationStats, type GroupHero, type FormationGroup, formationGroups, groupSides, type Archetype, formationArchetypes, groupCounters, groupCounterReport, counterBattles, counterRule, counterSummary, type CounterBattle, type CounterSide } from './formations.js';
+export { heroStats, pairStats, heroDistribution, trioStats, artifactStats, mapStats, heroRowStats } from './hero-stats.js';
+export { formationStats, type GroupHero, type FormationGroup, formationGroups, mapFormations, groupSides, type Archetype, formationArchetypes, groupCounters, groupCounterReport, counterRule, counterSummary } from './formations.js';
 export { playerStats } from './players.js';
-export { stageHistory, dreamHuntBest, stageStats } from './stages.js';
+export { stageHistory, dreamHuntBest } from './stages.js';
 export { scenarios, scenario } from './scenarios.js';
 export { heroInfo } from './heroes.js';
-export { parseLayout, parseDeployment, formationIds } from './deployments.js';
+export { parseDeployment, formationIds } from './deployments.js';
 export { round3 as round } from '../domain/stats.js';

@@ -3,8 +3,12 @@ import { api, type Phantimal, type PhantimalUsage } from '../backend.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { Portrait } from '../Portrait.js';
 import { refreshUnitRules } from '../unit-rules.js';
-import { useCrud } from '../useCrud.js';
+import { useAction } from '../hooks/action.js';
+import { useConfirmActions } from '../hooks/confirm.js';
+import { useLoad } from '../hooks/load.js';
 import { MasterDetail } from '../ui/MasterDetail.js';
+import { IconButton } from '../ui/Icon.js';
+import { Notice } from '../ui/Notice.js';
 
 const FACTIONS = ['Lightbearer', 'Wilder', 'Mauler', 'Graveborn', 'Celestial', 'Hypogean', 'Dimensional', 'Celestial-Hypogean'];
 const CLASSES = ['Tank', 'Support', 'Marksman', 'Mage', 'Rogue', 'Warrior'];
@@ -17,37 +21,44 @@ interface Draft {
   seasons: number[];
 }
 
+const NO_ITEMS: Phantimal[] = [];
 const blank = (): Draft => ({ name: '', faction: '', class: '', part: '', seasons: [] });
 const toDraft = (p: Phantimal): Draft => ({ name: p.name, faction: p.faction ?? '', class: p.class ?? '', part: p.part ?? '', seasons: p.seasons });
 const same = (a: Draft, b: Draft) =>
   a.name === b.name && a.faction === b.faction && a.class === b.class && a.part === b.part && a.seasons.join() === b.seasons.join();
 
 export function PhantimalsPage() {
-  const [items, setItems] = useState<Phantimal[]>([]);
+  const loaded = useLoad(async () => {
+    const list = await api.phantimals();
+    await refreshUnitRules();
+    return list;
+  }, []);
+  const items = loaded.data ?? NO_ITEMS;
   const [selected, setSelected] = useState<string | null>(null); // null while creating
   const [draft, setDraft] = useState<Draft>(blank());
   const [seasonInput, setSeasonInput] = useState('');
   const [usage, setUsage] = useState<PhantimalUsage | null>(null);
   const [seasonFilter, setSeasonFilter] = useState<string[]>([]);
-  const { error, setError, run: act, confirmDelete, confirmDiscard, dialog } = useCrud();
+  const { error: actionError, busy, setError, run: act } = useAction();
+  const error = loaded.error ?? actionError;
+  const { confirmDelete, confirmDiscard, dialog } = useConfirmActions(act);
 
   const current = items.find((p) => p.name === selected) ?? null;
   const dirty = current ? !same(draft, toDraft(current)) : draft.name !== '' || draft.seasons.length > 0;
 
-  const reload = useCallback(async (select?: string | null) => {
-    const loaded = await api.phantimals();
-    setItems(loaded);
-    await refreshUnitRules();
-    if (select !== undefined) {
-      setSelected(select);
-      const item = loaded.find((p) => p.name === select);
-      setDraft(item ? toDraft(item) : blank());
-    }
-  }, []);
-
-  useEffect(() => {
-    void act(() => reload());
-  }, [act, reload]);
+  // reads the phantimals again; with `select` (a saved phantimal's name, or null for a new one) the page then opens it
+  const reloadItems = loaded.reload;
+  const reload = useCallback(
+    async (select?: string | null) => {
+      const list = await reloadItems();
+      if (list && select !== undefined) {
+        setSelected(select);
+        const item = list.find((p) => p.name === select);
+        setDraft(item ? toDraft(item) : blank());
+      }
+    },
+    [reloadItems],
+  );
 
   // What puts the selected phantimal on a board decides whether its second part can change.
   useEffect(() => {
@@ -144,9 +155,9 @@ export function PhantimalsPage() {
         detail={
           <div className="map-editor">
             {error && (
-              <p className="error" role="alert">
+              <Notice kind="error">
                 {error}
-              </p>
+              </Notice>
             )}
             <div className="filters">
               <input placeholder="Name" aria-label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
@@ -180,12 +191,7 @@ export function PhantimalsPage() {
               {draft.seasons.map((s) => (
                 <span key={s} className="chip">
                   Season {s}
-                  <button
-                    aria-label={`Remove season ${s}`}
-                    onClick={() => setDraft({ ...draft, seasons: draft.seasons.filter((x) => x !== s) })}
-                  >
-                    ×
-                  </button>
+                  <IconButton icon="close" label={`Remove season ${s}`} onClick={() => setDraft({ ...draft, seasons: draft.seasons.filter((x) => x !== s) })} />
                 </span>
               ))}
             </div>
@@ -203,11 +209,11 @@ export function PhantimalsPage() {
             </div>
 
             <div className="actions">
-              <button className="primary" onClick={() => void save()} disabled={!dirty || draft.name.trim() === ''}>
+              <button className="primary" onClick={() => void save()} disabled={busy || !dirty || draft.name.trim() === ''}>
                 {current ? 'Save' : 'Create phantimal'}
               </button>
               {current && (
-                <button className="danger" onClick={() => void remove()}>
+                <button className="danger" disabled={busy} onClick={() => void remove()}>
                   Delete
                 </button>
               )}

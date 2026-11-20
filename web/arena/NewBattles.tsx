@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { afterSaved, told, useSaveRecord } from '../useSaveRecord.js';
+import { useAction } from '../hooks/action.js';
+import { joinNotices, stepAfterSave } from '../hooks/saved.js';
 import { ARTIFACT_ONCE_MODES, heroesAlreadyUsed, TEAMS_PER_MODE } from '../../src/domain/arena.js';
 import { api, type ArenaBattle, type ArenaMode, type Profile, type RoundDeploymentEntry } from '../backend.js';
 import { SideProfileBar } from './BattleEditor.js';
@@ -20,9 +21,10 @@ import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { useProfileRosters } from '../reader/useProfileRosters.js';
 import { useConfirm, useNameDialog } from '../ui/Dialog.js';
 import { FormationIdField } from '../FormationIdField.js';
-import { useLoad, useNewest } from '../useLoad.js';
+import { useLoad, useNewest } from '../hooks/load.js';
 import { type PatchReference, type Reference, type Draft, onMap, newDraft, weekly, withDefault, sharedTags, toInput, type Clone, loadRoundDeployments, profileByPlayerId, type Side } from './draft.js';
 import { ArenaIdentity, WinnerField, Board, FightFormationIds, UnionLevels } from './BoardParts.js';
+import { useToast } from '../ui/Toast.js';
 
 /** Sets up one team per slot of the mode, greying out heroes the other teams use, then saves each as its own record. */
 export function NewBattles({ reference, patchReference, initial, editing, savedRound, onSaved, onRecorded, onCancel, cancelLabel }: { reference: Reference; patchReference: PatchReference; initial?: Clone | null; /** The id of a saved battle that `initial` holds, to edit it as a whole. */ editing?: number | null; /** The Tournament and Round a saved Super League battle has now, to let the player move it to another Round. */ savedRound?: { tournamentId: number; round: Round } | null; onSaved: (notice?: string | null) => void; onRecorded: () => void; onCancel: () => void; /** What the cancel button says, when it leads back to the import. */ cancelLabel?: string }) {
@@ -34,6 +36,7 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
   const { confirm, dialog: saveDialog } = useConfirm();
   const reportParked = useParkedToast();
   const [status, setStatus] = useState<string | null>(() => initial?.notes?.join(' ') || null);
+  const toast = useToast();
   // The Formation ID of each side stands for the teams of the whole battle (ADR 0007); a battle of one team keeps its own on the team.
   const [formationIds, setFormationIds] = useState(() => initial?.formationIds ?? { a: '', b: '' });
   // The profile of each side holds for every team of the battle. One found from the Player ID of a saved battle is remembered (to offer
@@ -296,14 +299,14 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
       const slots = drafts.map((d) => ({ boss: null, mapName: d.mapName || null, rule: mode === 'Supreme Arena' ? d.rule || null : null }));
       patchReference({ defaults: await api.saveDefaults(weeklyMode, slots) });
       setError(null);
-      setStatus(`Saved as this week’s ${mode} default: new battles start with these maps${mode === 'Supreme Arena' ? ' and rules' : ''}.`);
+      toast(`Saved as this week’s ${mode} default: new battles start with these maps${mode === 'Supreme Arena' ? ' and rules' : ''}.`);
     } catch (e) {
       setStatus(null);
       setError((e as Error).message);
     }
   }
 
-  const saving = useSaveRecord();
+  const saving = useAction();
   const save = (another: boolean) => saving.run(() => saveNow(another));
 
   async function saveNow(another: boolean) {
@@ -331,9 +334,9 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
       else savedIds = [(await api.createArenaBattle(toInput(mode, filled[0]!.d))).id];
       // The tiles of the teams just saved go to the Round Deployment teams that have none yet (ADR 0020).
       const left: (string | null)[] = [];
-      if (initial?.round && editing == null) left.push(await afterSaved(() => fillDeploymentTiles(filled), 'The Round Deployment could not be given the tiles'));
+      if (initial?.round && editing == null) left.push(await stepAfterSave(() => fillDeploymentTiles(filled), 'The Round Deployment could not be given the tiles'));
       // A new battle may carry upgrades the profiles' rosters have not heard of yet; editing a saved one does not ask.
-      if (editing == null) left.push(await afterSaved(() => syncRosters(filled.map(({ d }) => d), savedIds)));
+      if (editing == null) left.push(await stepAfterSave(() => syncRosters(filled.map(({ d }) => d), savedIds)));
       // what the pictures said, set against what was kept: for measuring the readings and learning artifact and phantimal looks. A failure here changes nothing,
       // and the owner has no use for it (it is reported outside the app), so it stays silent. The save does not wait for the answer: a toast tells the
       // owner when readings were parked to confirm in Admin > Reader (ADR 0040).
@@ -341,8 +344,8 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
       if (editing == null && feedback.length > 0) reportParked([sendFeedback(mode, feedback)]);
       // the pictures the fights were read from stay with them (ADR 0016); one at a time, as each is about a megabyte
       const pictures = filled.flatMap(({ d }, i) => (editing == null && d.imported?.picture && savedIds[i] !== undefined ? [{ attemptId: savedIds[i]!, ...d.imported.picture }] : []));
-      if (pictures.length > 0) left.push(await afterSaved(() => pictures.reduce((done, p) => done.then(() => api.keepPicture(p.attemptId, p.label, p.data)).then(() => undefined), Promise.resolve()), 'The pictures could not be kept'));
-      notice = told(left);
+      if (pictures.length > 0) left.push(await stepAfterSave(() => pictures.reduce((done, p) => done.then(() => api.keepPicture(p.attemptId, p.label, p.data)).then(() => undefined), Promise.resolve()), 'The pictures could not be kept'));
+      notice = joinNotices(left);
     } catch (e) {
       setStatus(null);
       return setError((e as Error).message);

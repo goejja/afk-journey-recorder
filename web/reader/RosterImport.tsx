@@ -2,9 +2,10 @@ import { useCallback, useEffect, useReducer, useState, type Dispatch } from 'rea
 import { allowedEquipmentLevels, allowedRanks, equipmentForRank } from '../../src/domain/hero-state.js';
 import { api, rosterImportTileUrl, type Hero, type ImportApplySection, type ImportJob, type ImportRow, type ImportScreen, type ImportSection, type Profile, type RosterImportState, type Rules } from '../backend.js';
 import { heroStateText } from '../format.js';
-import { usePolling } from '../useLoad.js';
+import { useJobChange } from '../jobs/JobsProvider.js';
 import { Portrait } from '../Portrait.js';
 import { weaponOptionText } from '../WeaponStars.js';
+import { Notice } from '../ui/Notice.js';
 
 const SCREENS: { value: ImportScreen; label: string }[] = [
   { value: 'info', label: 'Player Info (My Formations)' },
@@ -112,9 +113,8 @@ export function RosterImport({ profile, profiles, heroes, rules, onClose, onAppl
     void refresh();
   }, [refresh]);
 
-  // While the agent reads, ask how it is doing.
-  const reading = state?.queue.some((q) => q.state === 'running' || q.state === 'queued') ?? false;
-  usePolling(refresh, reading);
+  // The app's job watcher follows the pictures being read; the details are asked for again when the queue changed.
+  useJobChange('roster', () => void refresh());
 
   async function attempt(action: () => Promise<unknown>) {
     setBusy(true);
@@ -162,11 +162,11 @@ export function RosterImport({ profile, profiles, heroes, rules, onClose, onAppl
         <button onClick={onClose}>Close</button>
       </div>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
-      {saved && <p role="status">{saved}</p>}
+      {saved && <Notice kind="success">{saved}</Notice>}
 
       {state && !job && (
         <form
@@ -248,10 +248,10 @@ export function RosterImport({ profile, profiles, heroes, rules, onClose, onAppl
 
       {job?.state === 'failed' && (
         <>
-          <p className="error" role="alert">
+          <Notice kind="error">
             {job.label ? `${job.label}: ` : ''}
             {job.error}
-          </p>
+          </Notice>
           <button onClick={() => void discard()} disabled={busy}>
             {state && state.queue.length > 1 ? 'Next picture' : 'Try another picture'}
           </button>

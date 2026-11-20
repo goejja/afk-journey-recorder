@@ -1,5 +1,5 @@
 import { FormationIdsAdmin } from './FormationIdsAdmin.js';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { allowsRule, DEFAULT_MODES, DEFAULT_SLOTS, emptySlot } from '../../src/domain/defaults.js';
 import { MapPicker } from '../MapPicker.js';
 import { urlOf } from '../../src/shared/contract.js';
@@ -14,21 +14,27 @@ import { ArtifactsPage } from './ArtifactsPage.js';
 import { UnitsPage } from './UnitsPage.js';
 import { ReaderPage } from '../reader/ReaderPage.js';
 import { ReviewPage } from '../reader/ReviewPage.js';
-import { useCrud } from '../useCrud.js';
+import { useAction } from '../hooks/action.js';
+import { useLoad } from '../hooks/load.js';
+import { useConfirmActions } from '../hooks/confirm.js';
 import { RecordRow } from '../ui/RecordRow.js';
+import { TabPanel, Tabs } from '../ui/Tabs.js';
+import { Notice } from '../ui/Notice.js';
+import { useToast } from '../ui/Toast.js';
 
 /** The modes the Statistics page starts with: a starting choice of its Mode filter, which the page can still change. */
 function StatsSettingsAdmin() {
-  const [view, setView] = useState<StatsSettingsView | null>(null);
-  const [draft, setDraft] = useState<string[]>([]);
-  const { error, message, run } = useCrud();
+  const loaded = useLoad(() => api.statsSettings(), []);
+  const view = loaded.data ?? null;
+  // the modes ticked so far; until the player ticks one, the saved ones
+  const [ticked, setDraft] = useState<string[] | null>(null);
+  const draft = ticked ?? view?.modes ?? [];
+  const { error: actionError, busy, run } = useAction({ toast: true });
+  const error = loaded.error ?? actionError;
 
-  const show = (v: StatsSettingsView) => (setView(v), setDraft(v.modes));
-  useEffect(() => {
-    void run(() => api.statsSettings(), show);
-  }, [run]);
+  const show = (v: StatsSettingsView) => (loaded.setData(() => v), setDraft(null));
 
-  if (!view) return error ? <p className="error" role="alert">{error}</p> : null;
+  if (!view) return error ? <Notice kind="error">{error}</Notice> : null;
   return (
     <>
       <h3>Statistics</h3>
@@ -36,8 +42,7 @@ function StatsSettingsAdmin() {
         The Statistics page starts with these modes selected in its Mode filter. It is only a starting choice: the page can still show other modes, and none ticked
         starts it with every mode. The query command always counts every mode unless it is given one.
       </p>
-      {error && <p className="error" role="alert">{error}</p>}
-      {message && <p role="status">{message}</p>}
+      {error && <Notice kind="error">{error}</Notice>}
       <div className="actions" role="group" aria-label="Statistics starts with these modes">
         {view.available.map((m) => (
           <label key={m} className="check">
@@ -46,8 +51,8 @@ function StatsSettingsAdmin() {
         ))}
       </div>
       <div className="actions">
-        <button className="primary" onClick={() => void run(() => api.saveStatsSettings(draft), show, 'Saved.')}>Save modes</button>
-        <button onClick={() => void run(() => api.resetStatsSettings(), show, 'Back to the PvP modes.')}>Use the PvP modes</button>
+        <button className="primary" disabled={busy} onClick={() => void run(() => api.saveStatsSettings(draft), show, 'Saved.')}>Save modes</button>
+        <button disabled={busy} onClick={() => void run(() => api.resetStatsSettings(), show, 'Back to the PvP modes.')}>Use the PvP modes</button>
       </div>
     </>
   );
@@ -55,17 +60,19 @@ function StatsSettingsAdmin() {
 
 /** When a Formation group counts as a counter of another in Statistics, the Counter Advisor and the query command (ADR 0039). */
 function CounterRuleAdmin() {
-  const [view, setView] = useState<CounterRuleView | null>(null);
-  const [rate, setRate] = useState('');
-  const [games, setGames] = useState('');
-  const { error, message, run } = useCrud();
+  const loaded = useLoad(() => api.counterRule(), []);
+  const view = loaded.data ?? null;
+  // what the player typed; until then the saved rule
+  const [typedRate, setRate] = useState<string | null>(null);
+  const [typedGames, setGames] = useState<string | null>(null);
+  const rate = typedRate ?? (view ? String(Math.round(view.winRate * 1000) / 10) : '');
+  const games = typedGames ?? (view ? String(view.minGames) : '');
+  const { error: actionError, busy, run } = useAction({ toast: true });
+  const error = loaded.error ?? actionError;
 
-  const show = (v: CounterRuleView) => (setView(v), setRate(String(Math.round(v.winRate * 1000) / 10)), setGames(String(v.minGames)));
-  useEffect(() => {
-    void run(() => api.counterRule(), show);
-  }, [run]);
+  const show = (v: CounterRuleView) => (loaded.setData(() => v), setRate(null), setGames(null));
 
-  if (!view) return error ? <p className="error" role="alert">{error}</p> : null;
+  if (!view) return error ? <Notice kind="error">{error}</Notice> : null;
   return (
     <>
       <h3>Counters</h3>
@@ -73,8 +80,7 @@ function CounterRuleAdmin() {
         A Formation group counters another when it met it in at least this many games and won at least this share of them. A record with fewer games is shown as
         anecdote and is never called a counter. The Statistics page, the Counter Advisor and the query command use this rule; it changes no Win Score.
       </p>
-      {error && <p className="error" role="alert">{error}</p>}
-      {message && <p role="status">{message}</p>}
+      {error && <Notice kind="error">{error}</Notice>}
       <div className="actions">
         <label className="field" title="From 50 to 100">
           Counter win rate (%)
@@ -88,8 +94,8 @@ function CounterRuleAdmin() {
         </label>
       </div>
       <div className="actions">
-        <button className="primary" onClick={() => void run(() => api.saveCounterRule({ winRate: Number(rate) / 100, minGames: Number(games) }), show, 'Saved.')}>Save counter rule</button>
-        <button onClick={() => void run(() => api.resetCounterRule(), show, 'Back to the default rule.')}>Use the default rule</button>
+        <button className="primary" disabled={busy} onClick={() => void run(() => api.saveCounterRule({ winRate: Number(rate) / 100, minGames: Number(games) }), show, 'Saved.')}>Save counter rule</button>
+        <button disabled={busy} onClick={() => void run(() => api.resetCounterRule(), show, 'Back to the default rule.')}>Use the default rule</button>
       </div>
     </>
   );
@@ -97,14 +103,14 @@ function CounterRuleAdmin() {
 
 /** The day of the latest game update, from which Dream Hunt's Advisor counts fights as fresh evidence. */
 function UpdateDateAdmin() {
-  const [saved, setSaved] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
-  const { error, run: act } = useCrud();
+  const loaded = useLoad(() => api.updateDate(), []);
+  const saved = loaded.data?.date ?? null;
+  const [typed, setDraft] = useState<string | null>(null);
+  const draft = typed ?? saved ?? '';
+  const { error: actionError, busy, run: act } = useAction();
+  const error = loaded.error ?? actionError;
 
-  const show = (v: { date: string | null }) => (setSaved(v.date), setDraft(v.date ?? ''));
-  useEffect(() => {
-    void act(() => api.updateDate(), show);
-  }, [act]);
+  const show = (v: { date: string | null }) => (loaded.setData(() => v), setDraft(null));
   const run = (action: () => Promise<{ date: string | null }>) => act(action, show);
 
   return (
@@ -114,14 +120,14 @@ function UpdateDateAdmin() {
         The day of the latest game update, which may have boosted Dream Hunt bosses. The Advisor then treats the fights from this day on as fresh evidence and shows
         them apart from the older ones. Leave it empty to count every fight alike.
       </p>
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <Notice kind="error">{error}</Notice>}
       <div className="actions">
         <label className="field">
           Update date
           <input type="date" value={draft} onChange={(e) => setDraft(e.target.value)} />
         </label>
-        <button className="primary" disabled={draft === '' || draft === saved} onClick={() => void run(() => api.saveUpdateDate(draft))}>Save date</button>
-        <button disabled={saved === null} onClick={() => void run(() => api.clearUpdateDate())}>Clear date</button>
+        <button className="primary" disabled={busy || draft === '' || draft === saved} onClick={() => void run(() => api.saveUpdateDate(draft))}>Save date</button>
+        <button disabled={busy || saved === null} onClick={() => void run(() => api.clearUpdateDate())}>Clear date</button>
       </div>
     </>
   );
@@ -129,14 +135,12 @@ function UpdateDateAdmin() {
 
 /** Settings of the app itself: the list of seasons and which one is the current one, and the Win Score tuning. */
 function GeneralAdmin() {
-  const [seasons, setSeasons] = useState<SeasonEntry[] | null>(null);
+  const loaded = useLoad(() => api.seasons(), []);
+  const seasons = loaded.data ?? null;
   const [number, setNumber] = useState('');
-  const { error, run: act } = useCrud();
-
-  useEffect(() => {
-    void act(() => api.seasons(), setSeasons);
-  }, [act]);
-  const run = (action: () => Promise<SeasonEntry[]>) => act(action, setSeasons);
+  const { error: actionError, busy, run: act } = useAction();
+  const error = loaded.error ?? actionError;
+  const run = (action: () => Promise<SeasonEntry[]>) => act(action, (next) => loaded.setData(() => next));
 
   return (
     <section>
@@ -146,9 +150,9 @@ function GeneralAdmin() {
         A season that stages, phantimals, records or Tournaments already name cannot be removed.
       </p>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       <div className="actions">
         <label className="field">
@@ -157,7 +161,7 @@ function GeneralAdmin() {
         </label>
         <button
           className="primary"
-          disabled={number === ''}
+          disabled={busy || number === ''}
           onClick={() => void run(() => api.addSeason(Number(number))).then((worked) => worked && setNumber(''))}
         >
           Add season
@@ -169,10 +173,10 @@ function GeneralAdmin() {
             <RecordRow
               actions={
                 <>
-                  <button disabled={s.current} onClick={() => void run(() => api.setCurrentSeason(s.number))}>
+                  <button disabled={busy || s.current} onClick={() => void run(() => api.setCurrentSeason(s.number))}>
                     Make current
                   </button>
-                  <button className="danger" disabled={s.current || s.stages + s.phantimals + s.records + s.tournaments > 0} onClick={() => void run(() => api.deleteSeason(s.number))}>
+                  <button className="danger" disabled={busy || s.current || s.stages + s.phantimals + s.records + s.tournaments > 0} onClick={() => void run(() => api.deleteSeason(s.number))}>
                     Remove
                   </button>
                 </>
@@ -197,16 +201,16 @@ function GeneralAdmin() {
 
 /** Rules that boost you, edited here only. */
 function RulesAdmin() {
-  const [rules, setRules] = useState<BossRule[] | null>(null);
-  const { error, run } = useCrud();
-  const reload = useCallback(() => run(() => api.bossRules(), setRules), [run]);
-  useEffect(() => void reload(), [reload]);
+  const loaded = useLoad(() => api.bossRules(), []);
+  const rules = loaded.data ?? null;
+  const error = loaded.error;
+  const reload = loaded.reload;
   return (
     <section>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       {rules && <BossRules rules={rules} onChanged={reload} />}
     </section>
@@ -215,31 +219,33 @@ function RulesAdmin() {
 
 /** Which agent answers scenarios when started from the Scenarios tab, found on this computer. */
 function AgentAdmin() {
-  const [settings, setSettings] = useState<AgentSettings | null>(null);
   const [looking, setLooking] = useState(false);
-  const { error, message, setMessage, run } = useCrud();
+  const { error: actionError, busy, run } = useAction({ toast: true });
+  // the settings on the page are the loaded ones with what the player changed, so edits go into the loaded data
+  const loaded = useLoad(() => api.agentSettings(), []);
+  const settings = loaded.data ?? null;
+  const setSettings = loaded.setData;
+  const error = loaded.error ?? actionError;
 
   const look = useCallback(async () => {
     setLooking(true);
-    await run(() => api.refreshAgentTools(), (found) => setSettings((current) => (current ? { ...current, tools: found.tools } : found)));
+    await run(() => api.refreshAgentTools(), (found) => setSettings((current) => ({ ...current, tools: found.tools })));
     setLooking(false);
-  }, [run]);
+  }, [run, setSettings]);
 
+  // the first time the settings arrive without a look at the agents, look for them
+  const firstLook = useRef(false);
+  const toolsKnown = settings === null ? null : Object.keys(settings.tools).length > 0;
   useEffect(() => {
-    void run(
-      () => api.agentSettings(),
-      (loaded) => {
-        setSettings(loaded);
-        if (Object.keys(loaded.tools).length === 0) void look();
-      },
-    );
-  }, [run, look]);
+    if (toolsKnown !== false || firstLook.current) return;
+    firstLook.current = true;
+    void look();
+  }, [toolsKnown, look]);
 
-  const save = () => settings && run(() => api.saveAgentSettings(settings), (saved) => setSettings({ ...saved, tools: settings.tools }), 'Saved.');
+  const save = () => settings && run(() => api.saveAgentSettings(settings), (saved) => setSettings(() => ({ ...saved, tools: settings.tools })), 'Saved.');
 
   const change = (patch: Partial<AgentSettings>) => {
-    setSettings((s) => s && { ...s, ...patch });
-    setMessage(null);
+    setSettings((s) => ({ ...s, ...patch }));
   };
 
   const tool = settings?.tools[settings.preset];
@@ -252,11 +258,10 @@ function AgentAdmin() {
         scenario's estimate. The agents are fixed in the code and are looked for on this computer's PATH; there is no path to type.
       </p>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
-      {message && <p role="status">{message}</p>}
       {settings && (
         <>
           <div className="filters">
@@ -284,10 +289,10 @@ function AgentAdmin() {
               Time limit (minutes)
               <input type="number" min={1} max={120} value={settings.timeoutMinutes} onChange={(e) => change({ timeoutMinutes: Number(e.target.value) })} />
             </label>
-            <button className="primary" onClick={() => void save()}>
+            <button className="primary" disabled={busy} onClick={() => void save()}>
               Save
             </button>
-            <button disabled={looking} onClick={() => void look()}>
+            <button disabled={busy || looking} onClick={() => void look()}>
               {looking ? 'Looking…' : 'Refresh agents and models'}
             </button>
           </div>
@@ -301,9 +306,9 @@ function AgentAdmin() {
             </p>
           )}
           {tool && !tool.installed && (
-            <p className="error" role="alert">
+            <Notice kind="error">
               {settings.preset} was not found on this computer's PATH, so it cannot run. Install it, then refresh.
-            </p>
+            </Notice>
           )}
         </>
       )}
@@ -313,18 +318,21 @@ function AgentAdmin() {
 
 /** Every tag in use, to rename (a rename onto an existing tag merges them) or remove from all records. */
 function TagsAdmin() {
-  const [tags, setTags] = useState<{ tag: string; count: number }[] | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const { error, message, setMessage, run: act, confirm, dialog } = useCrud();
+  const { error: actionError, busy, run: act } = useAction();
+  const toast = useToast();
+  const { confirm, dialog } = useConfirmActions(act);
 
-  const reload = useCallback(() => act(() => api.tags(), setTags), [act]);
-  useEffect(() => void reload(), [reload]);
+  const loaded = useLoad(() => api.tags(), []);
+  const tags = loaded.data ?? null;
+  const error = loaded.error ?? actionError;
+  const reload = loaded.reload;
 
   /** Does a change that answers with what it did, shows that, and reads the tags again. */
   const run = (action: () => Promise<string>) =>
     act(action, (done) => {
-      setMessage(done);
+      toast(done);
       setEditing(null);
       return reload();
     });
@@ -351,11 +359,10 @@ function TagsAdmin() {
         already exists merges the two. Removing a tag never deletes the records.
       </p>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
-      {message && <p role="status">{message}</p>}
       {tags && tags.length === 0 && <p className="muted">No tags yet.</p>}
       <ul className="attempts" aria-label="Tags">
         {(tags ?? []).map(({ tag, count }) => (
@@ -367,7 +374,7 @@ function TagsAdmin() {
                   <>
                     <button
                       className="primary"
-                      disabled={name.trim() === ''}
+                      disabled={busy || name.trim() === ''}
                       onClick={() => void run(async () => `Renamed ${tag} on ${plural((await api.renameTag(tag, name)).records)}.`)}
                     >
                       Save
@@ -390,7 +397,7 @@ function TagsAdmin() {
                     >
                       Rename
                     </button>
-                    <button className="danger" onClick={() => void removeTag(tag, count)}>
+                    <button className="danger" disabled={busy} onClick={() => void removeTag(tag, count)}>
                       Remove
                     </button>
                   </>
@@ -410,7 +417,8 @@ function TagsAdmin() {
 
 /** Downloading a backup, restoring one, and the cleanup of old records. */
 function DatabaseAdmin() {
-  const { error, message, run, confirm, dialog } = useCrud();
+  const { error, message, run } = useAction();
+  const { confirm, dialog } = useConfirmActions(run);
 
   async function restore(file: File | undefined) {
     if (!file) return;
@@ -436,11 +444,11 @@ function DatabaseAdmin() {
         pictures you confirmed or uploaded (images/custom) exist only in the images folder, so copy that folder too.
       </p>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
-      {message && <p role="status">{message}</p>}
+      {message && <Notice kind="success">{message}</Notice>}
       <div className="filters">
         <a className="button" href={urlOf(adminContract.backup)} download>
           Download backup
@@ -467,7 +475,7 @@ function WeeklyMode({ mode, setup, reference }: { mode: DefaultMode; setup: Week
   const fill = (from: WeeklySetups[DefaultMode]) => Array.from({ length: DEFAULT_SLOTS[mode] }, (_, i) => from.slots[i] ?? emptySlot());
   const [saved, setSaved] = useState(setup);
   const [slots, setSlots] = useState<DefaultSlot[]>(() => fill(setup));
-  const { error, message, run: act } = useCrud();
+  const { error, busy, run: act } = useAction({ toast: true });
 
   const edit = (index: number, change: Partial<DefaultSlot>) => setSlots((old) => old.map((s, i) => (i === index ? { ...s, ...change } : s)));
 
@@ -486,9 +494,9 @@ function WeeklyMode({ mode, setup, reference }: { mode: DefaultMode; setup: Week
     <section className="panel" aria-label={mode}>
       <h3>{mode}</h3>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       <ul className="weekly-slots" aria-label={`${mode} slots`}>
         {slots.map((slot, i) => (
@@ -521,12 +529,11 @@ function WeeklyMode({ mode, setup, reference }: { mode: DefaultMode; setup: Week
         ))}
       </ul>
       <div className="workspace-actions">
-        <button className="primary" onClick={() => void run(() => api.saveDefaults(mode, slots), `Saved the ${mode} setup.`)}>
+        <button className="primary" disabled={busy} onClick={() => void run(() => api.saveDefaults(mode, slots), `Saved the ${mode} setup.`)}>
           Save
         </button>
-        <button onClick={() => void run(() => api.clearDefaults(mode), `Cleared the ${mode} setup.`)}>Clear</button>
+        <button disabled={busy} onClick={() => void run(() => api.clearDefaults(mode), `Cleared the ${mode} setup.`)}>Clear</button>
         <span className="muted">{saved.updatedAt ? `Updated ${saved.updatedAt}` : 'Not set'}</span>
-        {message && <span role="status">{message}</span>}
       </div>
     </section>
   );
@@ -534,27 +541,20 @@ function WeeklyMode({ mode, setup, reference }: { mode: DefaultMode; setup: Week
 
 /** The boss, map and rule each mode repeats for a week: new records start with them. Every mode is shown and saved on its own. */
 function WeeklyAdmin() {
-  const [setups, setSetups] = useState<WeeklySetups | null>(null);
-  const [reference, setReference] = useState<WeeklyReference | null>(null);
-  const { error, run } = useCrud();
-
-  useEffect(() => {
-    void run(
-      () => Promise.all([api.defaults(), api.bosses(), api.bossRules(), api.maps()]),
-      ([all, bosses, rules, maps]) => {
-        setSetups(all);
-        setReference({ bosses, rules, maps });
-      },
-    );
-  }, [run]);
+  const loaded = useLoad(async () => {
+    const [setups, bosses, rules, maps] = await Promise.all([api.defaults(), api.bosses(), api.bossRules(), api.maps()]);
+    return { setups, reference: { bosses, rules, maps } as WeeklyReference };
+  }, []);
+  const { setups, reference } = loaded.data ?? { setups: null, reference: null };
+  const error = loaded.error;
 
   return (
     <section>
       <p className="muted">Dream Hunt, Supreme Arena, Super League and Guild Duel repeat the same bosses, maps and rules for a week. New records start with what is set here. Nothing expires: change it when the week does.</p>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       {setups && reference && DEFAULT_MODES.map((mode) => <WeeklyMode key={mode} mode={mode} setup={setups[mode]} reference={reference} />)}
     </section>
@@ -585,14 +585,10 @@ export function AdminPage() {
   return (
     <div>
       <h2 className="sr-only">{active.label}</h2>
-      <div className="tabs" role="tablist" aria-label="Admin">
-        {SECTIONS.map(({ key, label }) => (
-          <button key={key} role="tab" aria-selected={section === key} className={section === key ? 'active' : undefined} onClick={() => setSection(key)}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <Section />
+      <Tabs id="admin" label="Admin" tabs={SECTIONS} value={section} onChange={setSection} />
+      <TabPanel id="admin" value={section}>
+        <Section />
+      </TabPanel>
     </div>
   );
 }

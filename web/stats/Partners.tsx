@@ -3,8 +3,9 @@ import { PARTNER_RELATIONS, PARTNER_RELATION_TEXT, type PartnerRelation } from '
 import { isSmallSample, SMALL_SAMPLE } from '../../src/domain/stats.js';
 import { api, type PartnerStat, type PositionalPartnerStat } from '../backend.js';
 import { percent, record } from '../format.js';
-import { useLoad } from '../useLoad.js';
+import { useLoad } from '../hooks/load.js';
 import { heroCell, rateColumns, StatsTable } from './StatsTable.js';
+import { Notice } from '../ui/Notice.js';
 
 interface Filters {
   mode: string[];
@@ -36,7 +37,7 @@ function Positions({ hero, filters }: { hero: string; filters: Filters }) {
           {PARTNER_RELATIONS.map((r) => <option key={r} value={r}>{PARTNER_RELATION_TEXT[r]}</option>)}
         </select>
       </label>
-      {report.error && <p className="error" role="alert">{report.error}</p>}
+      {report.error && <Notice kind="error">{report.error}</Notice>}
       {data && (
         <>
           <p className="muted">{data.empty} of {data.games} games had nobody there.</p>
@@ -97,8 +98,8 @@ export function Partners({ filters }: { filters: Filters }) {
           </select>
         </label>
       </div>
-      {tags.error && <p className="error" role="alert">{tags.error}</p>}
-      {report.error && <p className="error" role="alert">{report.error}</p>}
+      {tags.error && <Notice kind="error">{tags.error}</Notice>}
+      {report.error && <Notice kind="error">{report.error}</Notice>}
       {!hero && <p className="muted">Pick a hero to see who it is fielded with.</p>}
       {data && (
         <>

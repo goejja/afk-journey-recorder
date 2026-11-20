@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { Portrait } from '../Portrait.js';
+import { IconButton } from '../ui/Icon.js';
 
 const MAX_SUGGESTIONS = 8;
 
@@ -69,9 +70,7 @@ function HeroChips({ names, excluded, onRemove }: { names: string[]; excluded?: 
             <Portrait kind="hero" name={name} size={24} title={name} />
           </span>
           <span className="sr-only">{excluded ? `Excluded: ${name}` : `Included: ${name}`}</span>
-          <button type="button" className="tag-remove" aria-label={`Remove ${name}`} onClick={() => onRemove(name)}>
-            ×
-          </button>
+          <IconButton icon="close" className="tag-remove" label={`Remove ${name}`} onClick={() => onRemove(name)} />
         </span>
       ))}
     </span>

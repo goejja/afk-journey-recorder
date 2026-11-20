@@ -7,8 +7,10 @@ import { FormationIdBadge } from '../FormationIdField.js';
 import { TagBadges } from '../Tags.js';
 import { UnitsOnMap, type MapUnit } from '../admin/UnitsOnMap.js';
 import { mapColumns } from '../../src/domain/map.js';
-import { useFitWidth } from '../useFitWidth.js';
-import { useLoad } from '../useLoad.js';
+import { useFitWidth } from '../hooks/fit-width.js';
+import { useLoad } from '../hooks/load.js';
+import { Notice } from '../ui/Notice.js';
+import { Loading } from '../ui/ListStatus.js';
 
 /** How many records of a box the panel lists before `Show N older records`. */
 const NEWEST = 5;
@@ -92,11 +94,11 @@ export function BoxPanel({ box, state, newestSeason, maps, version, onEdit, onCl
         </div>
       </div>
       {records.error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {records.error}
-        </p>
+        </Notice>
       )}
-      {records.data === undefined && !records.error && <p className="muted">Loading…</p>}
+      {records.data === undefined && !records.error && <Loading />}
       {records.data && list.length === 0 && <p className="muted">Nothing recorded for this stage yet.</p>}
       <ul className="attempts stage-records" aria-label={`Records of ${heading}`}>
         {shown.map((a) => (

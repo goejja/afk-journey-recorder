@@ -2,25 +2,40 @@ import { useEffect, useMemo, useState } from 'react';
 import { RECORD_MODES } from '../../src/domain/arena.js';
 import { weaponLabel } from '../../src/domain/exclusive-weapon.js';
 import { isSmallSample, SMALL_SAMPLE } from '../../src/domain/stats.js';
-import { STAGE_KINDS } from '../../src/domain/stage.js';
-import { useLoad } from '../useLoad.js';
-import { api, type ArtifactStat, type HeroStat, type MapStat, type RowStat, type RuleStat, type PairStat, type PlayerStat, type StageStat, type Summary, type TrioStat } from '../backend.js';
+import { useLoad } from '../hooks/load.js';
+import { api, type ArtifactStat, type HeroStat, type MapStat, type RowStat, type PairStat, type PlayerStat, type Summary, type TrioStat } from '../backend.js';
 import { FormationGroups } from './FormationGroups.js';
+import { MapFormations } from './MapFormations.js';
 import { Partners } from './Partners.js';
 import { heroCell, rateColumns, StatsTable, WinBar } from './StatsTable.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { TagFilter } from '../Tags.js';
 import { percent } from '../format.js';
+import { TabPanel, Tabs } from '../ui/Tabs.js';
+import { Notice } from '../ui/Notice.js';
+import { Loading } from '../ui/ListStatus.js';
 
-type View = 'overview' | 'players' | 'formations' | 'heroes' | 'pairs' | 'partners' | 'artifacts' | 'maps' | 'stages' | 'phantimals';
+type View = 'overview' | 'players' | 'formations' | 'heroes' | 'pairs' | 'partners' | 'artifacts' | 'maps' | 'phantimals';
+
+const VIEWS: { key: View; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'players', label: 'Players' },
+  { key: 'formations', label: 'Formations' },
+  { key: 'heroes', label: 'Heroes' },
+  { key: 'pairs', label: 'Hero pairs and trios' },
+  { key: 'partners', label: 'Partners' },
+  { key: 'artifacts', label: 'Artifacts' },
+  { key: 'maps', label: 'Maps' },
+  { key: 'phantimals', label: 'Phantimal check' },
+];
 
 
 /** Rank by equipment level, with how many Players fielded the hero in each state. It is asked for when a hero is opened. */
 function HeroDistributionGrid({ hero, mode, tag, player, playedIn }: { hero: string; mode: string[]; tag: string[]; player: string[]; playedIn: string[] }) {
   const { data: distribution, error } = useLoad(() => api.statsHeroDistribution(hero, { mode, tag, player, playedIn }), [hero, mode, tag, player, playedIn]);
 
-  if (error) return <p className="error" role="alert">{error}</p>;
-  if (!distribution) return <p className="muted">Loading…</p>;
+  if (error) return <Notice kind="error">{error}</Notice>;
+  if (!distribution) return <Loading />;
   const ranks = [...new Set(distribution.cells.map((c) => c.rank))];
   const levels = [...new Set(distribution.cells.map((c) => c.equipmentLevel))].sort((a, b) => (a ?? -1) - (b ?? -1));
   return (
@@ -60,7 +75,7 @@ function HeroDistributionGrid({ hero, mode, tag, player, playedIn }: { hero: str
 function HeroRows({ hero, mode, tag, player, playedIn }: { hero: string; mode: string[]; tag: string[]; player: string[]; playedIn: string[] }) {
   const { data: rows, error } = useLoad(() => api.statsHeroRows(hero, { mode, tag, player, playedIn }), [hero, mode, tag, player, playedIn]);
 
-  if (error) return <p className="error" role="alert">{error}</p>;
+  if (error) return <Notice kind="error">{error}</Notice>;
   if (!rows) return null;
   return (
     <>
@@ -88,7 +103,7 @@ const formationCell = (heroes: string[]) => (
 /** The stored records whose Phantimal its own heroes cannot have brought (ADR 0029). Read only: nothing here changes a record. */
 function FactionMismatchList() {
   const { data, error } = useLoad(() => api.factionMismatches(), []);
-  if (error) return <p className="error" role="alert">{error}</p>;
+  if (error) return <Notice kind="error">{error}</Notice>;
   if (!data) return <p className="muted">Checking the records…</p>;
   if (data.length === 0) return <p className="muted">Every recorded Phantimal has the heroes that bring it.</p>;
   return (
@@ -97,7 +112,7 @@ function FactionMismatchList() {
         A Phantimal stands only where the mode allows one, and only when three heroes of its faction are on the field. These records name one that could not have stood there, which usually
         means the reader misread the Phantimal or a hero of a Battle import. Nothing is changed here: check the record and its picture.
       </p>
-      <table className="stats" aria-label="Phantimal check">
+      <table className="board" aria-label="Phantimal check">
         <thead>
           <tr>
             <th>Battle</th>
@@ -138,17 +153,14 @@ export function StatsPage() {
   const [excludeDefault, setExcludeDefault] = useState(false);
   const [knownPlayers, setKnownPlayers] = useState<PlayerStat[] | null>(null);
   const [min, setMin] = useState('1');
-  const [kind, setKind] = useState<string[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [heroes, setHeroes] = useState<HeroStat[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
   const [pairs, setPairs] = useState<PairStat[]>([]);
   const [artifacts, setArtifacts] = useState<ArtifactStat[]>([]);
   const [maps, setMaps] = useState<MapStat[]>([]);
-  const [rules, setRules] = useState<RuleStat[]>([]);
   const [trios, setTrios] = useState<TrioStat[]>([]);
   const [size, setSize] = useState<2 | 3>(2);
-  const [stages, setStages] = useState<StageStat[]>([]);
   const [error, setError] = useState<string | null>(null);
   // The lists the filters offer (seasons, Players) are read apart from the report, so a failure to read them is kept apart too: the report's own load clears `error`.
   const [optionsError, setOptionsError] = useState<string | null>(null);
@@ -179,8 +191,7 @@ export function StatsPage() {
       heroes: () => api.statsHeroes(withMode).then(keep(setHeroes)),
       pairs: () => (size === 3 ? api.statsTrios(withMode).then(keep(setTrios)) : api.statsPairs(withMode).then(keep(setPairs))),
       artifacts: () => api.statsArtifacts(withMode).then(keep(setArtifacts)),
-      maps: () => Promise.all([api.statsMaps(withMode).then(keep(setMaps)), api.statsRules(withMode).then(keep(setRules))]).then(() => undefined),
-      stages: () => api.statsStages({ tag, min: filters.min, kind, playedIn }).then(keep(setStages)),
+      maps: () => api.statsMaps(withMode).then(keep(setMaps)),
       phantimals: () => Promise.resolve(), // the Phantimal check loads its own list
     }[view];
     load().then(
@@ -190,7 +201,7 @@ export function StatsPage() {
     return () => {
       live = false;
     };
-  }, [modesReady, view, mode, tag, player, playedIn, min, kind, size, excludeDefault]);
+  }, [modesReady, view, mode, tag, player, playedIn, min, size, excludeDefault]);
 
   // The seasons to choose from, read once when a view that filters by season is first opened.
   const filtersBySeason = view !== 'overview' && view !== 'phantimals';
@@ -219,205 +230,195 @@ export function StatsPage() {
         Win rates are counted from your recorded battles, not simulated. Rows with fewer than {SMALL_SAMPLE} games are dimmed: too few to trust. In Arena, each
         hero is counted on both sides, with the result flipped for Side B.
       </p>
-      <div className="tabs" role="tablist">
-        {([['overview', 'Overview'], ['players', 'Players'], ['formations', 'Formations'], ['heroes', 'Heroes'], ['pairs', 'Hero pairs and trios'], ['partners', 'Partners'], ['artifacts', 'Artifacts'], ['maps', 'Maps & rules'], ['stages', 'Stages'], ['phantimals', 'Phantimal check']] as const).map(([key, label]) => (
-          <button key={key} role="tab" aria-selected={view === key} className={view === key ? 'active' : undefined} onClick={() => setView(key)}>
-            {label}
-          </button>
-        ))}
-      </div>
-      {view !== 'overview' && (
-        <div className="filters">
-          {(view === 'players' || view === 'formations' || view === 'heroes' || view === 'pairs' || view === 'partners' || view === 'artifacts' || view === 'maps') && (
-            <MultiSelect label="Mode" options={[...modes]} value={mode} onChange={setMode} />
-          )}
-          {view === 'pairs' && (
-            <div className="field" role="radiogroup" aria-label="Group size">
-              {([[2, 'Pairs'], [3, 'Trios']] as const).map(([n, label]) => (
-                <label key={n} className="check">
-                  <input type="radio" name="group-size" checked={size === n} onChange={() => chooseSize(n)} /> {label}
-                </label>
-              ))}
-            </div>
-          )}
-          {filtersBySeason && <MultiSelect label="Played in season" options={seasons} value={playedIn} onChange={setPlayedIn} format={(s) => `Season ${s}`} />}
-          {view === 'stages' && (
-            <MultiSelect label="Kind" options={[...STAGE_KINDS]} value={kind} onChange={setKind} />
-          )}
-          {filtersByPlayer && (
-            <MultiSelect
-              label="Player"
-              options={(knownPlayers ?? []).map((p) => p.playerId)}
-              value={player}
-              onChange={setPlayer}
-              format={(id) => {
-                const known = knownPlayers?.find((p) => p.playerId === id);
-                return known?.name ?? `ID ${id}`;
+      <Tabs id="stats" label="Statistics views" tabs={VIEWS} value={view} onChange={setView} />
+      <TabPanel id="stats" value={view}>
+        {view !== 'overview' && (
+          <div className="filters">
+            {(view === 'players' || view === 'formations' || view === 'heroes' || view === 'pairs' || view === 'partners' || view === 'artifacts' || view === 'maps') && (
+              <MultiSelect label="Mode" options={[...modes]} value={mode} onChange={setMode} />
+            )}
+            {view === 'pairs' && (
+              <div className="field" role="radiogroup" aria-label="Group size">
+                {([[2, 'Pairs'], [3, 'Trios']] as const).map(([n, label]) => (
+                  <label key={n} className="check">
+                    <input type="radio" name="group-size" checked={size === n} onChange={() => chooseSize(n)} /> {label}
+                  </label>
+                ))}
+              </div>
+            )}
+            {filtersBySeason && <MultiSelect label="Played in season" options={seasons} value={playedIn} onChange={setPlayedIn} format={(s) => `Season ${s}`} />}
+            {filtersByPlayer && (
+              <MultiSelect
+                label="Player"
+                options={(knownPlayers ?? []).map((p) => p.playerId)}
+                value={player}
+                onChange={setPlayer}
+                format={(id) => {
+                  const known = knownPlayers?.find((p) => p.playerId === id);
+                  return known?.name ?? `ID ${id}`;
+                }}
+              />
+            )}
+            {(view === 'players' || filtersByPlayer) && (
+              <label className="check">
+                <input type="checkbox" checked={excludeDefault} onChange={(e) => setExcludeDefault(e.target.checked)} /> Leave out my own records
+              </label>
+            )}
+            {view !== 'players' && <TagFilter value={tag} onChange={setTag} />}
+            <label className="field">
+              At least (games)
+              <input type="number" min={1} value={min} onChange={(e) => setMin(e.target.value)} />
+            </label>
+          </div>
+        )}
+        {error && (
+          <Notice kind="error">
+            {error}
+          </Notice>
+        )}
+        {optionsError && (
+          <Notice kind="error">
+            {optionsError}
+          </Notice>
+        )}
+
+        {view === 'overview' && summary && (
+          <>
+            {summary.records.length === 0 && <p className="muted">No records yet.</p>}
+            <table className="board">
+              <thead>
+                <tr>
+                  <th>Mode</th>
+                  <th>Records</th>
+                  <th>Wins</th>
+                  <th>Win rate</th>
+                  <th>First</th>
+                  <th>Last</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.records.map((r) => (
+                  <tr key={r.mode}>
+                    <td>{r.mode}</td>
+                    <td>{r.records}</td>
+                    <td>{r.wins}</td>
+                    <td>
+                      <WinBar wins={r.wins} games={r.records} /> {percent(r.wins / r.records)}
+                    </td>
+                    <td>{r.first}</td>
+                    <td>{r.last}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {summary.tags.length > 0 && (
+              <p className="muted">
+                Tags: {summary.tags.map((t) => `${t.tag} (${t.records})`).join(', ')}
+              </p>
+            )}
+          </>
+        )}
+        {view === 'players' && (
+          <StatsTable
+            rows={players}
+            rowKey={(r) => r.playerId}
+            detail={{
+              label: (r) => `Formations of ${r.name ?? `ID ${r.playerId}`}`,
+              render: (r) => (
+                <ul className="stats-detail">
+                  {r.formations.map((f) => (
+                    <li key={f.heroes.join('/')}>
+                      {formationCell(f.heroes)} <span className="muted">{f.games} games · {percent(f.winRate)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ),
+            }}
+            columns={[
+              {
+                key: 'player',
+                header: 'Player',
+                value: (r) => r.name ?? r.playerId,
+                render: (r) => (
+                  <>
+                    {r.name ?? `ID ${r.playerId}`} {r.name && <span className="muted">ID {r.playerId}</span>}
+                  </>
+                ),
+              },
+              ...rateColumns<PlayerStat>(),
+              { key: 'modes', header: 'Modes', value: (r) => r.modes.join(', ') },
+              { key: 'last', header: 'Last record', value: (r) => r.last },
+            ]}
+          />
+        )}
+        {view === 'formations' && modesReady && <FormationGroups filters={formationFilters} />}
+        {view === 'partners' && modesReady && <Partners filters={formationFilters} />}
+        {view === 'phantimals' && <FactionMismatchList />}
+        {view === 'artifacts' && (
+          <StatsTable
+            rows={artifacts}
+            rowKey={(r) => r.artifact}
+            columns={[{ key: 'artifact', header: 'Artifact', value: (r) => r.artifact }, ...rateColumns<ArtifactStat>()]}
+          />
+        )}
+        {view === 'maps' && (
+          <>
+            <p className="muted">
+              The rows count Side A only: both sides of a battle share the map, so counting both would always give half. Open a map to see its best win-rate formations, counted from both sides.
+            </p>
+            <StatsTable
+              label="Maps"
+              rows={maps}
+              rowKey={(r) => r.map}
+              columns={[{ key: 'map', header: 'Map', value: (r) => r.map }, ...rateColumns<MapStat>()]}
+              detail={{
+                label: (r) => `Best formations on ${r.map}`,
+                render: (r) => <MapFormations map={r.map} filters={{ mode, tag, player, playedIn, excludeDefault: excludeDefault ? 'true' : '' }} />,
               }}
             />
-          )}
-          {(view === 'players' || filtersByPlayer) && (
-            <label className="check">
-              <input type="checkbox" checked={excludeDefault} onChange={(e) => setExcludeDefault(e.target.checked)} /> Leave out my own records
-            </label>
-          )}
-          {view !== 'players' && <TagFilter value={tag} onChange={setTag} />}
-          <label className="field">
-            At least (games)
-            <input type="number" min={1} value={min} onChange={(e) => setMin(e.target.value)} />
-          </label>
-        </div>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {optionsError && (
-        <p className="error" role="alert">
-          {optionsError}
-        </p>
-      )}
-
-      {view === 'overview' && summary && (
-        <>
-          {summary.records.length === 0 && <p className="muted">No records yet.</p>}
-          <table className="board">
-            <thead>
-              <tr>
-                <th>Mode</th>
-                <th>Records</th>
-                <th>Wins</th>
-                <th>Win rate</th>
-                <th>First</th>
-                <th>Last</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.records.map((r) => (
-                <tr key={r.mode}>
-                  <td>{r.mode}</td>
-                  <td>{r.records}</td>
-                  <td>{r.wins}</td>
-                  <td>
-                    <WinBar wins={r.wins} games={r.records} /> {percent(r.wins / r.records)}
-                  </td>
-                  <td>{r.first}</td>
-                  <td>{r.last}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {summary.tags.length > 0 && (
-            <p className="muted">
-              Tags: {summary.tags.map((t) => `${t.tag} (${t.records})`).join(', ')}
-            </p>
-          )}
-        </>
-      )}
-      {view === 'players' && (
-        <StatsTable
-          rows={players}
-          rowKey={(r) => r.playerId}
-          detail={{
-            label: (r) => `Formations of ${r.name ?? `ID ${r.playerId}`}`,
-            render: (r) => (
-              <ul className="stats-detail">
-                {r.formations.map((f) => (
-                  <li key={f.heroes.join('/')}>
-                    {formationCell(f.heroes)} <span className="muted">{f.games} games · {percent(f.winRate)}</span>
-                  </li>
-                ))}
-              </ul>
-            ),
-          }}
-          columns={[
-            {
-              key: 'player',
-              header: 'Player',
-              value: (r) => r.name ?? r.playerId,
+          </>
+        )}
+        {view === 'heroes' && (
+          <StatsTable
+            rows={heroes}
+            rowKey={(r) => r.hero}
+            detail={{
+              label: (r) => `Rank and equipment of ${r.hero}`,
               render: (r) => (
                 <>
-                  {r.name ?? `ID ${r.playerId}`} {r.name && <span className="muted">ID {r.playerId}</span>}
+                  <HeroDistributionGrid hero={r.hero} mode={mode} tag={tag} player={player} playedIn={playedIn} />
+                  <HeroRows hero={r.hero} mode={mode} tag={tag} player={player} playedIn={playedIn} />
                 </>
               ),
-            },
-            ...rateColumns<PlayerStat>(),
-            { key: 'modes', header: 'Modes', value: (r) => r.modes.join(', ') },
-            { key: 'last', header: 'Last record', value: (r) => r.last },
-          ]}
-        />
-      )}
-      {view === 'formations' && modesReady && <FormationGroups filters={formationFilters} />}
-      {view === 'partners' && modesReady && <Partners filters={formationFilters} />}
-      {view === 'phantimals' && <FactionMismatchList />}
-      {view === 'artifacts' && (
-        <StatsTable
-          rows={artifacts}
-          rowKey={(r) => r.artifact}
-          columns={[{ key: 'artifact', header: 'Artifact', value: (r) => r.artifact }, ...rateColumns<ArtifactStat>()]}
-        />
-      )}
-      {view === 'maps' && (
-        <>
-          <p className="muted">Both sides of a battle share the map and the rule, so counting both would always give half: only Side A is counted.</p>
-          <h3>Maps</h3>
-          <StatsTable label="Maps" rows={maps} rowKey={(r) => r.map} columns={[{ key: 'map', header: 'Map', value: (r) => r.map }, ...rateColumns<MapStat>()]} />
-          <h3>Rules</h3>
-          <StatsTable label="Rules" rows={rules} rowKey={(r) => r.rule} columns={[{ key: 'rule', header: 'Rule', value: (r) => r.rule }, ...rateColumns<RuleStat>()]} />
-        </>
-      )}
-      {view === 'heroes' && (
-        <StatsTable
-          rows={heroes}
-          rowKey={(r) => r.hero}
-          detail={{
-            label: (r) => `Rank and equipment of ${r.hero}`,
-            render: (r) => (
-              <>
-                <HeroDistributionGrid hero={r.hero} mode={mode} tag={tag} player={player} playedIn={playedIn} />
-                <HeroRows hero={r.hero} mode={mode} tag={tag} player={player} playedIn={playedIn} />
-              </>
-            ),
-          }}
-          columns={[
-            { key: 'hero', header: 'Hero', value: (r) => r.hero, render: (r) => heroCell(r.hero) },
-            ...rateColumns<HeroStat>(),
-            { key: 'pickRate', header: 'Pick rate', value: (r) => r.pickRate, render: (r) => percent(r.pickRate) },
-          ]}
-        />
-      )}
-      {view === 'pairs' && size === 3 && (
-        <StatsTable
-          rows={trios}
-          rowKey={(r) => `${r.heroA}/${r.heroB}/${r.heroC}`}
-          columns={[
-            { key: 'trio', header: 'Trio', value: (r) => `${r.heroA} + ${r.heroB} + ${r.heroC}`, render: (r) => <span className="unit-inline">{heroCell(r.heroA)} + {heroCell(r.heroB)} + {heroCell(r.heroC)}</span> },
-            ...rateColumns<TrioStat>(),
-          ]}
-        />
-      )}
-      {view === 'pairs' && size === 2 && (
-        <StatsTable
-          rows={pairs}
-          rowKey={(r) => `${r.heroA}/${r.heroB}`}
-          columns={[
-            { key: 'pair', header: 'Pair', value: (r) => `${r.heroA} + ${r.heroB}`, render: (r) => <span className="unit-inline">{heroCell(r.heroA)} + {heroCell(r.heroB)}</span> },
-            ...rateColumns<PairStat>(),
-          ]}
-        />
-      )}
-      {view === 'stages' && (
-        <StatsTable
-          rows={stages}
-          rowKey={(r) => `${r.season}/${r.phase}/${r.kind}/${r.number}`}
-          columns={[
-            { key: 'stage', header: 'Stage', value: (r) => `S${r.season} ${r.kind}${r.phase ? ` p${r.phase}` : ''} ${String(r.number).padStart(5, '0')}`, render: (r) => `S${r.season} · ${r.kind}${r.phase ? ` (phase ${r.phase})` : ''} · ${r.number}` },
-            ...rateColumns<StageStat>(),
-            { key: 'last', header: 'Last attempt', value: (r) => r.last },
-          ]}
-        />
-      )}
+            }}
+            columns={[
+              { key: 'hero', header: 'Hero', value: (r) => r.hero, render: (r) => heroCell(r.hero) },
+              ...rateColumns<HeroStat>(),
+              { key: 'pickRate', header: 'Pick rate', value: (r) => r.pickRate, render: (r) => percent(r.pickRate) },
+            ]}
+          />
+        )}
+        {view === 'pairs' && size === 3 && (
+          <StatsTable
+            rows={trios}
+            rowKey={(r) => `${r.heroA}/${r.heroB}/${r.heroC}`}
+            columns={[
+              { key: 'trio', header: 'Trio', value: (r) => `${r.heroA} + ${r.heroB} + ${r.heroC}`, render: (r) => <span className="unit-inline">{heroCell(r.heroA)} + {heroCell(r.heroB)} + {heroCell(r.heroC)}</span> },
+              ...rateColumns<TrioStat>(),
+            ]}
+          />
+        )}
+        {view === 'pairs' && size === 2 && (
+          <StatsTable
+            rows={pairs}
+            rowKey={(r) => `${r.heroA}/${r.heroB}`}
+            columns={[
+              { key: 'pair', header: 'Pair', value: (r) => `${r.heroA} + ${r.heroB}`, render: (r) => <span className="unit-inline">{heroCell(r.heroA)} + {heroCell(r.heroB)}</span> },
+              ...rateColumns<PairStat>(),
+            ]}
+          />
+        )}
+      </TabPanel>
     </section>
   );
 }

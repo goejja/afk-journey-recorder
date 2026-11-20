@@ -5,6 +5,7 @@ import type { ImportGroup } from './battle-import.js';
 import { coverageNotice, namesOf, nameOf, warningText, type ImportRound } from './battle-import-edits.js';
 import type { useRoundChoice } from '../arena/useRoundChoice.js';
 import type { TeamChange } from '../arena/useRoundReview.js';
+import { Notice } from '../ui/Notice.js';
 
 /** The form that reads pictures: the mode, for Super League the Tournament and Round, the files, and what the choices warn about. */
 export function ReadForm({ state, mode, setMode, files, setFiles, reuse, chooseReuse, choice, busy, onStart }: {
@@ -80,9 +81,9 @@ export function ReadForm({ state, mode, setMode, files, setFiles, reuse, chooseR
         </form>
       )}
       {files.length > 0 && TEAMS_PER_MODE[mode] > 1 && files.length % TEAMS_PER_MODE[mode] !== 0 && (
-        <p className="badge few" role="status">
+        <Notice kind="warning">
           {files.length} pictures is not a multiple of {TEAMS_PER_MODE[mode]}: a {mode} battle has {TEAMS_PER_MODE[mode]} fights, so at least one battle will be incomplete.
-        </p>
+        </Notice>
       )}
       {adding && (
         <form
@@ -103,9 +104,9 @@ export function ReadForm({ state, mode, setMode, files, setFiles, reuse, chooseR
         </form>
       )}
       {warnings.map((w) => (
-        <p key={w.kind} className="badge few" role="status">
+        <Notice kind="warning" key={w.kind}>
           {warningText(w)}
-        </p>
+        </Notice>
       ))}
       {state && (
         <p className="muted">
@@ -145,7 +146,7 @@ export function QueueStatus({ waiting, failed, busy, onCancel, onRetry, onDiscar
       )}
 
       {failed.map((q) => (
-        <p key={q.id} className="error" role="alert">
+        <Notice kind="error" key={q.id}>
           {q.label ?? `Picture ${q.id}`}: {q.error}{' '}
           <button className="small" onClick={() => onRetry(q.id)} disabled={busy}>
             Read again
@@ -153,7 +154,7 @@ export function QueueStatus({ waiting, failed, busy, onCancel, onRetry, onDiscar
           <button className="small" onClick={() => onDiscard([q.id])} disabled={busy}>
             Discard
           </button>
-        </p>
+        </Notice>
       ))}
     </>
   );
@@ -266,9 +267,9 @@ export function GroupCard({ group, index, groups, profiles, busy, onNumber, onMo
             {group.pictures[0]!.draft.sideA.name ?? '?'} against {group.pictures[0]!.draft.sideB.name ?? '?'} · {group.mode}
           </h4>
           {coverageNotice(group) && (
-            <p className="badge few" role="status" title="A battle has one picture per fight: the record can still be opened, but its teams will be missing">
+            <Notice kind="warning" title="A battle has one picture per fight: the record can still be opened, but its teams will be missing">
               {coverageNotice(group)}
-            </p>
+            </Notice>
           )}
           <ul className="import-unknown">
             {group.pictures.map((p) => {

@@ -1,36 +1,30 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useReference } from '../hooks/load.js';
 import { api } from '../backend.js';
-import { type PatchReference, type Reference } from './draft.js';
+import { type PatchReference } from './draft.js';
 import { Battles } from './BattleList.js';
+import { Notice } from '../ui/Notice.js';
 
 export function ArenaPage() {
-  const [reference, setReference] = useState<Reference | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const patchReference: PatchReference = useCallback((change) => setReference((old) => old && { ...old, ...(typeof change === 'function' ? change(old) : change) }), []);
-
-  const reload = useCallback(async () => {
-    try {
-      const [maps, heroes, artifacts, rules, heroRules, phantimals, defaults, profiles] = await Promise.all([api.maps(), api.heroes(), api.artifacts(), api.bossRules(), api.rules(), api.phantimals(), api.defaults(), api.profiles()]);
-      setReference({ maps, heroes, artifacts, rules, heroRules, phantimals, defaults, profiles });
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const loaded = useReference({
+    maps: api.maps,
+    heroes: api.heroes,
+    artifacts: api.artifacts,
+    rules: api.bossRules,
+    heroRules: api.rules,
+    phantimals: api.phantimals,
+    defaults: api.defaults,
+    profiles: api.profiles,
+  });
+  const patchReference: PatchReference = loaded.patch;
 
   return (
     <div>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
+      {loaded.error && (
+        <Notice kind="error">
+          {loaded.error}
+        </Notice>
       )}
-      {reference && <Battles reference={reference} patchReference={patchReference} />}
+      {loaded.data && <Battles reference={loaded.data} patchReference={patchReference} />}
     </div>
   );
 }

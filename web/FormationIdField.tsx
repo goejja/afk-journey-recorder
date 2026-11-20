@@ -1,6 +1,7 @@
 import { compareDeployments, deploymentArtifactClash, deploymentFrom, isEmptyDeployment, isFormationId, normalizeFormationId } from '../src/domain/layout.js';
 import { api, type FormationIdEntry } from './backend.js';
-import { useLoad } from './useLoad.js';
+import { useLoad } from './hooks/load.js';
+import { Notice } from './ui/Notice.js';
 
 /** The library of Formation IDs, read when a field appears: it is short, and the matching is done here. */
 const NO_ENTRIES: FormationIdEntry[] = [];
@@ -9,7 +10,7 @@ function useLibrary(): FormationIdEntry[] {
 }
 
 /** One team as the forms hold it: its placed units, phantimal and artifact (empty when none). */
-export interface PlacedTeam {
+interface PlacedTeam {
   placed: { tile: number; hero: string; part?: string | null }[];
   phantimal: { tile: number; name: string; partnerTile?: number | null } | null;
   artifact?: string | null;
@@ -61,8 +62,8 @@ export function FormationIdField({ label, value, onChange, teams }: Props) {
           onChange={(e) => onChange(e.target.value.toUpperCase())}
         />
         {code !== '' && !isFormationId(code) && <span className="muted">Digits or capital letters, 8 in all.</span>}
-        {clash === 'units' && <span className="error" role="alert">{code} is stored with other units or tiles: check the code, or clear it to save without.</span>}
-        {clash && clash !== 'units' && <span className="error" role="alert">{code} is stored with {clash.stored} on team {clash.team}, not {clash.placed}: check the code, or clear it to save without.</span>}
+        {clash === 'units' && <Notice kind="error" as="span">{code} is stored with other units or tiles: check the code, or clear it to save without.</Notice>}
+        {clash && clash !== 'units' && <Notice kind="error" as="span">{code} is stored with {clash.stored} on team {clash.team}, not {clash.placed}: check the code, or clear it to save without.</Notice>}
         {known && !clash && (
           <span className="muted" title={[seen(known), artifactsOf(known)].filter(Boolean).join(' · ')}>
             Known{teamCount(known) > 1 ? `: ${teamCount(known)} teams` : ''}

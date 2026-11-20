@@ -6,7 +6,7 @@ const API = 'https://afk-journey.fandom.com/api.php';
 const IMAGE_BATCH = 50;
 const MIN_ENEMIES = 300;
 
-export type EnemyCategory = 'Common' | 'Elite' | 'Boss';
+type EnemyCategory = 'Common' | 'Elite' | 'Boss';
 
 export interface Enemy {
   name: string;

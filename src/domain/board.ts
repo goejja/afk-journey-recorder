@@ -3,16 +3,16 @@ import { ROW_LENGTHS, ROW_OFFSETS, TILE_COUNT } from './map.js';
 /** Which side of the board a team stands on: A is the player's (the bottom rows), B the opponent's, the same board turned upside down. */
 export type Side = 'A' | 'B';
 
-export const STARTS = ROW_LENGTHS.map((_, row) => ROW_LENGTHS.slice(0, row).reduce((sum, n) => sum + n, 0));
+const STARTS = ROW_LENGTHS.map((_, row) => ROW_LENGTHS.slice(0, row).reduce((sum, n) => sum + n, 0));
 
-export const rowOfTile = (tile: number) => STARTS.findLastIndex((start) => start <= tile);
+const rowOfTile = (tile: number) => STARTS.findLastIndex((start) => start <= tile);
 export const xOf = (tile: number) => {
   const row = rowOfTile(tile);
   return ROW_OFFSETS[row]! + (tile - STARTS[row]!);
 };
 
 /** The tile at a row and a horizontal position (in tile widths, halves for the stagger), or null off the board. */
-export function tileAt(row: number, x: number): number | null {
+function tileAt(row: number, x: number): number | null {
   if (row < 0 || row >= ROW_LENGTHS.length) return null;
   const index = x - ROW_OFFSETS[row]!;
   return Number.isInteger(index) && index >= 0 && index < ROW_LENGTHS[row]! ? STARTS[row]! + index : null;
@@ -28,7 +28,7 @@ export const OWN_TILE = (tile: number, side: Side) => (side === 'A' ? tile : tur
  * Map editor, so tiles of one game row share `x - 1.5 * line`, x being the position in tile widths. A lower depth is nearer the side's
  * back edge. Side B's tile is turned first, so both sides read the board from their own back edge.
  */
-export function depthOf(tile: number, side: Side): number {
+function depthOf(tile: number, side: Side): number {
   const own = OWN_TILE(tile, side);
   return xOf(own) - 1.5 * rowOfTile(own);
 }

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useAction } from '../hooks/action.js';
 import { rosterChanges, type RecordedHero, type RosterChange } from '../../src/domain/roster-sync.js';
 import { isSummon } from '../../src/domain/units.js';
 import { api, type FormationInput, type Hero, type Rules } from '../backend.js';
@@ -6,6 +7,7 @@ import { HeroStateButtons } from '../ui/HeroStateButtons.js';
 import { Dialog } from '../ui/Dialog.js';
 import { Portrait } from '../Portrait.js';
 import { heroStateText, toggled } from '../format.js';
+import { Notice } from '../ui/Notice.js';
 
 /** The heroes of a formation as recorded, with the rank and equipment the record carries (none where it left them to the roster). */
 export function recordedHeroes(formation: Pick<FormationInput, 'heroes'> & Partial<Pick<FormationInput, 'assistHero' | 'assistRank' | 'assistEquipmentLevel'>>): RecordedHero[] {
@@ -65,8 +67,7 @@ function RosterSyncDialog({ pending, onClose }: { pending: Pending; onClose: () 
   const [fixed, setFixed] = useState<Set<string>>(new Set());
   // The state each hero is updated to: the record's by default, which the player may correct.
   const [edited, setEdited] = useState(() => new Map(pending.changes.map((c) => [c.hero, { rank: c.to.rank ?? '', equipment: c.to.equipmentLevel === null ? '' : String(c.to.equipmentLevel) }])));
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { error, busy, run } = useAction();
   const canFix = (c: RosterChange) => pending.records !== undefined && c.direction !== 'new' && c.from.rank !== null;
 
   const stateOf = (c: RosterChange) => {
@@ -74,9 +75,8 @@ function RosterSyncDialog({ pending, onClose }: { pending: Pending; onClose: () 
     return { rank: e.rank === '' ? null : e.rank, equipmentLevel: e.equipment === '' ? null : Number(e.equipment) };
   };
 
-  async function update() {
-    setBusy(true);
-    try {
+  const update = () =>
+    run(async () => {
       const corrections: { hero: string; rank: string | null; equipmentLevel: number | null }[] = [];
       for (const change of pending.changes) {
         if (fixed.has(change.hero)) corrections.push({ hero: change.hero, rank: change.from.rank, equipmentLevel: change.from.equipmentLevel });
@@ -87,12 +87,7 @@ function RosterSyncDialog({ pending, onClose }: { pending: Pending; onClose: () 
         if (state.rank !== change.to.rank || state.equipmentLevel !== change.to.equipmentLevel) corrections.push({ hero: change.hero, ...state });
       }
       if (pending.records && corrections.length > 0) await api.correctRecordStates(pending.records.attemptIds, pending.records.side, corrections);
-      onClose();
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
-    }
-  }
+    }, onClose);
 
   const toggle = (hero: string) => {
     setTicked((old) => toggled(old, hero));
@@ -162,9 +157,9 @@ function RosterSyncDialog({ pending, onClose }: { pending: Pending; onClose: () 
           ))}
         </ul>
         {error && (
-          <p className="error" role="alert">
+          <Notice kind="error">
             {error}
-          </p>
+          </Notice>
         )}
         <div className="overlay-actions">
           <button className="primary" onClick={() => void update()} disabled={busy || ticked.size + fixed.size === 0}>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mapColumns, nextTile, ROW_LENGTHS, TILE, TILE_COUNT, validateMap, zoneEdges } from '../../src/domain/map.js';
+import { mapColumns, MapBodySchema, nextTile, ROW_LENGTHS, TILE, TILE_COUNT, zoneEdges } from '../../src/domain/map.js';
+import { problemWith } from '../../src/domain/schema.js';
 
 const cells = Array(TILE_COUNT).fill(TILE.OPEN);
 
@@ -11,22 +12,22 @@ describe('nextTile', () => {
   });
 });
 
-describe('validateMap', () => {
+describe('the map body schema', () => {
   it('accepts a well-formed map', () => {
-    expect(validateMap({ name: 'My map', tags: ['Arena', 'Stage'], cells })).toBeNull();
-    expect(validateMap({ name: 'No tags', tags: [], cells })).toBeNull();
+    expect(problemWith(MapBodySchema, { name: 'My map', tags: ['Arena', 'Stage'], cells })).toBeNull();
+    expect(problemWith(MapBodySchema, { name: 'No tags', tags: [], cells })).toBeNull();
   });
   it('rejects a blank name', () => {
-    expect(validateMap({ name: '  ', tags: [], cells })).toMatch(/name/);
+    expect(problemWith(MapBodySchema, { name: '  ', tags: [], cells })).toMatch(/name/);
   });
   it('rejects unknown tags', () => {
-    expect(validateMap({ name: 'x', tags: ['Dream Hunt'], cells })).toMatch(/Tags/);
+    expect(problemWith(MapBodySchema, { name: 'x', tags: ['Dream Hunt'], cells })).toMatch(/Tags/);
   });
   it('rejects the wrong number of tiles', () => {
-    expect(validateMap({ name: 'x', tags: [], cells: cells.slice(1) })).toMatch(/exactly 45/);
+    expect(problemWith(MapBodySchema, { name: 'x', tags: [], cells: cells.slice(1) })).toMatch(/exactly 45/);
   });
   it('rejects unknown tile types', () => {
-    expect(validateMap({ name: 'x', tags: [], cells: [...cells.slice(1), 7] })).toMatch(/may only contain/);
+    expect(problemWith(MapBodySchema, { name: 'x', tags: [], cells: [...cells.slice(1), 7] })).toMatch(/may only contain/);
   });
 });
 

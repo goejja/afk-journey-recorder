@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import { ScenariosPage } from '../../../web/scenarios/ScenariosPage.js';
+import { jobsBody, renderWithJobs } from '../support/jobs.js';
+import { jobsStream } from '../support/jobs-stream.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
 const hero = (name: string, owned = true) => ({ name, tier: 'S', class: 'Mage', faction: 'Wilder', damageType: 'Magic', imagePath: null, owned, rank: null, equipmentLevel: null });
@@ -17,11 +19,15 @@ let requests: { method: string; url: string; body?: any; headers?: Record<string
 /** What the server says about the agent's run on scenario 3, and the scenario as it is saved. */
 let runState: { state: string; error?: string };
 let saved: typeof scenario;
+/** The server pushes where the run stands. */
+const pushRun = () => jobsStream.send(jobsBody({ scenarios: runState.state === 'idle' ? {} : { 3: runState as any } }));
 
 beforeEach(() => {
   requests = [];
   runState = { state: 'idle' };
   saved = scenario;
+  jobsStream.install();
+  pushRun();
   vi.stubGlobal('window', Object.assign(window, { confirm: () => true }));
   vi.stubGlobal(
     'fetch',
@@ -29,8 +35,11 @@ beforeEach(() => {
       const method = init?.method ?? 'GET';
       requests.push({ method, url, body: init?.body ? JSON.parse(init.body as string) : undefined, headers: init?.headers as Record<string, string> });
       if (url === '/api/scenarios' && method === 'GET') return Response.json([saved]);
-      if (url === '/api/scenarios/runs' && method === 'GET') return Response.json(runState.state === 'idle' ? {} : { 3: runState });
-      if (url === '/api/scenarios/3/run' && method === 'POST') return Response.json((runState = { state: 'running' }), { status: 202 });
+      if (url === '/api/scenarios/3/run' && method === 'POST') {
+        runState = { state: 'running' };
+        pushRun();
+        return Response.json(runState, { status: 202 });
+      }
       if (url === '/api/scenarios/3/run/cancel' && method === 'POST') return Response.json(runState);
       if (url === '/api/scenarios' && method === 'POST') return Response.json(scenario, { status: 201 });
       if (url.startsWith('/api/scenarios/') && method === 'PUT') return Response.json(scenario);
@@ -47,7 +56,7 @@ afterEach(cleanup);
 
 /** The page opens on the team generator; these tests are about the scenario planner. */
 async function renderPlanner() {
-  render(<ScenariosPage />);
+  renderWithJobs(<ScenariosPage />, 'scenarios');
   await userEvent.click(screen.getByRole('tab', { name: 'Scenario planner' }));
 }
 
@@ -131,7 +140,7 @@ describe('Running the agent on a scenario', () => {
     // the server finishes: it has saved a new estimate
     runState = { state: 'done' };
     saved = { ...scenario, estimate: 'Fresh answer from the agent.', estimateAt: '2026-10-30 12:00:00' };
-    await act(() => vi.advanceTimersByTimeAsync(2100));
+    await act(async () => pushRun());
 
     expect(await screen.findByText('Fresh answer from the agent.')).toBeTruthy();
     expect(screen.queryByText(/The agent is working on this/)).toBeNull();
@@ -150,6 +159,7 @@ describe('Running the agent on a scenario', () => {
 
   it('shows a run that failed with its reason, and says the old estimate is kept', async () => {
     runState = { state: 'failed', error: 'claude: not logged in' };
+    pushRun();
     await renderPlanner();
     const alert = await screen.findByText(/The last run failed: claude: not logged in/);
     expect(alert.textContent).toMatch(/The previous estimate is kept/);
@@ -158,6 +168,7 @@ describe('Running the agent on a scenario', () => {
 
   it('does not reload the list for a run that finished before the page was opened', async () => {
     runState = { state: 'done' };
+    pushRun();
     await renderPlanner();
     await screen.findByText(/Try Evie and Fay/);
     const loads = () => requests.filter((r) => r.method === 'GET' && r.url === '/api/scenarios').length;

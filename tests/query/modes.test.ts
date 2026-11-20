@@ -14,7 +14,7 @@ describe('modesFor', () => {
   });
 
   it('leaves the other commands on every mode', () => {
-    for (const command of ['summary', 'stage-stats', 'dream-hunt', 'player-stats', 'sql']) expect(modesFor(command, undefined)).toBeUndefined();
+    for (const command of ['summary', 'stage', 'dream-hunt', 'player-stats', 'sql']) expect(modesFor(command, undefined)).toBeUndefined();
   });
 
   it('names no command the CLI does not have', () => {

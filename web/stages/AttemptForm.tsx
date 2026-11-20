@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSaveRecord } from '../useSaveRecord.js';
+import { useAction } from '../hooks/action.js';
 import { allowsPhantimal, isApex, PHASES, STAGE_KINDS } from '../../src/domain/stage.js';
 import { AFK_RANGE_TAG } from '../../src/domain/tags.js';
 import {
@@ -166,7 +166,7 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
     }
   }
 
-  const saving = useSaveRecord();
+  const saving = useAction();
   const saveAttempt = (another: boolean) => saving.run(() => saveOne(another));
 
   async function saveOne(another: boolean) {

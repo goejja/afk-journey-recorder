@@ -24,7 +24,7 @@ export const readerExamplesContract = {
 export const DATA_URL = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/;
 const PICTURE_MESSAGE = 'Send the fight and its picture as a data URL';
 /** The original picture of a saved Battle import, as a data URL, with the fight it showed. */
-export const KeptPictureBody = z.object(
+const KeptPictureBody = z.object(
   {
     attemptId: z.number({ error: PICTURE_MESSAGE }).int(PICTURE_MESSAGE),
     data: z.string({ error: PICTURE_MESSAGE }).regex(DATA_URL, PICTURE_MESSAGE),

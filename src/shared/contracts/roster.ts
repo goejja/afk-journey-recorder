@@ -18,7 +18,7 @@ export type Hero = z.infer<typeof Hero>;
 
 const HERO_STATE_MESSAGE = 'rank must be a string or null and equipmentLevel a number or null';
 /** A hero's rank and equipment level on the roster; whether they are allowed for its tier is checked against the rules. */
-export const HeroStateBody = z.object({ rank: z.string({ error: HERO_STATE_MESSAGE }).nullish(), equipmentLevel: z.number({ error: HERO_STATE_MESSAGE }).nullish() }, { error: HERO_STATE_MESSAGE });
+const HeroStateBody = z.object({ rank: z.string({ error: HERO_STATE_MESSAGE }).nullish(), equipmentLevel: z.number({ error: HERO_STATE_MESSAGE }).nullish() }, { error: HERO_STATE_MESSAGE });
 
 /** `?profile=` names the profile a roster request is about (an id or a name); the default profile when left out. */
 const forProfile = z.object({ profile: z.string().optional() });

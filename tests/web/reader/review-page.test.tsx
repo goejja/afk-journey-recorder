@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReviewPage } from '../../../web/reader/ReviewPage.js';
+import { jobsBody, renderWithJobs } from '../support/jobs.js';
+import { jobsStream } from '../support/jobs-stream.js';
 
 let requests: { method: string; url: string; body?: unknown; action?: string }[];
 let findings: any;
@@ -23,6 +25,8 @@ beforeEach(() => {
   dismissed = [];
   explainState = null;
   explanation = null;
+  jobsStream.install();
+  jobsStream.send(jobsBody());
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -39,9 +43,9 @@ beforeEach(() => {
       }
       if (url === '/api/admin/review/runs/1/explain' && method === 'POST') {
         explainState = { runId: 1, state: 'running' };
+        jobsStream.send(jobsBody({ review: explainState }));
         return Response.json(explainState, { status: 202 });
       }
-      if (url === '/api/admin/review/explain') return Response.json(explainState);
       if (url === '/api/admin/review/dismissals') return Response.json(JSON.parse(String(init!.body)), { status: method === 'POST' ? 201 : 200 });
       if (url === '/api/admin/review/runs' && method === 'POST') {
         noRun = false;
@@ -60,7 +64,7 @@ afterEach(cleanup);
 
 describe('ReviewPage', () => {
   it('offers the pictures Thinning removes, all ticked, with the counts before and after, and removes only the ones left ticked', async () => {
-    render(<ReviewPage />);
+    renderWithJobs(<ReviewPage />, 'admin');
     await userEvent.click(await screen.findByRole('button', { name: 'Look for pictures to remove' }));
     expect(await screen.findByText('Supreme+')).toBeTruthy();
     expect(screen.getByText('R1')).toBeTruthy();
@@ -81,7 +85,7 @@ describe('ReviewPage', () => {
   });
 
   it('does not compare the Rank Looks until the player asks, and saving the distance before that proposes nothing', async () => {
-    render(<ReviewPage />);
+    renderWithJobs(<ReviewPage />, 'admin');
     const field = (await screen.findByLabelText('Rank Looks are alike closer than')) as HTMLInputElement;
     await waitFor(() => expect(field.value).toBe('0.05'));
     await userEvent.click(screen.getByRole('button', { name: 'Save distance' }));
@@ -90,7 +94,7 @@ describe('ReviewPage', () => {
   });
 
   it('shows the distance that makes two Rank Looks alike, saves a new one and proposes again', async () => {
-    render(<ReviewPage />);
+    renderWithJobs(<ReviewPage />, 'admin');
     // the field is looked up each time: the page draws it again once the findings arrive
     const field = () => screen.getByLabelText('Rank Looks are alike closer than') as HTMLInputElement;
     await screen.findByLabelText('Rank Looks are alike closer than');
@@ -112,7 +116,7 @@ describe('ReviewPage', () => {
   it('keeps the distance field in place when the slow findings arrive after the player started typing', async () => {
     let release!: () => void;
     holdFindings = new Promise((resolve) => (release = resolve));
-    render(<ReviewPage />);
+    renderWithJobs(<ReviewPage />, 'admin');
     const field = await screen.findByLabelText('Rank Looks are alike closer than');
     await userEvent.click(field);
     expect(document.activeElement).toBe(field);
@@ -146,7 +150,7 @@ describe('ReviewPage', () => {
     const runsStarted = () => requests.filter((r) => r.url === '/api/admin/review/runs' && r.method === 'POST').length;
 
     it('lists the three groups, and offers to move or delete a Rank Look the others read as another rank', async () => {
-      render(<ReviewPage />);
+      renderWithJobs(<ReviewPage />, 'admin');
       for (const name of ['Wrong', 'Obsolete', 'Improve']) expect(await screen.findByRole('heading', { name })).toBeTruthy();
       for (const f of findings.wrong) expect(screen.getByText(f.message)).toBeTruthy();
 
@@ -159,14 +163,14 @@ describe('ReviewPage', () => {
     });
 
     it('deletes a Rank Look the others read as another rank', async () => {
-      render(<ReviewPage />);
+      renderWithJobs(<ReviewPage />, 'admin');
       await userEvent.click(await screen.findByRole('button', { name: 'Delete Rank Look 7' }));
       await waitFor(() => expect(requests.some((r) => r.url === '/api/admin/learned/rank/7' && r.method === 'DELETE')).toBe(true));
       await waitFor(() => expect(screen.queryByRole('button', { name: 'Delete Rank Look 7' })).toBeNull());
     });
 
     it('offers no change for a record: the finding only names it', async () => {
-      render(<ReviewPage />);
+      renderWithJobs(<ReviewPage />, 'admin');
       await screen.findByText(findings.wrong[1].message);
       // the only button on a record finding is Dismiss, which hides the finding and changes no record
       expect(screen.queryByRole('button', { name: /^(?!Dismiss).*record/i })).toBeNull();
@@ -174,7 +178,7 @@ describe('ReviewPage', () => {
     });
 
     it('deletes the unreferenced files left ticked, and shows the size and age of the kept pictures', async () => {
-      render(<ReviewPage />);
+      renderWithJobs(<ReviewPage />, 'admin');
       await userEvent.click(await screen.findByRole('checkbox', { name: 'Delete look/old.png' }));
       expect((screen.getByRole('checkbox', { name: 'Delete rank-look/stray.png' }) as HTMLInputElement).checked).toBe(true);
       await userEvent.click(screen.getByRole('button', { name: 'Delete 1 ticked file' }));
@@ -186,7 +190,7 @@ describe('ReviewPage', () => {
     });
 
     it('counts the heroes without an example and lists them apart from the other Improve findings', async () => {
-      render(<ReviewPage />);
+      renderWithJobs(<ReviewPage />, 'admin');
       expect(await screen.findByText('Paragon 3 has 2 Rank Looks: the rank reader names a rank only after 3.')).toBeTruthy();
       expect(screen.getByText('2 heroes have no example')).toBeTruthy();
       expect(screen.getByText('Anya')).toBeTruthy();
@@ -195,7 +199,7 @@ describe('ReviewPage', () => {
 
     it('shows the date of the run it shows, marks the new findings, and starts a run on the button', async () => {
       findings = { ...findings, wrong: findings.wrong.map((f: any, i: number) => ({ ...f, new: i === 1 })) };
-      render(<ReviewPage />);
+      renderWithJobs(<ReviewPage />, 'admin');
       expect(await screen.findByText(/Last run: 2026-11-11 13:40/)).toBeTruthy();
       expect(screen.getAllByText('New')).toHaveLength(1);
       expect(runsStarted()).toBe(0); // opening the tab shows the run, it does not look again
@@ -207,7 +211,7 @@ describe('ReviewPage', () => {
 
     it('says no review was run yet, and does not look until the player asks', async () => {
       noRun = true;
-      render(<ReviewPage />);
+      renderWithJobs(<ReviewPage />, 'admin');
       expect(await screen.findByText('No review has been run yet.')).toBeTruthy();
       expect(runsStarted()).toBe(0);
       await userEvent.click(screen.getByRole('button', { name: 'Run review' }));
@@ -216,7 +220,7 @@ describe('ReviewPage', () => {
     });
 
     it('dismisses a finding the player judges fine, and offers no dismissal for Thinning or the kept pictures', async () => {
-      render(<ReviewPage />);
+      renderWithJobs(<ReviewPage />, 'admin');
       await screen.findByRole('heading', { name: 'Wrong' });
       // 3 Wrong, 2 files, 1 Improve finding and 2 heroes: Thinning groups and the Kept table have none
       expect(screen.getAllByRole('button', { name: /^Dismiss finding about / })).toHaveLength(8);
@@ -234,7 +238,7 @@ describe('ReviewPage', () => {
       const anya = { code: 'hero-no-example', subject: 'Anya', message: 'Anya has no picture the hero reader can compare a tile with.' };
       dismissed = [anya];
       findings = { ...findings, improve: findings.improve.filter((f: any) => f.subject !== 'Anya') };
-      render(<ReviewPage />);
+      renderWithJobs(<ReviewPage />, 'admin');
       await userEvent.click(await screen.findByText('Dismissed (1)'));
       expect(screen.getByText(anya.message)).toBeTruthy();
       await userEvent.click(screen.getByRole('button', { name: 'Show again finding about Anya' }));
@@ -247,7 +251,7 @@ describe('ReviewPage', () => {
       it('starts the Agent on the last run, shows that it is working, and shows its explanation with the date when it finishes', async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-        render(<ReviewPage />);
+        renderWithJobs(<ReviewPage />, 'admin');
         await user.click(await screen.findByRole('button', { name: 'Ask the Agent' }));
         const start = requests.find((r) => r.method === 'POST' && r.url === '/api/admin/review/runs/1/explain')!;
         expect(start.action).toBe('app');
@@ -256,7 +260,7 @@ describe('ReviewPage', () => {
         // the server finishes: it has kept the explanation on the run
         explainState = { runId: 1, state: 'done' };
         explanation = { text: '1. Rank Look 7 first: the reader names R2 for it.', at: '2026-11-11 14:05:00' };
-        await act(() => vi.advanceTimersByTimeAsync(2100));
+        await act(async () => jobsStream.send(jobsBody({ review: explainState })));
 
         expect(await screen.findByText('1. Rank Look 7 first: the reader names R2 for it.')).toBeTruthy();
         expect(screen.getByText(/Written 2026-11-11 14:05/)).toBeTruthy();
@@ -265,13 +269,14 @@ describe('ReviewPage', () => {
 
       it('says why the Agent could not explain the run', async () => {
         explainState = { runId: 1, state: 'failed', error: 'claude: not logged in' };
-        render(<ReviewPage />);
+        jobsStream.send(jobsBody({ review: explainState }));
+        renderWithJobs(<ReviewPage />, 'admin');
         expect(await screen.findByText(/Could not explain the run: claude: not logged in/)).toBeTruthy();
       });
 
       it('shows no explanation on a run the Agent did not explain, such as a new one', async () => {
         explanation = { text: 'An old explanation.', at: '2026-11-10 10:00:00' };
-        render(<ReviewPage />);
+        renderWithJobs(<ReviewPage />, 'admin');
         expect(await screen.findByText('An old explanation.')).toBeTruthy();
         await userEvent.click(screen.getByRole('button', { name: 'Run review' }));
         await waitFor(() => expect(screen.queryByText('An old explanation.')).toBeNull());

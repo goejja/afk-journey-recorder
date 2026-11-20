@@ -105,26 +105,20 @@ export function artifactStats(db: Database.Database, filters: StatFilters & { mi
 }
 
 /**
- * Win rate of Side A per map (`column` 'map_name') or per rule ('rule'). Both sides of a battle share the map and the rule, so
- * counting both would always give half: only Side A, whose result is the record's, is counted.
+ * Win rate of Side A per map. Both sides of a battle share the map, so counting both would always give half: only Side A, whose
+ * result is the record's, is counted.
  */
-function sideAStats(db: Database.Database, column: 'map_name' | 'rule', filters: StatFilters & { minGames?: number }) {
+export function mapStats(db: Database.Database, filters: StatFilters & { minGames?: number } = {}) {
   const params: unknown[] = [];
   const where = whereFor(filters, params);
   return db
     .prepare(
-      `SELECT x.${column} AS name, count(*) AS games, sum(x.won) AS wins, round(1.0 * sum(x.won) / count(*), 3) AS winRate
-       FROM v_side x ${where ? `${where} AND` : 'WHERE'} x.side = 'A' AND x.${column} IS NOT NULL
-       GROUP BY x.${column} HAVING count(*) >= ? ORDER BY games DESC, winRate DESC LIMIT ${MAX_ROWS}`,
+      `SELECT x.map_name AS map, count(*) AS games, sum(x.won) AS wins, round(1.0 * sum(x.won) / count(*), 3) AS winRate
+       FROM v_side x ${where ? `${where} AND` : 'WHERE'} x.side = 'A' AND x.map_name IS NOT NULL
+       GROUP BY x.map_name HAVING count(*) >= ? ORDER BY games DESC, winRate DESC LIMIT ${MAX_ROWS}`,
     )
-    .all(...params, filters.minGames ?? 1) as { name: string; games: number; wins: number; winRate: number }[];
+    .all(...params, filters.minGames ?? 1) as { map: string; games: number; wins: number; winRate: number }[];
 }
-
-export const mapStats = (db: Database.Database, filters: StatFilters & { minGames?: number } = {}) =>
-  sideAStats(db, 'map_name', filters).map(({ name, ...rest }) => ({ map: name, ...rest }));
-
-export const ruleStats = (db: Database.Database, filters: StatFilters & { minGames?: number } = {}) =>
-  sideAStats(db, 'rule', filters).map(({ name, ...rest }) => ({ rule: name, ...rest }));
 
 /**
  * Win rate of a hero by the game row it stood in (the diagonal rows of ADR 0036, 1 to 15), counted from the back edge of its own side:

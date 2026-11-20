@@ -10,10 +10,10 @@ const sources = (dir: string): string[] =>
   });
 
 describe('error messages', () => {
-  it('give every .error the role alert, as docs/ui-conventions.md says', () => {
-    const missing = sources('web').flatMap((file) =>
-      [...readFileSync(file, 'utf8').matchAll(/<(?:p|span|div)\b[^>]*className="error"[^>]*>/g)].filter((tag) => !tag[0].includes('role="alert"')).map((tag) => `${file}: ${tag[0].replace(/\s+/g, ' ').slice(0, 80)}`),
-    );
-    expect(missing).toEqual([]);
+  it('are drawn by Notice, which gives every error the role alert, as docs/ui-conventions.md says', () => {
+    const raw = sources('web')
+      .filter((file) => !file.endsWith('Notice.tsx'))
+      .flatMap((file) => [...readFileSync(file, 'utf8').matchAll(/<(?:p|span|div)\b[^>]*className="error"[^>]*>/g)].map((tag) => `${file}: ${tag[0]}`));
+    expect(raw).toEqual([]);
   });
 });

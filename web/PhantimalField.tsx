@@ -2,6 +2,7 @@ import type { Hero, Phantimal } from './backend.js';
 import { checkFactionRequirement, PARTNER_PHANTIMALS } from '../src/domain/units.js';
 import { Portrait } from './Portrait.js';
 import type { PlacedPhantimal, PlacedRow } from './units.js';
+import { Notice } from './ui/Notice.js';
 
 interface Props {
   /** The Phantimals the mode and season offer; the pairs are offered once, under their key. */
@@ -71,7 +72,7 @@ export function PhantimalField({ phantimals, placed, heroes, choice, shown, onCh
       </ul>
       {options.length === 0 && <p className="muted">No phantimals are tagged for this season.</p>}
       {options.length > 0 && noneEligible && choice === '' && <p className="muted">Three heroes of one faction bring a Phantimal.</p>}
-      {choice !== '' && shown === null && problem(choice) === null && options.some((p) => p.name === choice) && <p className="error" role="alert">No free tile for {choice}.</p>}
+      {choice !== '' && shown === null && problem(choice) === null && options.some((p) => p.name === choice) && <Notice kind="error">No free tile for {choice}.</Notice>}
     </>
   );
 }

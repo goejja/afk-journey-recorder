@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { afterSaved, useSaveRecord } from '../useSaveRecord.js';
+import { useAction } from '../hooks/action.js';
+import { stepAfterSave } from '../hooks/saved.js';
 import { heroesAlreadyUsed } from '../../src/domain/arena.js';
 import { DREAM_HUNT_FIGHTS } from '../../src/domain/dream-hunt.js';
 import { api, type DreamHuntAttempt, type WeeklySetups } from '../backend.js';
@@ -10,6 +11,7 @@ import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { FormationIdField } from '../FormationIdField.js';
 import { type Reference, type Draft, onMap, sharedTags, newDraft, draftFromFight, toFight } from './draft.js';
 import { FightIdentity, FightResult, FightBoard } from './FightParts.js';
+import { useToast } from '../ui/Toast.js';
 
 /** The five fights of a Dream Hunt day, one tab each, saved together as one battle of separate records. */
 interface NewFightsProps {
@@ -43,6 +45,7 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
   const [current, setCurrent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const toast = useToast();
   // The Formation ID stands for the fights of the whole day (ADR 0007), not for one of them.
   const [formationId, setFormationId] = useState(() => (editing?.fights ?? cloneOf)?.[0]?.battleFormationId ?? '');
   const sync = useRosterSync();
@@ -66,14 +69,14 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
       const slots = drafts.map((d, i) => ({ boss: d.boss || null, mapName: d.mapName || null, rule: i === DREAM_HUNT_FIGHTS - 1 ? d.rule || null : null }));
       onDefaults(await api.saveDefaults('Dream Hunt', slots));
       setError(null);
-      setStatus('Saved as this week’s Dream Hunt setup: new days start with these bosses, maps and rule.');
+      toast('Saved as this week’s Dream Hunt setup: new days start with these bosses, maps and rule.');
     } catch (e) {
       setStatus(null);
       setError((e as Error).message);
     }
   }
 
-  const saving = useSaveRecord();
+  const saving = useAction();
   const save = (another: boolean) => saving.run(() => saveNow(another));
 
   async function saveNow(another: boolean) {
@@ -90,7 +93,7 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
       const day = fights.map(({ index, fight }) => ({ ...fight, position: index + 1 }));
       const saved = await (editing ? api.updateDreamHuntBattle(editing.id, day, { formationId }) : api.createDreamHuntBattle(day, { formationId }));
       // New fights may carry upgrades the roster has not heard of yet; editing a saved day does not ask.
-      if (!editing) notice = await afterSaved(() => sync.ask(day.flatMap((fight) => recordedHeroes(fight.formation)), reference.heroes, reference.heroRules, undefined, { attemptIds: saved.fights.map((f) => f.id), side: 'A' }));
+      if (!editing) notice = await stepAfterSave(() => sync.ask(day.flatMap((fight) => recordedHeroes(fight.formation)), reference.heroes, reference.heroRules, undefined, { attemptIds: saved.fights.map((f) => f.id), side: 'A' }));
     } catch (e) {
       setStatus(null);
       return setError((e as Error).message);

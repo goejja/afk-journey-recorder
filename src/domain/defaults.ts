@@ -24,7 +24,7 @@ export const emptySlot = (): DefaultSlot => ({ boss: null, mapName: null, rule: 
 export const allowsRule = (mode: DefaultMode, position: number) => mode === 'Supreme Arena' || (mode === 'Dream Hunt' && position === DEFAULT_SLOTS['Dream Hunt']);
 
 /** The setup a mode is saved with: at most as many teams as the mode has, each naming only what that team can have. Names are checked against the database elsewhere. */
-export const defaultsSchema = (mode: DefaultMode) => {
+const defaultsSchema = (mode: DefaultMode) => {
   const tooMany = `A ${mode} setup has at most ${DEFAULT_SLOTS[mode]} teams`;
   return z.object(
     {

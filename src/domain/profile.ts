@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
 export const MAX_PROFILE_NAME_LENGTH = 40;
-export const MAX_PLAYER_ID_LENGTH = 40;
+const MAX_PLAYER_ID_LENGTH = 40;
 
 /** A profile name: spaces collapsed and trimmed, 1 to 40 characters. */
-export const ProfileNameSchema = z
+const ProfileNameSchema = z
   .string({ error: 'A profile needs a name' })
   .transform((name) => name.trim().replace(/\s+/g, ' '))
   .pipe(z.string().min(1, 'A profile needs a name').max(MAX_PROFILE_NAME_LENGTH, `A profile name is at most ${MAX_PROFILE_NAME_LENGTH} characters`));
@@ -22,7 +22,7 @@ export const PlayerIdSchema = z
   .transform((id) => (id === '' ? null : id));
 
 /** A profile named by its id or its name; anything else reads as an id no profile has, so the route answers "unknown profile". */
-export const ProfileRefSchema = z.union([z.number(), z.string()]).nullish().catch(-1);
+const ProfileRefSchema = z.union([z.number(), z.string()]).nullish().catch(-1);
 
 /** What a new profile is made with; `copyFrom` names a profile whose heroes it starts with. */
 export const NewProfileSchema = z.object(

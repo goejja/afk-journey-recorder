@@ -24,7 +24,7 @@ npm run query -- formation-profile --core "A,B,C"
 npm run query -- hero-rows --name HERO
 npm run query -- hero-distribution --name HERO [--mode M]
 npm run query -- player-stats [--mode M] [--min N]
-npm run query -- stage-stats --kind Normal
+npm run query -- stage --season 8 --kind Normal --number 1
 npm run query -- dream-hunt --boss "King Croaker"
 npm run query -- scenarios
 npm run query -- scenario --id N

@@ -1,7 +1,10 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { TagInput } from './Tags.js';
+import { TabPanel, Tabs } from './ui/Tabs.js';
+import { Icon } from './ui/Icon.js';
+import { Notice } from './ui/Notice.js';
 
-export interface TeamTabs {
+interface TeamTabs {
   /** One label per team; a single-team mode passes none and shows no tabs. */
   labels: string[];
   current: number;
@@ -108,6 +111,7 @@ function useFillWindow() {
  * has, then the team tabs, and the board in the rest of the window (ADR 0034).
  */
 export function RecordShell({ title, identity, result, note, onNote, tags, onTags, lockedTags, fields, deployment, formationIds, teams, onSetDefault, error, status, saveLabel, onSave, onSaveAnother, saveDisabled, saving, onCancel, cancelLabel, children }: Props) {
+  const teamsId = useId();
   const fill = useFillWindow();
   return (
     <section className="workspace" ref={fill.ref} style={fill.style}>
@@ -145,13 +149,7 @@ export function RecordShell({ title, identity, result, note, onNote, tags, onTag
         {deployment}
         {teams && teams.labels.length > 1 && (
           <div className="workspace-row">
-            <div className="tabs" role="tablist" aria-label="Teams">
-              {teams.labels.map((label, i) => (
-                <button key={i} role="tab" aria-selected={i === teams.current} className={i === teams.current ? 'active' : undefined} onClick={() => teams.onSelect(i)}>
-                  {label}
-                </button>
-              ))}
-            </div>
+            <Tabs id={teamsId} label="Teams" tabs={teams.labels.map((label, i) => ({ key: i, label }))} value={teams.current} onChange={teams.onSelect} />
             {teams.onCopyPrevious && (
               <button onClick={teams.onCopyPrevious} disabled={teams.current === 0}>
                 Copy the map from the previous team
@@ -160,19 +158,25 @@ export function RecordShell({ title, identity, result, note, onNote, tags, onTag
             {teams.swap && <SwapControl teams={teams} swap={teams.swap} />}
             {teams.hint && (
               <span className="hint-icon" role="img" tabIndex={0} title={teams.hint} aria-label={teams.hint}>
-                ⓘ
+                <Icon name="info" />
               </span>
             )}
           </div>
         )}
         {error && (
-          <p className="error" role="alert">
+          <Notice kind="error">
             {error}
-          </p>
+          </Notice>
         )}
-        {status && <p role="status">{status}</p>}
+        {status && <Notice kind="success">{status}</Notice>}
       </div>
-      <div className="workspace-body">{children}</div>
+      {teams && teams.labels.length > 1 ? (
+        <TabPanel id={teamsId} value={teams.current} className="workspace-body">
+          {children}
+        </TabPanel>
+      ) : (
+        <div className="workspace-body">{children}</div>
+      )}
     </section>
   );
 }

@@ -15,7 +15,7 @@ export const StageEnemy = z.object({ enemy: z.string().nullable(), hero: z.strin
 export type StageEnemy = z.infer<typeof StageEnemy>;
 
 /** A stage as listed: its identity, its map and how many attempts it has. */
-export const StageSummary = StageKey.extend({ id: z.number(), mapName: z.string(), attemptCount: z.number() });
+const StageSummary = StageKey.extend({ id: z.number(), mapName: z.string(), attemptCount: z.number() });
 
 export const Stage = StageSummary.extend({ enemies: z.array(StageEnemy) });
 export type Stage = z.infer<typeof Stage>;
@@ -32,7 +32,7 @@ export const Enemy = z.object({
 export type Enemy = z.infer<typeof Enemy>;
 
 /** A stage of the Stages grid: the stage rows of one kind, phase and number across seasons, as `stagesContract.grid` lists it. */
-export const StageGridBox = z.object({
+const StageGridBox = z.object({
   kind: StageKind,
   /** 0 for Normal and Phantisomal, whose numbers run on across the phases. */
   phase: z.number(),
@@ -41,7 +41,6 @@ export const StageGridBox = z.object({
   state: z.enum(['cleared', 'older']),
   newestSeason: z.number(),
 });
-export type StageGridBox = z.infer<typeof StageGridBox>;
 
 export const Attempt = z.object({
   id: z.number(),

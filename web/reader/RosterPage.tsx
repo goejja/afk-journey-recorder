@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { HeroIcons } from '../HeroIcons.js';
 import { RankText } from '../RankText.js';
 import { HeroStateButtons } from '../ui/HeroStateButtons.js';
@@ -7,44 +7,46 @@ import { distinct, heroMatches, TIER_ORDER } from '../heroFilter.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { Portrait } from '../Portrait.js';
 import { RosterImport } from './RosterImport.js';
-import { useCrud } from '../useCrud.js';
+import { useAction } from '../hooks/action.js';
+import { useLoad } from '../hooks/load.js';
+import { useConfirmActions } from '../hooks/confirm.js';
 import { MasterDetail } from '../ui/MasterDetail.js';
+import { Icon } from '../ui/Icon.js';
+import { Notice } from '../ui/Notice.js';
+
+const NO_PROFILES: Profile[] = [];
+const NO_HEROES: Hero[] = [];
 
 export function RosterPage() {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [heroes, setHeroes] = useState<Hero[]>([]);
-  const [rules, setRules] = useState<Rules | null>(null);
   const [search, setSearch] = useState('');
   const [faction, setFaction] = useState<string[]>([]);
   const [heroClass, setHeroClass] = useState<string[]>([]);
   const [tier, setTier] = useState<string[]>([]);
   const [ownedOnly, setOwnedOnly] = useState(false);
   const [form, setForm] = useState<'new' | 'edit' | 'import' | 'merge' | null>(null);
-  const { error, run: act, confirm, dialog } = useCrud();
+  const { error: actionError, run: act } = useAction({ when: 'queue' });
+  const { confirm, confirmRun, dialog } = useConfirmActions(act);
+
+  // the profiles and the heroes of the one on show; asked again when another is picked, and patched in place by a change to one hero
+  const loaded = useLoad(async () => {
+    const profiles = await api.profiles();
+    const current = profiles.find((p) => p.id === selectedId) ?? profiles.find((p) => p.isDefault);
+    return { profiles, heroes: await api.heroes(current?.id) };
+  }, [selectedId]);
+  const profiles = loaded.data?.profiles ?? NO_PROFILES;
+  const heroes = loaded.data?.heroes ?? NO_HEROES;
+  const reload = loaded.reload;
+  const setProfiles = (change: (old: Profile[]) => Profile[]) => loaded.setData((old) => ({ ...old, profiles: change(old.profiles) }));
+  const setHeroes = (change: (old: Hero[]) => Hero[]) => loaded.setData((old) => ({ ...old, heroes: change(old.heroes) }));
+
+  // The rules do not change while the page is open.
+  const loadedRules = useLoad(() => api.rules(), []);
+  const rules: Rules | null = loadedRules.data ?? null;
+  const error = loaded.error ?? loadedRules.error ?? actionError;
 
   // The profile on show: the one picked, else the default (also when the picked one has just been deleted).
   const selected = profiles.find((p) => p.id === selectedId) ?? profiles.find((p) => p.isDefault) ?? null;
-
-  const asked = useRef(0); // the newest reload wins: answers arriving out of order are dropped
-  const reload = useCallback(async () => {
-    const request = ++asked.current;
-    const loadedProfiles = await api.profiles();
-    const current = loadedProfiles.find((p) => p.id === selectedId) ?? loadedProfiles.find((p) => p.isDefault);
-    const loadedHeroes = await api.heroes(current?.id);
-    if (request !== asked.current) return;
-    setProfiles(loadedProfiles);
-    setHeroes(loadedHeroes);
-  }, [selectedId]);
-
-  useEffect(() => {
-    void act(reload);
-  }, [act, reload]);
-
-  // The rules do not change while the page is open.
-  useEffect(() => {
-    void act(() => api.rules(), setRules);
-  }, [act]);
 
   /** Does a change to the profiles, then reads the page again. */
   const run = (action: () => Promise<unknown>) =>
@@ -76,54 +78,36 @@ export function RosterPage() {
   const visible = heroes.filter((h) => heroMatches(h, { search, faction, heroClass, tier }) && (!ownedOnly || h.owned));
   const ownedCount = heroes.filter((h) => h.owned).length;
 
-  async function reset() {
-    if (
-      selected &&
-      (await confirm({
-        title: `Remove all ${ownedCount} heroes from the roster of ${selected.name}?`,
-        message: 'This cannot be undone.',
-        confirmLabel: 'Remove',
-        danger: true,
-      }))
-    ) {
-      void run(() => api.resetRoster(selected.id));
-    }
-  }
+  const reset = () =>
+    selected &&
+    confirmRun({ title: `Remove all ${ownedCount} heroes from the roster of ${selected.name}?`, message: 'This cannot be undone.', confirmLabel: 'Remove' }, () => api.resetRoster(selected.id), reload);
 
-  async function merge(into: Profile) {
-    if (
-      selected &&
-      (await confirm({
+  const merge = (into: Profile) =>
+    selected &&
+    confirmRun(
+      {
         title: `Merge ${selected.name} into ${into.name}?`,
         message: `Their heroes are combined at the stronger state of each, ${selected.name} is deleted and ${into.name} keeps its name. This cannot be undone.`,
         confirmLabel: 'Merge',
-        danger: true,
-      }))
-    ) {
-      void run(async () => {
+      },
+      async () => {
         await api.mergeProfile(selected.id, into.id);
         setSelectedId(into.id);
         setForm(null);
-      });
-    }
-  }
+      },
+      reload,
+    );
 
-  async function remove() {
-    if (
-      selected &&
-      (await confirm({
-        title: `Delete the profile ${selected.name} and its ${selected.heroCount} heroes?`,
-        message: "Saved records keep their own copy of every hero's state.",
-        confirmLabel: 'Delete',
-        danger: true,
-      }))
-    ) {
-      void run(async () => {
+  const remove = () =>
+    selected &&
+    confirmRun(
+      { title: `Delete the profile ${selected.name} and its ${selected.heroCount} heroes?`, message: "Saved records keep their own copy of every hero's state.", confirmLabel: 'Delete' },
+      async () => {
         await api.deleteProfile(selected.id);
         setSelectedId(null);
-      });
-    }
-  }
+      },
+      reload,
+    );
 
   return (
     <>
@@ -131,9 +115,9 @@ export function RosterPage() {
         header={
           <>
             {error && (
-              <p className="error" role="alert">
+              <Notice kind="error">
                 {error}
-              </p>
+              </Notice>
             )}
             {selected && (
               <div className="panel roster-top-panel">
@@ -190,7 +174,7 @@ export function RosterPage() {
                   onClick={() => (setSelectedId(p.id), setForm(null))}
                 >
                   <span className="profile-name">
-                    {p.isDefault && <span title="Default profile" aria-label="Default">★ </span>}
+                    {p.isDefault && <span title="Default profile" aria-label="Default"><Icon name="star" /> </span>}
                     {p.name}
                   </span>
                   <span className="muted profile-meta">

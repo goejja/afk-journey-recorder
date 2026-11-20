@@ -12,15 +12,15 @@ const WEAK_UP_TO = 0.4;
 /** An upgrade gap is the difference of the sides' mean power per hero; this far or more is ahead or behind. */
 const GAP_LEVEL = 0.5;
 
-export interface Tally {
+interface Tally {
   games: number;
   wins: number;
 }
-export interface RateRecord extends Tally {
+interface RateRecord extends Tally {
   winRate: number;
 }
 
-export interface GroupRow extends FormationGroup {
+interface GroupRow extends FormationGroup {
   /** The group's win rate minus the win rate of all sides under the same filters. */
   vsAverage: number;
   /** The most used artifact and its share of the group's appearances; null when none is known. */
@@ -28,12 +28,12 @@ export interface GroupRow extends FormationGroup {
   labels: EvidenceLabel[];
 }
 
-export interface ReportArchetype extends Omit<Archetype, 'groups'> {
+interface ReportArchetype extends Omit<Archetype, 'groups'> {
   groups: GroupRow[];
 }
 
 /** A hero of a group on one map: the tile it stood on most often (as if on the half of Side A) and how often that was. */
-export interface PlacedHero {
+interface PlacedHero {
   hero: string;
   /** The tile the example board puts the hero on; null when every tile it stood on is taken by a hero used more. */
   tile: number | null;
@@ -45,7 +45,7 @@ export interface PlacedHero {
   secondChoice: boolean;
 }
 
-export interface PlacementMap extends RateRecord {
+interface PlacementMap extends RateRecord {
   map: string;
   heroes: PlacedHero[];
 }

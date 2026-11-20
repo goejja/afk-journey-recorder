@@ -30,6 +30,8 @@ beforeEach(() => {
 
 const post = (url: string) => app.request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 const json = async (response: Response | Promise<Response>) => (await response).json() as Promise<any>;
+/** The Review explanation, as the job list tells it. */
+const reviewJob = async () => (await json(app.request('/api/jobs'))).review;
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const newRun = async () => {
   db.prepare('INSERT INTO rank_look (rank, file) VALUES (?, ?)').run('Paragon 3', `p-${Math.random()}.png`);
@@ -39,15 +41,15 @@ const newRun = async () => {
 describe('asking the Agent to explain a Review run', () => {
   it('runs the Agent in the background and keeps its reply on the run, with the date', async () => {
     const run = await newRun();
-    expect(await json(app.request('/api/admin/review/explain'))).toBeNull();
+    expect(await reviewJob()).toBeNull();
     const started = await post(`/api/admin/review/runs/${run}/explain`);
     expect(started.status).toBe(202);
-    expect(await json(app.request('/api/admin/review/explain'))).toEqual({ runId: run, state: 'running' });
+    expect(await reviewJob()).toEqual({ runId: run, state: 'running' });
     expect((await json(app.request('/api/admin/review/runs/latest'))).explanation).toBeNull();
 
     finish.resolve('1. Paragon 3 has too few looks: learn it from a roster import.');
     await settle();
-    expect(await json(app.request('/api/admin/review/explain'))).toEqual({ runId: run, state: 'done' });
+    expect(await reviewJob()).toEqual({ runId: run, state: 'done' });
     const explanation = (await json(app.request('/api/admin/review/runs/latest'))).explanation;
     expect(explanation.text).toBe('1. Paragon 3 has too few looks: learn it from a roster import.');
     expect(explanation.at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
@@ -64,7 +66,7 @@ describe('asking the Agent to explain a Review run', () => {
     await post(`/api/admin/review/runs/${run}/explain`);
     finish.resolve('  \n ');
     await settle();
-    expect(await json(app.request('/api/admin/review/explain'))).toEqual({ runId: run, state: 'failed', error: 'The agent returned an empty reply' });
+    expect(await reviewJob()).toEqual({ runId: run, state: 'failed', error: 'The agent returned an empty reply' });
     expect((await json(app.request('/api/admin/review/runs/latest'))).explanation).toBeNull();
   });
 
@@ -73,7 +75,7 @@ describe('asking the Agent to explain a Review run', () => {
     await post(`/api/admin/review/runs/${run}/explain`);
     finish.reject(new Error('claude: command not found'));
     await settle();
-    expect(await json(app.request('/api/admin/review/explain'))).toEqual({ runId: run, state: 'failed', error: 'claude: command not found' });
+    expect(await reviewJob()).toEqual({ runId: run, state: 'failed', error: 'claude: command not found' });
     expect((await json(app.request('/api/admin/review/runs/latest'))).explanation).toBeNull();
 
     expect((await post(`/api/admin/review/runs/${run}/explain`)).status).toBe(202); // the Agent is free again

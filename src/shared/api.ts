@@ -6,7 +6,7 @@ import type { EquipmentCap, HeroStateRules } from '../domain/hero-state.js';
 import type { LayoutSummary, RuleTimes } from '../domain/dream-hunt.js';
 import type { LayoutUnit } from '../domain/layout.js';
 import type { FormationJson } from './contracts/formation.js';
-import type { Attempt, StageKey, StageKind } from './contracts/stages.js';
+import type { Attempt, StageKey } from './contracts/stages.js';
 import type { Round } from '../domain/tournament.js';
 
 export interface FormationInput {
@@ -188,7 +188,7 @@ export interface GeneratedBoard {
   roleMix?: { role: string | null; count: number }[];
 }
 
-export interface PlacementRuleLine {
+interface PlacementRuleLine {
   hero: string;
   relation: 'behind' | 'mirror' | 'rearmost' | 'sameRow' | 'farthest';
   effect: 'protects' | 'boosts' | 'other';
@@ -198,7 +198,7 @@ export interface PlacementRuleLine {
   source: string;
 }
 
-export interface EnemyRuleLine extends Omit<PlacementRuleLine, 'satisfied'> {
+interface EnemyRuleLine extends Omit<PlacementRuleLine, 'satisfied'> {
   /** The enemy unit the skill reaches, or null when no unit stands there. */
   reaches: { hero: string; part: string; tile: number } | null;
   /** Whether that unit has the role the rule wants; null when the rule wants none or reaches nobody. */
@@ -206,13 +206,13 @@ export interface EnemyRuleLine extends Omit<PlacementRuleLine, 'satisfied'> {
 }
 
 /** Why a hero stands where it does, with the source of the claim (never a skill description). */
-export interface PlacementReason {
+interface PlacementReason {
   source: 'recorded' | 'pinned' | 'engine' | 'rule';
   text: string;
 }
 
 /** A free roster hero offered in place of another, with the Win Score of the swapped team; `small` below 5 comparable battles. */
-export interface Swap {
+interface Swap {
   hero: string;
   chance: number;
   delta: number;
@@ -273,7 +273,7 @@ export interface ScenarioInput {
   }[];
 }
 
-export interface AgentTool {
+interface AgentTool {
   installed: boolean;
   path: string | null;
   version: string | null;
@@ -319,14 +319,6 @@ export interface MapStat {
   winRate: number;
 }
 
-/** Side A's results under a rule. */
-export interface RuleStat {
-  rule: string;
-  games: number;
-  wins: number;
-  winRate: number;
-}
-
 /** A hero's results in one row of the board, counted from the back edge of its own side (1 is the back row). */
 export interface RowStat {
   row: number;
@@ -360,7 +352,7 @@ export interface PlayerStat {
 }
 
 /** A set of heroes fielded together on one side (positions, artifacts, ranks ignored) with how it did. */
-export interface FormationStat {
+interface FormationStat {
   heroes: string[];
   games: number;
   wins: number;
@@ -383,7 +375,7 @@ export interface FormationGroupStat {
   variants: (FormationStat & { flex: string[] })[];
 }
 
-export interface EvidenceLabel {
+interface EvidenceLabel {
   name: string;
   detail?: string;
 }
@@ -418,7 +410,7 @@ export interface FormationReport {
   rows: ArchetypeStat[];
 }
 
-export interface PlacedHero {
+interface PlacedHero {
   hero: string;
   tile: number | null;
   share: number;
@@ -503,17 +495,6 @@ export interface TrioStat {
   games: number;
   wins: number;
   winRate: number;
-}
-
-export interface StageStat {
-  season: number;
-  phase: number;
-  kind: StageKind;
-  number: number;
-  games: number;
-  wins: number;
-  winRate: number;
-  last: string;
 }
 
 export interface Summary {
@@ -725,12 +706,6 @@ export interface ThinningProposal {
   kinds: ThinningKind[];
 }
 
-/** How alike two pictures of a kind must be for Thinning to treat them as one look (the reader's feature distance), with the defaults. */
-export interface ThinningSettingsView {
-  rank: number;
-  defaults: { rank: number };
-}
-
 /** One thing the Reader review found, by code from the readers' data (ADR 0031). `subject` is what it is about: a rank, a hero, a Rank Look id, a record id or a file. */
 export interface ReviewFinding {
   code: string;
@@ -746,7 +721,7 @@ export interface ReviewFinding {
 }
 
 /** What a category of pictures kept for a purpose holds, shown for the player to judge. */
-export interface ReviewKept {
+interface ReviewKept {
   category: string;
   files: number;
   bytes: number;
@@ -777,6 +752,24 @@ export interface ReviewExplainJob {
   runId: number;
   state: 'running' | 'done' | 'failed';
   error?: string;
+}
+
+/** The pictures of one kind of import (a Roster import or a Battle import) in the queue, in short: how many wait or are read, how many failed, how many are read. */
+export interface ImportQueueSummary {
+  /** Queued or being read. */
+  active: number;
+  failed: number;
+  done: number;
+  /** Changes whenever the id or the state of any picture in the queue does, so a page that shows the queue knows when to ask for it again. */
+  signature: string;
+}
+
+/** The background work of the app, for one poll: the scenario runs (by scenario id), the Review explanation, and the two picture queues. */
+export interface JobsSummary {
+  scenarios: Record<string, AgentJob>;
+  review: ReviewExplainJob | null;
+  roster: ImportQueueSummary;
+  battle: ImportQueueSummary;
 }
 
 /** A row where a proposed hero's tile fell that lost clearly more than the same hero in alike teams, from the records of all Players. */
@@ -876,7 +869,7 @@ export interface GroupCounterReport {
 }
 
 /** A Formation group that beat the enemy's group in the owner's records, with which of its Core heroes the roster has. */
-export interface PastCounter {
+interface PastCounter {
   core: string[];
   flex: string[];
   /** The games it met the enemy's group in, and how many it won and lost. */

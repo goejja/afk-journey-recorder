@@ -69,10 +69,10 @@ export function applyUnitRules(rules: UnitRules): void {
 applyUnitRules(DEFAULT_UNIT_RULES);
 
 /** How many heroes of its faction a Phantimal needs on the field before it appears (ADR 0029). */
-export const FACTION_HEROES = 3;
+const FACTION_HEROES = 3;
 
 /** The factions a Phantimal's requirement accepts: its own, or both of a `Celestial-Hypogean` tag. */
-export const factionsOf = (faction: string | null | undefined): string[] =>
+const factionsOf = (faction: string | null | undefined): string[] =>
   (faction ?? '')
     .split('-')
     .map((f) => f.trim())
@@ -114,9 +114,6 @@ export function unitsOf(hero: string): string[] {
   const summon = SUMMONS[hero];
   return ['', ...(summon ? Array.from({ length: summon.count }, () => summon.part) : [])];
 }
-
-/** The heroes of a set of placed rows: a Pair counts once, its Summons never. */
-export const heroesOfUnits = (units: { hero: string }[]): string[] => [...new Set(units.map((u) => u.hero))].sort();
 
 /** The unit of a placed row: '' or missing for a hero standing alone; a part name for a pair; the summon's name for a summon. */
 export const partOf = (p: { part?: string | null }): string => p.part ?? '';

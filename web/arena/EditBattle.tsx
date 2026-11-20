@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useNewest } from '../useLoad.js';
+import { useAction } from '../hooks/action.js';
+import { useNewest } from '../hooks/load.js';
 import { api, type ArenaBattle } from '../backend.js';
 import { SideProfileBar } from './BattleEditor.js';
 import { withRosterStates } from '../FormationEditor.js';
@@ -12,7 +13,7 @@ import { ArenaIdentity, WinnerField, Board, FightFormationIds, UnionLevels } fro
 export function EditBattle({ battle, reference, patchReference, onSaved, onCancel }: { battle: ArenaBattle; reference: Reference; patchReference: PatchReference; onSaved: () => void; onCancel: () => void }) {
   const [mode, setMode] = useState(battle.mode);
   const [draft, setDraft] = useState(() => draftFromBattle(battle));
-  const [error, setError] = useState<string | null>(null);
+  const { error, busy, setError, run } = useAction();
   // As in a new battle: the profile of each side, found from its Player ID; choosing one sets the side's Player ID (the recorded states stay).
   const [chosenProfile, setChosenProfile] = useState<Record<Side, number | null>>(() => ({
     A: profileByPlayerId(reference.profiles, battle.playerIdA),
@@ -45,23 +46,17 @@ export function EditBattle({ battle, reference, patchReference, onSaved, onCance
   async function givePlayerId(side: Side, playerId: string) {
     const profile = reference.profiles.find((p) => p.id === chosenProfile[side]);
     if (!profile) return;
-    try {
-      const updated = await api.updateProfile(profile.id, { playerId });
-      patchReference((old) => ({ profiles: old.profiles.map((p) => (p.id === updated.id ? updated : p)) }));
-      setDraft((old) => ({ ...old, [side === 'A' ? 'playerIdA' : 'playerIdB']: updated.playerId }));
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    await run(
+      () => api.updateProfile(profile.id, { playerId }),
+      (updated) => {
+        patchReference((old) => ({ profiles: old.profiles.map((p) => (p.id === updated.id ? updated : p)) }));
+        setDraft((old) => ({ ...old, [side === 'A' ? 'playerIdA' : 'playerIdB']: updated.playerId }));
+      },
+    );
   }
 
   async function save() {
-    try {
-      await api.updateArenaBattle(battle.id, toInput(mode, draft));
-      onSaved();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    await run(() => api.updateArenaBattle(battle.id, toInput(mode, draft)), onSaved);
   }
 
   return (
@@ -88,6 +83,7 @@ export function EditBattle({ battle, reference, patchReference, onSaved, onCance
       error={error}
       status={null}
       saveLabel="Save changes"
+      saving={busy}
       onSave={() => void save()}
       onCancel={onCancel}
     >

@@ -5,6 +5,7 @@ import type { Artifact, GameMap, Hero, Phantimal, Rules } from './backend.js';
 import { emptyFormation, FormationEditor, type FormationState } from './FormationEditor.js';
 import { guessOf, ownFromTeam, pruneGuess, standsOn, teamOfOwn, withoutGuess, type GuessTiles } from './arena/round-deployment.js';
 import { Dialog } from './ui/Dialog.js';
+import { Notice } from './ui/Notice.js';
 
 /**
  * The form's own placement control for one team of a Round Deployment (ADR 0021): the five teams of a Round have their tiles placed here,
@@ -89,7 +90,7 @@ export function TeamEditorDialog({ title, team, maps, heroes, artifacts, phantim
           mapLabel={`Team of ${title}`}
         />
       ) : (
-        <p className="error" role="alert">This Round has no Arena Map to place the team on. Add one in Admin → Maps first.</p>
+        <Notice kind="error">This Round has no Arena Map to place the team on. Add one in Admin → Maps first.</Notice>
       )}
     </Dialog>
   );

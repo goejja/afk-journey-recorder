@@ -113,9 +113,9 @@ describe('dream hunt attempts', () => {
 
 describe('leaderboard', () => {
   it('compares compositions across repeated fights, whatever the order of the heroes', async () => {
-    await fight({ timeSeconds: 100, formation: team(['A', 'B', 'C']) });
-    await fight({ timeSeconds: 80, formation: team(['C', 'B', 'A']) });
-    await fight({ timeSeconds: 120, formation: team(['A', 'B', 'C']) });
+    await fight({ timeSeconds: 60, formation: team(['A', 'B', 'C']) });
+    await fight({ timeSeconds: 40, formation: team(['C', 'B', 'A']) });
+    await fight({ timeSeconds: 80, formation: team(['A', 'B', 'C']) });
     await fight({ timeSeconds: 70, formation: team(['A', 'D', 'E']) });
     await fight({ outcome: 'Loss', timeSeconds: null, formation: team(['A', 'B', 'C']) });
 
@@ -123,13 +123,13 @@ describe('leaderboard', () => {
     expect(board.attempts).toBe(5);
     const [first, second] = board.compositions;
     expect(first.heroes).toEqual(['A', 'B', 'C']);
-    expect(first).toMatchObject({ attempts: 4, clears: 3, bestSeconds: 80, medianSeconds: 100, worstSeconds: 120, lowConfidence: false });
+    expect(first).toMatchObject({ attempts: 4, clears: 3, bestSeconds: 40, medianSeconds: 60, worstSeconds: 80, lowConfidence: false });
     expect(first.latest.heroes).toHaveLength(3);
     expect(second).toMatchObject({ heroes: ['A', 'D', 'E'], clears: 1, lowConfidence: true });
   });
 
   it('keeps only the fights recorded since a given day', async () => {
-    const old = await json(fight({ timeSeconds: 100, formation: team(['A', 'B', 'C']) }));
+    const old = await json(fight({ timeSeconds: 50, formation: team(['A', 'B', 'C']) }));
     await fight({ timeSeconds: 80, formation: team(['A', 'D', 'E']) });
     db.prepare("UPDATE attempt SET created_at = '2020-01-01 10:00:00' WHERE id = ?").run(old.id);
 
@@ -139,15 +139,15 @@ describe('leaderboard', () => {
   });
 
   it('lists the layouts of a composition with their fights, fastest first', async () => {
-    await fight({ timeSeconds: 100, formation: team(['A', 'B', 'C']) });
+    await fight({ timeSeconds: 85, formation: team(['A', 'B', 'C']) });
     await fight({ timeSeconds: 70, formation: team(['C', 'B', 'A']) }); // the same heroes on other tiles
-    await fight({ timeSeconds: 90, formation: team(['A', 'B', 'C']) });
+    await fight({ timeSeconds: 75, formation: team(['A', 'B', 'C']) });
 
     const board = await json(send('GET', '/api/dream-hunt/leaderboard?boss=King%20Croaker'));
     const [composition] = board.compositions;
     expect(composition.layouts.map((l: any) => [l.attempts, l.clears, l.medianSeconds])).toEqual([
       [1, 1, 70],
-      [2, 2, 95],
+      [2, 2, 80],
     ]);
     expect(composition.layouts[0].layout.units.map((u: any) => [u.hero, u.tile])).toEqual([['C', 38], ['B', 39], ['A', 40]]);
   });
@@ -155,7 +155,7 @@ describe('leaderboard', () => {
   it('filters by boss rule: any, none, or a named rule', async () => {
     await send('POST', '/api/boss-rules', { name: 'Boost' });
     await fight({ timeSeconds: 60, bossRule: 'Boost' });
-    await fight({ timeSeconds: 120 });
+    await fight({ timeSeconds: 80 });
     const count = async (rule: string) => (await json(send('GET', `/api/dream-hunt/leaderboard?boss=King%20Croaker&rule=${rule}`))).attempts;
     expect(await count('any')).toBe(2);
     expect(await count('none')).toBe(1);
@@ -170,7 +170,7 @@ describe('leaderboard', () => {
 
 describe('finder', () => {
   it('lists, per boss, the compositions that hold every hero asked for, the boss with the most fights first', async () => {
-    await fight({ timeSeconds: 100, formation: team(['A', 'B', 'C']) });
+    await fight({ timeSeconds: 50, formation: team(['A', 'B', 'C']) });
     await fight({ timeSeconds: 80, formation: team(['A', 'B', 'D']) });
     await fight({ timeSeconds: 70, formation: team(['A', 'D', 'E']) });
     await fight({ boss: 'Thalassa', timeSeconds: 60, formation: team(['B', 'A', 'E']) });
@@ -201,19 +201,19 @@ describe('Normal and Rule times on the leaderboard', () => {
   beforeEach(async () => {
     await send('POST', '/api/boss-rules', { name: 'Boost' });
     await send('POST', '/api/boss-rules', { name: 'Double' });
-    await fight({ timeSeconds: 100 });
-    await fight({ timeSeconds: 120 });
+    await fight({ timeSeconds: 50 });
+    await fight({ timeSeconds: 60 });
     await fight({ timeSeconds: 40, bossRule: 'Boost' });
     await fight({ timeSeconds: 50, bossRule: 'Double' });
     await fight({ timeSeconds: 30, bossRule: 'Boost', formation: team(['A', 'D', 'E']) }); // cleared only under a Rule
-    await fight({ timeSeconds: 200, formation: team(['B', 'D', 'E']) });
+    await fight({ timeSeconds: 85, formation: team(['B', 'D', 'E']) });
   });
   const board = (query = '') => json(send('GET', `/api/dream-hunt/leaderboard?boss=King%20Croaker${query}`));
 
   it('under Any, keeps the figures to the fights with no Rule and reports the fights under a Rule apart', async () => {
     const { compositions } = await board();
     expect(compositions.map((c: any) => c.heroes.join(''))).toEqual(['ABC', 'BDE', 'ADE']); // cleared only under a Rule comes last
-    expect(compositions[0]).toMatchObject({ attempts: 2, clears: 2, bestSeconds: 100, worstSeconds: 120 });
+    expect(compositions[0]).toMatchObject({ attempts: 2, clears: 2, bestSeconds: 50, worstSeconds: 60 });
     expect(compositions[0].rule).toEqual({ attempts: 2, clears: 2, bestSeconds: 40, medianSeconds: 45, worstSeconds: 50, times: [40, 50], rules: ['Boost', 'Double'] });
     expect(compositions[1].rule).toBeNull();
     expect(compositions[2]).toMatchObject({ attempts: 0, clears: 0 });
@@ -236,8 +236,8 @@ describe('Normal and Rule times on the leaderboard', () => {
 
 describe('the Include and Exclude hero filters', () => {
   beforeEach(async () => {
-    await fight({ timeSeconds: 100, formation: team(['A', 'B', 'C']) });
     await fight({ timeSeconds: 90, formation: team(['A', 'B', 'C']) });
+    await fight({ timeSeconds: 85, formation: team(['A', 'B', 'C']) });
     await fight({ timeSeconds: 80, formation: team(['A', 'B', 'D']) });
     await fight({ timeSeconds: 70, formation: team(['A', 'D', 'E']) });
     await fight({ boss: 'Thalassa', timeSeconds: 60, formation: team(['C', 'E', 'A']) });
@@ -251,7 +251,7 @@ describe('the Include and Exclude hero filters', () => {
     expect(teams(await board('&include=A&exclude=B&exclude=C'))).toEqual(['ADE']);
     const kept = await board('&exclude=D');
     expect(kept).toMatchObject({ include: [], exclude: ['D'], attempts: 2 });
-    expect(kept.compositions[0]).toMatchObject({ attempts: 2, clears: 2, bestSeconds: 90, worstSeconds: 100 });
+    expect(kept.compositions[0]).toMatchObject({ attempts: 2, clears: 2, bestSeconds: 85, worstSeconds: 90 });
     expect((await json(send('GET', '/api/dream-hunt/leaderboard?boss=King%20Croaker&include=Z'))).compositions).toEqual([]);
   });
 

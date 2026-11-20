@@ -18,7 +18,7 @@ beforeEach(() => {
   app = createApp(db, { imagesDir: images });
 });
 
-const findings = async () => (await app.request('/api/admin/review/findings')).json() as Promise<{ wrong: any[]; obsolete: any[]; improve: any[]; kept: any[] }>;
+const findings = async () => ((await (await app.request('/api/admin/review/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json()) as { findings: { wrong: any[]; obsolete: any[]; improve: any[]; kept: any[] } }).findings;
 const rankLooks = (rank: string, count: number) => {
   for (let i = 0; i < count; i++) db.prepare('INSERT INTO rank_look (rank, file) VALUES (?, ?)').run(rank, `${rank}-${i}.png`);
 };

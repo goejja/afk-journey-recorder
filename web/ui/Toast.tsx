@@ -1,12 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { IconButton } from './Icon.js';
 
 /** How long a toast stays when the caller gives no time, and how long its fade-out takes, in milliseconds. */
 export const TOAST_MS = 6000;
 export const TOAST_FADE_MS = 200;
 
-export interface ToastOptions {
+interface ToastOptions {
   /** How long the toast stays before it fades, in milliseconds. */
   duration?: number;
+  /**
+   * `error` is for work that failed in the background, where the person may not be looking: it is announced as an alert, does not fade, and is
+   * closed only with its button. Anything the person did themselves and sees fail stays an inline Notice.
+   */
+  kind?: 'error';
+  /** Where the result is: the toast then has an "Open" link to this address (a page of the app, like `#scenarios`). */
+  href?: string;
 }
 
 type Show = (message: string, options?: ToastOptions) => void;
@@ -21,6 +29,8 @@ interface Item {
   id: number;
   message: string;
   duration: number;
+  sticky: boolean;
+  href?: string;
 }
 
 function ToastItem({ item, onDone }: { item: Item; onDone: (id: number) => void }) {
@@ -29,10 +39,10 @@ function ToastItem({ item, onDone }: { item: Item; onDone: (id: number) => void 
   const [held, setHeld] = useState(false);
 
   useEffect(() => {
-    if (held || leaving) return;
+    if (item.sticky || held || leaving) return;
     const timer = setTimeout(() => setLeaving(true), item.duration);
     return () => clearTimeout(timer);
-  }, [held, leaving, item.duration]);
+  }, [held, leaving, item.duration, item.sticky]);
 
   useEffect(() => {
     if (!leaving) return;
@@ -41,11 +51,19 @@ function ToastItem({ item, onDone }: { item: Item; onDone: (id: number) => void 
   }, [leaving, item.id, onDone]);
 
   return (
-    <div className={`toast${leaving ? ' leaving' : ''}`} onMouseEnter={() => setHeld(true)} onMouseLeave={() => setHeld(false)} onFocus={() => setHeld(true)} onBlur={() => setHeld(false)}>
-      <span>{item.message}</span>
-      <button aria-label="Close notification" title="Close" onClick={() => setLeaving(true)}>
-        ✕
-      </button>
+    <div className={`toast${item.sticky ? ' toast-error' : ''}${leaving ? ' leaving' : ''}`} role={item.sticky ? 'alert' : undefined} onMouseEnter={() => setHeld(true)} onMouseLeave={() => setHeld(false)} onFocus={() => setHeld(true)} onBlur={() => setHeld(false)}>
+      <span>
+        {item.message}
+        {item.href && (
+          <>
+            {' '}
+            <a href={item.href} onClick={() => setLeaving(true)}>
+              Open
+            </a>
+          </>
+        )}
+      </span>
+      <IconButton icon="close" label="Close notification" onClick={() => setLeaving(true)} />
     </div>
   );
 }
@@ -54,7 +72,7 @@ function ToastItem({ item, onDone }: { item: Item; onDone: (id: number) => void 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Item[]>([]);
   const next = useRef(0);
-  const show = useCallback<Show>((message, options) => setItems((old) => [...old, { id: next.current++, message, duration: options?.duration ?? TOAST_MS }]), []);
+  const show = useCallback<Show>((message, options) => setItems((old) => [...old, { id: next.current++, message, duration: options?.duration ?? TOAST_MS, sticky: options?.kind === 'error', href: options?.href }]), []);
   const done = useCallback((id: number) => setItems((old) => old.filter((item) => item.id !== id)), []);
   return (
     <ToastContext.Provider value={show}>

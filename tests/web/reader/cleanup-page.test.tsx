@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CleanupPage } from '../../../web/reader/CleanupPage.js';
+import { ToastProvider } from '../../../web/ui/Toast.js';
 
 let requests: { method: string; url: string; body?: any }[];
 
@@ -27,7 +28,7 @@ afterEach(cleanup);
 describe('Cleanup page', () => {
   it('previews the matching records and only deletes after the person confirms the count', async () => {
     const user = userEvent.setup();
-    render(<CleanupPage />);
+    render(<ToastProvider><CleanupPage /></ToastProvider>);
     await user.selectOptions(screen.getByLabelText('Mode'), 'Arena');
     await user.click(screen.getByRole('button', { name: 'Preview' }));
     expect(await screen.findByText(/match, entered between/)).toBeTruthy();
@@ -58,7 +59,7 @@ describe('Cleanup page', () => {
 
   it('compacts the database and reports the size', async () => {
     const user = userEvent.setup();
-    render(<CleanupPage />);
+    render(<ToastProvider><CleanupPage /></ToastProvider>);
     await user.click(screen.getByRole('button', { name: 'Optimize database' }));
     expect(await screen.findByText(/20 KB → 8 KB/)).toBeTruthy();
   });

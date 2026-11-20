@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useLoad, useNewest, usePolling } from '../../web/useLoad.js';
+import { useLoad, useNewest, useReference } from '../../../web/hooks/load.js';
 
 afterEach(() => {
   cleanup();
@@ -76,27 +76,6 @@ describe('useLoad', () => {
   });
 });
 
-describe('usePolling', () => {
-  it('polls while active, stops when not, and does not overlap a slow poll', async () => {
-    vi.useFakeTimers();
-    const slow = later<void>();
-    const poll = vi.fn(() => slow.promise);
-    const { rerender } = renderHook(({ active }) => usePolling(poll, active, 1000), { initialProps: { active: false } });
-    await vi.advanceTimersByTimeAsync(3000);
-    expect(poll).not.toHaveBeenCalled();
-    rerender({ active: true });
-    await vi.advanceTimersByTimeAsync(3000);
-    expect(poll).toHaveBeenCalledTimes(1); // the first poll has not finished
-    await act(async () => slow.resolve());
-    poll.mockImplementation(() => Promise.resolve());
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(poll).toHaveBeenCalledTimes(3);
-    rerender({ active: false });
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(poll).toHaveBeenCalledTimes(3);
-  });
-});
-
 describe('useNewest', () => {
   it('tells an answer that a later load has overtaken from the newest one', () => {
     const { result } = renderHook(() => useNewest());
@@ -112,5 +91,57 @@ describe('useNewest', () => {
     const before = result.current;
     rerender();
     expect(result.current).toBe(before);
+  });
+});
+
+describe('useLoad reload', () => {
+  it('answers what it loaded, so a caller can use it at once', async () => {
+    const answers = [later<string>(), later<string>()];
+    let n = 0;
+    const { result } = renderHook(() => useLoad(() => answers[n++]!.promise, []));
+    answers[0]!.resolve('first');
+    await waitFor(() => expect(result.current.data).toBe('first'));
+
+    let slow!: Promise<string | undefined>;
+    act(() => void (slow = result.current.reload()));
+    await act(async () => answers[1]!.resolve('second'));
+    await expect(slow).resolves.toBe('second');
+    expect(result.current.data).toBe('second');
+  });
+
+  it('answers nothing when the load fails, and keeps the error', async () => {
+    const { result } = renderHook(() => useLoad(() => Promise.reject(new Error('down')), []));
+    await waitFor(() => expect(result.current.error).toBe('down'));
+    await expect(result.current.reload()).resolves.toBeUndefined();
+  });
+});
+
+describe('useReference', () => {
+  it('asks every loader at once and keeps the answers under the loaders’ names', async () => {
+    const maps = vi.fn(() => Promise.resolve(['Arena']));
+    const rules = vi.fn(() => Promise.resolve([1, 2]));
+    const { result } = renderHook(() => useReference({ maps, heroRules: rules }));
+    await waitFor(() => expect(result.current.data).toEqual({ maps: ['Arena'], heroRules: [1, 2] }));
+    expect(maps).toHaveBeenCalledTimes(1);
+    expect(rules).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the message of the loader that failed and keeps no data', async () => {
+    const { result } = renderHook(() => useReference({ maps: () => Promise.resolve([]), heroes: () => Promise.reject(new Error('Heroes unreachable')) }));
+    await waitFor(() => expect(result.current.error).toBe('Heroes unreachable'));
+    expect(result.current.data).toBeUndefined();
+  });
+
+  it('patches some fields from an object or from a function of the data, and does nothing before the first answer', async () => {
+    const gate = later<string[]>();
+    const { result } = renderHook(() => useReference({ heroes: () => gate.promise, maps: () => Promise.resolve(['Arena']) }));
+    act(() => result.current.patch({ maps: ['early'] }));
+    expect(result.current.data).toBeUndefined();
+    await act(async () => gate.resolve(['Alna']));
+    await waitFor(() => expect(result.current.data).toEqual({ heroes: ['Alna'], maps: ['Arena'] }));
+    act(() => result.current.patch({ heroes: ['Alna', 'Bryn'] }));
+    expect(result.current.data).toEqual({ heroes: ['Alna', 'Bryn'], maps: ['Arena'] });
+    act(() => result.current.patch((old) => ({ maps: [...old.maps, 'Dream Hunt'] })));
+    expect(result.current.data?.maps).toEqual(['Arena', 'Dream Hunt']);
   });
 });

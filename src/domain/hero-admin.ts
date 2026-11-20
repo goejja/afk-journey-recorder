@@ -72,8 +72,6 @@ export const PvpHintBodySchema = z.object(
   { error: 'A PVP hint needs a tier and a role, or neither' },
 );
 
-export type PvpHintBody = z.output<typeof PvpHintBodySchema>;
-
 /** What a hero's range, energy and mechanic tags are set to (ADR 0037); both lists empty and no range or season removes the row. */
 export const HeroAttributesBodySchema = z.object(
   {
@@ -87,8 +85,6 @@ export const HeroAttributesBodySchema = z.object(
   { error: 'Attributes need a range, energy values, mechanic tags and a season' },
 );
 
-export type HeroAttributesBody = z.output<typeof HeroAttributesBodySchema>;
-
 /** What a Placement Rule is created or changed with (ADR 0036). The hero is the one the rule is listed under, never changed here. */
 export const PlacementRuleBodySchema = z.object(
   {
@@ -100,5 +96,3 @@ export const PlacementRuleBodySchema = z.object(
   },
   { error: 'A rule needs a relation, an effect and whether it is on' },
 );
-
-export type PlacementRuleBody = z.output<typeof PlacementRuleBodySchema>;

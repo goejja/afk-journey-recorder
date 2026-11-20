@@ -10,7 +10,7 @@ export type ArenaMode = (typeof ARENA_MODES)[number];
  * The PvP modes that let one Phantimal join the team. Arena never does. Treasure Rush does: every recorded Treasure Rush fight of the
  * owner's carries one, and no plain Arena fight does (ADR 0029).
  */
-export const PHANTIMAL_MODES: ReadonlySet<string> = new Set(['Supreme Arena', 'Super League', 'Guild Duel', 'Treasure Rush']);
+const PHANTIMAL_MODES: ReadonlySet<string> = new Set(['Supreme Arena', 'Super League', 'Guild Duel', 'Treasure Rush']);
 
 export const modeAllowsPhantimal = (mode: string): boolean => PHANTIMAL_MODES.has(mode);
 

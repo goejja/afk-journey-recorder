@@ -23,6 +23,7 @@ import {
 import { promptFor, type ExtraFiles } from '../../domain/roster-import-prompt.js';
 import { readUnit, unitFeatures } from '../../vision/unit-read.js';
 import type { TileBox } from '../../vision/tile-image.js';
+import { queueSummary, type JobRegistry } from '../agent/job-registry.js';
 import { newAgentSlot, type AgentSlot } from '../agent/agent-slot.js';
 import { loadAgentSettings } from '../agent/agent-settings.js';
 import { ARENA_MODES, type ArenaMode } from '../../domain/arena.js';
@@ -107,7 +108,7 @@ export function rosterImportRoutes(
   db: Database.Database,
   runner: AgentRunner,
   rules: () => HeroStateRules,
-  options: { imagesDir?: string; workDir?: string; slot?: AgentSlot; /** How many pictures are read at once. */ concurrency?: number; /** The most bytes of pictures that may wait at once. */ maxQueuedBytes?: number; /** Keep the pictures of a Battle import on disk while they wait, so that a restart does not lose them. */ persistQueue?: boolean } = {},
+  options: { imagesDir?: string; workDir?: string; slot?: AgentSlot; /** Where the queues say where they stand. */ registry?: JobRegistry; /** How many pictures are read at once. */ concurrency?: number; /** The most bytes of pictures that may wait at once. */ maxQueuedBytes?: number; /** Keep the pictures of a Battle import on disk while they wait, so that a restart does not lose them. */ persistQueue?: boolean } = {},
 ): Hono {
   const app = new Hono();
   const imagesDir = options.imagesDir ?? 'images';
@@ -181,6 +182,11 @@ export function rosterImportRoutes(
 
   /** The pictures of one kind of import: a Roster import's, or with `?kind=report` a Battle import's (they share the queue but not the review). */
   const ofKind = (kind: string | undefined) => jobs.filter((j) => (kind === 'report') === (j.screen === 'report'));
+  options.registry?.register('roster', () => queueSummary(ofKind(undefined)));
+  options.registry?.register('battle', async () => {
+    await restore();
+    return queueSummary(ofKind('report'));
+  });
 
   serve(app, rosterImportContract.state, async (_, c) => {
     const kind = c.req.query('kind');

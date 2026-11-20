@@ -10,7 +10,7 @@ export function loadThinningSettings(db: Database.Database): ThinningSettings {
   return { ...DEFAULT_THINNING_SETTINGS, ...Object.fromEntries(saved.map((s) => [s.kind, s.distance])) };
 }
 
-/** Routes for how alike pictures must be for Thinning: read, save, and go back to the defaults. */
+/** Routes for how alike pictures must be for Thinning: read and save. */
 export function thinningSettingsRoutes(db: Database.Database): Hono {
   const app = new Hono();
   const view = () => ({ ...loadThinningSettings(db), defaults: DEFAULT_THINNING_SETTINGS });
@@ -19,11 +19,6 @@ export function thinningSettingsRoutes(db: Database.Database): Hono {
 
   serve(app, reviewContract.saveThinningSettings, ({ body }) => {
     db.prepare('INSERT INTO thinning_setting (kind, distance) VALUES (?, ?) ON CONFLICT (kind) DO UPDATE SET distance = excluded.distance').run('rank', body.rank);
-    return view();
-  });
-
-  serve(app, reviewContract.resetThinningSettings, () => {
-    db.prepare('DELETE FROM thinning_setting').run();
     return view();
   });
 

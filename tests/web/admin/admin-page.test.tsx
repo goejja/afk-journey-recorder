@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminPage } from '../../../web/admin/AdminPage.js';
+import { ToastProvider } from '../../../web/ui/Toast.js';
 
 let requests: { method: string; url: string; body?: any; headers?: Record<string, string> }[];
 const seasons = [
@@ -67,8 +68,9 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const open = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
-  render(<AdminPage />);
+/** `toasts` provides the toasts, for a tab that says how an action went in one; they are read from the page's status. */
+const open = async (user: ReturnType<typeof userEvent.setup>, name: string, toasts = false) => {
+  render(toasts ? <ToastProvider><AdminPage /></ToastProvider> : <AdminPage />);
   await user.click(screen.getByRole('tab', { name }));
 };
 
@@ -142,7 +144,7 @@ describe('Admin page', () => {
 
   it('renames a tag and removes one after confirming', async () => {
     const user = userEvent.setup();
-    await open(user, 'Tags');
+    await open(user, 'Tags', true);
     await user.click(await screen.findByRole('button', { name: 'Rename' }));
     const field = screen.getByLabelText('New tag name');
     await user.clear(field);
@@ -230,7 +232,7 @@ describe('Admin page, Agent tab', () => {
 
   it('offers the models the tool lists, and saves the chosen agent, model and time limit', async () => {
     const user = userEvent.setup();
-    await open(user, 'Agent');
+    await open(user, 'Agent', true);
     await screen.findByText(/Found at/);
     expect(Array.from(document.querySelectorAll('#agent-models option')).map((o) => o.getAttribute('value'))).toEqual(['opus', 'sonnet', 'haiku']);
 
@@ -249,7 +251,7 @@ describe('Admin page, Agent tab', () => {
     const user = userEvent.setup();
     await open(user, 'Agent');
     await screen.findByText(/Found at/);
-    await user.selectOptions(screen.getByLabelText('Agent'), 'opencode');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'opencode');
     expect((await screen.findByRole('alert')).textContent).toMatch(/opencode was not found on this computer's PATH/);
   });
 

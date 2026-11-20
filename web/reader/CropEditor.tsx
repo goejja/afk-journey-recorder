@@ -11,6 +11,7 @@ import {
   zoomAt,
   type View,
 } from '../../src/domain/image-frame.js';
+import { Notice } from '../ui/Notice.js';
 
 type Source = CanvasImageSource & { width: number; height: number };
 
@@ -113,9 +114,9 @@ export function CropEditor({ file, name, onSave, onCancel, load = loadImage }: P
     <div className="crop-editor" role="dialog" aria-label={`Crop and frame image for ${name}`}>
       <h3>Crop and frame: {name}</h3>
       {error && (
-        <p className="error" role="alert">
+        <Notice kind="error">
           {error}
-        </p>
+        </Notice>
       )}
       <canvas
         ref={canvas}
