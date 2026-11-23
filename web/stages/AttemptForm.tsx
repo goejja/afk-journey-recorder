@@ -158,7 +158,7 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
       const { attempts } = await api.createAttemptRange(range);
       if (!another) return onSaved();
       setError(null);
-      setStatus(`Saved ${attempts.length} attempts, stages ${range.from} to ${range.to}. Change the range for the next clear, or the formation.`);
+      setStatus(`Saved ${attempts.length} records, stages ${range.from} to ${range.to}. Change the range for the next clear, or the formation.`);
       onRecorded?.();
     } catch (e) {
       setStatus(null);
@@ -262,7 +262,7 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
 
   return (
     <RecordShell
-      title={editing ? 'Edit attempt' : 'New attempt'}
+      title={editing ? 'Edit record' : 'New record'}
       identity={identity}
       result={result}
       fields={fields}
@@ -274,7 +274,7 @@ export function AttemptForm({ maps, heroes, artifacts, enemies, phantimals, edit
       formationIds={<FormationIdField value={formation.formationId} onChange={(formationId) => setFormation({ ...formation, formationId })} teams={[{ placed: formation.placed, phantimal: formation.phantimal, artifact: formation.artifact }]} />}
       error={error}
       status={status}
-      saveLabel={editing ? 'Save changes' : 'Save attempt'}
+      saveLabel={editing ? 'Save changes' : 'Save record'}
       onSave={() => void saveAttempt(false)}
       onSaveAnother={editing ? undefined : () => void saveAttempt(true)}
       saveDisabled={!numberValid || !map || formation.placed.length === 0}

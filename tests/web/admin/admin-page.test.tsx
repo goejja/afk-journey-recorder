@@ -7,9 +7,9 @@ import { ToastProvider } from '../../../web/ui/Toast.js';
 
 let requests: { method: string; url: string; body?: any; headers?: Record<string, string> }[];
 const seasons = [
-  { number: 8, current: true, stages: 3, phantimals: 2, records: 0, tournaments: 0 },
-  { number: 7, current: false, stages: 0, phantimals: 1, records: 0, tournaments: 0 },
-  { number: 6, current: false, stages: 0, phantimals: 0, records: 0, tournaments: 0 },
+  { number: 8, current: true, phase: 1, stages: 3, phantimals: 2, records: 0, tournaments: 0 },
+  { number: 7, current: false, phase: 1, stages: 0, phantimals: 1, records: 0, tournaments: 0 },
+  { number: 6, current: false, phase: 1, stages: 0, phantimals: 0, records: 0, tournaments: 0 },
 ];
 const agent = { preset: 'claude', model: 'opus', timeoutMinutes: 10, presets: ['claude', 'opencode'], tools: {} };
 let agentTools: Record<string, unknown>;
@@ -30,8 +30,9 @@ beforeEach(() => {
       const method = init?.method ?? 'GET';
       requests.push({ method, url, body: typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body, headers: init?.headers as Record<string, string> });
       if (url === '/api/seasons' && method === 'GET') return Response.json(seasons);
-      if (url === '/api/seasons' && method === 'POST') return Response.json([{ number: 9, current: false, stages: 0, phantimals: 0, records: 0, tournaments: 0 }, ...seasons], { status: 201 });
+      if (url === '/api/seasons' && method === 'POST') return Response.json([{ number: 9, current: false, phase: 1, stages: 0, phantimals: 0, records: 0, tournaments: 0 }, ...seasons], { status: 201 });
       if (url === '/api/seasons/current' && method === 'PUT') return Response.json(seasons.map((s) => ({ ...s, current: s.number === 7 })));
+      if (url === '/api/seasons/current/phase' && method === 'PUT') return Response.json(seasons);
       if (url === '/api/tags' && method === 'GET') return Response.json([{ tag: 'Luna', count: 3 }]);
       if (url.startsWith('/api/defaults/') && method === 'PUT') return Response.json({ 'Supreme Arena': { slots: JSON.parse(init!.body as string).slots, updatedAt: '2026-10-30 10:00:00' }, 'Super League': { slots: [], updatedAt: null }, 'Guild Duel': { slots: [], updatedAt: null }, 'Dream Hunt': { slots: [], updatedAt: null } });
       if (url === '/api/defaults' && method === 'GET') return Response.json({ 'Supreme Arena': { slots: [], updatedAt: null }, 'Super League': { slots: [], updatedAt: null }, 'Guild Duel': { slots: [], updatedAt: null }, 'Dream Hunt': { slots: [], updatedAt: null } });
@@ -77,7 +78,7 @@ const open = async (user: ReturnType<typeof userEvent.setup>, name: string, toas
 describe('Admin page', () => {
   it('groups the upkeep sections', () => {
     render(<AdminPage />);
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['General', 'Weekly default', 'Maps', 'Units', 'Artifacts', 'Images', 'Reader', 'Review', 'Database', 'Tags', 'Formation IDs', 'Rules', 'Agent']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['General', 'Weekly default', 'Units', 'Artifacts', 'Maps', 'Images', 'Tags', 'Formation IDs', 'Rules', 'Database', 'Agent', 'Reader', 'Review']);
   });
 
   it('opens on General, lists the seasons, and protects the current one and the ones in use', async () => {
@@ -132,6 +133,15 @@ describe('Admin page', () => {
     const seven = (await screen.findAllByRole('listitem')).find((i) => i.textContent?.includes('Season 7'))!;
     await user.click(within(seven).getByRole('button', { name: 'Make current' }));
     await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/seasons/current')?.body).toEqual({ number: 7 }));
+  });
+
+  it('sets the Season Phase of the current season', async () => {
+    const user = userEvent.setup();
+    render(<AdminPage />);
+    const current = (await screen.findAllByRole('listitem')).find((i) => i.textContent?.includes('Season 8'))!;
+    await user.selectOptions(within(current).getByLabelText('Season Phase'), '3');
+    await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/seasons/current/phase')?.body).toEqual({ phase: 3 }));
+    expect(screen.getAllByLabelText('Season Phase')).toHaveLength(1); // the other seasons have no selector
   });
 
   it('manages rules', async () => {

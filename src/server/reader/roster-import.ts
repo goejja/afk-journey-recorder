@@ -37,7 +37,7 @@ import { imageType } from '../image-type.js';
 import { removeFiles, saveImage } from './saved-image.js';
 import { learnedPicturesRoot } from './learned-pictures.js';
 import { MAX_PROFILE_NAME_LENGTH } from '../../domain/profile.js';
-import { draftOf } from '../records/battle-draft.js';
+import { draftOf } from '../records/fight-draft.js';
 import type { AgentRunner } from '../agent/scenario-run.js';
 import { hasName, heroNames as allHeroNames } from '../db-helpers.js';
 import { rosterImportContract } from '../../shared/contracts/roster-import.js';

@@ -41,7 +41,7 @@ export function BackCheckList() {
       </p>
       {data.rows.length > shown.length && <p className="muted">Showing the newest {shown.length} of {data.rows.length} rows.</p>}
       {left}
-      <table className="board" aria-label="Placement check">
+      <table className="data-table" aria-label="Placement check">
         <thead>
           <tr>
             <th>Battle</th>

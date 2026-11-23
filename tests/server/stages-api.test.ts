@@ -17,7 +17,7 @@ beforeEach(() => {
   db.prepare('INSERT INTO equipment_level (level) VALUES (10)').run();
   for (const name of ['A', 'B', 'C', 'D', 'E', 'F']) db.prepare('INSERT INTO hero (name) VALUES (?)').run(name);
   for (const name of ['A', 'B', 'C']) db.prepare("INSERT INTO roster (hero_name, rank, equipment_level) VALUES (?, 'Mythic+', 10)").run(name);
-  db.prepare("INSERT INTO enemy (name, category) VALUES ('Grunt', 'Common')").run();
+  db.prepare("INSERT INTO enemy (name, kind) VALUES ('Grunt', 'Common')").run();
   db.prepare("INSERT INTO artifact (name, grp) VALUES ('Bladestorm', 'Season 8')").run();
   db.prepare("INSERT INTO phantimal (name) VALUES ('Gervan'), ('Aurelian')").run();
   db.prepare("INSERT INTO phantimal_season VALUES ('Gervan', 8), ('Aurelian', 7)").run();
@@ -181,7 +181,7 @@ describe('attempts', () => {
 
   it('serves the artifact and enemy lists', async () => {
     expect(await json(send('GET', '/api/artifacts'))).toEqual([{ name: 'Bladestorm', group: 'Season 8', source: 'import', uses: 0 }]);
-    expect((await json(send('GET', '/api/enemies')))[0]).toMatchObject({ name: 'Grunt', category: 'Common', uses: 0 });
+    expect((await json(send('GET', '/api/enemies')))[0]).toMatchObject({ name: 'Grunt', kind: 'Common', uses: 0 });
   });
 
   it('counts on how many stages each enemy stands', async () => {

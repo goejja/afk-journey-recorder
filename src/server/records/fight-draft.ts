@@ -3,7 +3,7 @@ import type { ArenaMode } from '../../domain/arena.js';
 import { allowedEquipmentLevels, type HeroStateRules } from '../../domain/hero-state.js';
 import { matchProfile, matchSeenName, type SeenName } from '../../domain/name-match.js';
 import type { ImportPlayer, ParsedFight, TileReading } from '../../domain/roster-import.js';
-import type { BattleDraft, BattleDraftSide, DraftHero } from '../../shared/api.js';
+import type { FightDraft, FightDraftSide, DraftHero } from '../../shared/api.js';
 
 /** The rank of a tile when the picture is sure of it: the rank reader's, else the Agent's when it said it was sure. */
 function sureRank(tile: TileReading): string | null {
@@ -11,7 +11,7 @@ function sureRank(tile: TileReading): string | null {
   return tile.rank !== null && tile.rankConfident ? tile.rank : null;
 }
 
-function sideOf(db: Database.Database, player: ImportPlayer | undefined, rules: HeroStateRules): BattleDraftSide {
+function sideOf(db: Database.Database, player: ImportPlayer | undefined, rules: HeroStateRules): FightDraftSide {
   const profiles = db.prepare('SELECT id, name, player_id AS playerId FROM profile').all() as { id: number; name: string; playerId: string | null }[];
   // A spelling resolved to a Profile before wins (ADR 0021): a name matched once, or corrected once, is not asked again.
   const seen = db.prepare('SELECT folded, profile_id AS profileId FROM profile_name').all() as SeenName[];
@@ -55,7 +55,7 @@ function duplicateOf(db: Database.Database, mode: ArenaMode, a: string[], b: str
   return null;
 }
 
-export function draftOf(db: Database.Database, rules: HeroStateRules, mode: ArenaMode, players: ImportPlayer[], fight: ParsedFight | null): BattleDraft {
+export function draftOf(db: Database.Database, rules: HeroStateRules, mode: ArenaMode, players: ImportPlayer[], fight: ParsedFight | null): FightDraft {
   const sideA = sideOf(db, players[0], rules);
   const sideB = sideOf(db, players[1], rules);
   const outcome = fight?.allyWon == null ? null : fight.allyWon ? 'Win' : 'Loss';

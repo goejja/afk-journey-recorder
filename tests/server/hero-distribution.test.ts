@@ -25,7 +25,7 @@ const send = (method: string, url: string, body?: unknown) =>
 const json = async (response: Response | Promise<Response>) => (await response).json() as Promise<any>;
 /** One fight with hero A on Side A (in the state given) and hero X on Side B. */
 const fight = (extra: Record<string, unknown>, a: { rank?: string; equipmentLevel?: number } = {}, x: { rank?: string; equipmentLevel?: number } = {}, mode = 'Arena') =>
-  send('POST', '/api/pvp/battles', {
+  send('POST', '/api/pvp/fights', {
     mode, mapName: 'Open', outcome: 'Win',
     formation: { heroes: [{ tile: 38, hero: 'A', ...a }], phantimal: null, assistHero: null, artifact: null},
     opponent: { heroes: [{ tile: 0, hero: 'X', ...x }] },
@@ -78,7 +78,7 @@ describe('searching the battles by Player', () => {
     await fight({ playerIdA: '111' });
     await fight({ playerIdB: '987654' });
     await fight({});
-    const ids = async (player: string) => (await json(send('GET', `/api/pvp/battles?player=${player}`))).length;
+    const ids = async (player: string) => (await json(send('GET', `/api/pvp/fights?player=${player}`))).length;
     expect(await ids('111')).toBe(1);
     expect(await ids('lun')).toBe(1); // the Profile's name, found through its Player ID
     expect(await ids('9876')).toBe(1);

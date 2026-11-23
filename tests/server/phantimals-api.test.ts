@@ -92,7 +92,7 @@ describe('phantimals API', () => {
       expect(refused.status).toBe(409);
       expect(((await refused.json()) as { error: string }).error).toMatch(/1 records/);
       expect((await put({ name: 'Used', faction: 'Wilder', seasons: [] })).status).toBe(200);
-      expect(await (await used.request('/api/phantimals/Used/usage')).json()).toEqual({ records: 1, deployments: 0, onBoard: 1 });
+      expect(await (await used.request('/api/phantimals/Used/usage')).json()).toEqual({ records: 1, deployments: 0, placements: 1 });
     });
   });
 });

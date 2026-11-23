@@ -10,11 +10,11 @@ interface Props {
   onDragEnemy?: (name: string | null) => void;
 }
 
-const CATEGORIES: Enemy['category'][] = ['Boss', 'Elite', 'Common'];
+const KINDS: Enemy['kind'][] = ['Boss', 'Elite', 'Common'];
 const MOST_USED = 8;
 
 const describe = (e: Enemy) =>
-  [e.name, e.category, e.class, e.damageType, e.uses > 0 ? `on ${e.uses} stage${e.uses === 1 ? '' : 's'}` : undefined].filter(Boolean).join(' · ');
+  [e.name, e.kind, e.class, e.damageType, e.uses > 0 ? `on ${e.uses} stage${e.uses === 1 ? '' : 's'}` : undefined].filter(Boolean).join(' · ');
 
 /**
  * Enemies as compact name chips: the ones used on the most stages first, then the rest grouped as
@@ -51,14 +51,14 @@ export function EnemyPicker({ enemies, selected, onPick, onDragEnemy }: Props) {
         </>
       )}
       <div className="chip-groups">
-        {CATEGORIES.map((category) => {
-          const members = matching.filter((e) => e.category === category).sort((a, b) => a.name.localeCompare(b.name));
+        {KINDS.map((kind) => {
+          const members = matching.filter((e) => e.kind === kind).sort((a, b) => a.name.localeCompare(b.name));
           return members.length === 0 ? null : (
-            <section key={category}>
+            <section key={kind}>
               <h4>
-                {category} <span className="muted">{members.length}</span>
+                {kind} <span className="muted">{members.length}</span>
               </h4>
-              <ul className="enemy-chips" aria-label={`${category} enemies`}>
+              <ul className="enemy-chips" aria-label={`${kind} enemies`}>
                 {members.map(chip)}
               </ul>
             </section>

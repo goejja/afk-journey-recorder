@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useAction } from '../hooks/action.js';
 import { joinNotices, stepAfterSave } from '../hooks/saved.js';
 import { ARTIFACT_ONCE_MODES, heroesAlreadyUsed, TEAMS_PER_MODE } from '../../src/domain/arena.js';
-import { api, type ArenaBattle, type ArenaMode } from '../backend.js';
-import { SideProfileBar } from './BattleEditor.js';
+import { api, type ArenaFight, type ArenaMode } from '../backend.js';
+import { SideProfileBar } from './FightTeamsEditor.js';
 import { useSideProfiles } from './useSideProfiles.js';
 import { useRoundDeployments } from './useRoundDeployments.js';
 import { formationBorrow } from './borrow.js';
@@ -20,10 +20,10 @@ import { useConfirm, useNameDialog } from '../ui/Dialog.js';
 import { FormationIdField } from '../FormationIdField.js';
 import { useLoad } from '../hooks/load.js';
 import { type PatchReference, type Reference, type Draft, onMap, newDraft, weekly, withDefault, sharedTags, toInput, type Clone, profileByPlayerId, type Side } from './draft.js';
-import { ArenaIdentity, WinnerField, Board, FightFormationIds, UnionLevels } from './BoardParts.js';
+import { ArenaIdentity, WinnerField, FightEditor, FightFormationIds, UnionLevels } from './FightParts.js';
 
 /** Sets up one team per slot of the mode, greying out heroes the other teams use, then saves each as its own record. */
-export function NewBattles({ reference, patchReference, initial, editing, savedRound, onSaved, onRecorded, onCancel, cancelLabel }: { reference: Reference; patchReference: PatchReference; initial?: Clone | null; /** The id of a saved battle that `initial` holds, to edit it as a whole. */ editing?: number | null; /** The Tournament and Round a saved Super League battle has now, to let the player move it to another Round. */ savedRound?: { tournamentId: number; round: Round } | null; onSaved: (notice?: string | null) => void; onRecorded: () => void; onCancel: () => void; /** What the cancel button says, when it leads back to the import. */ cancelLabel?: string }) {
+export function NewFights({ reference, patchReference, initial, editing, savedRound, onSaved, onRecorded, onCancel, cancelLabel }: { reference: Reference; patchReference: PatchReference; initial?: Clone | null; /** The id of a saved battle that `initial` holds, to edit it as a whole. */ editing?: number | null; /** The Tournament and Round a saved Super League battle has now, to let the player move it to another Round. */ savedRound?: { tournamentId: number; round: Round } | null; onSaved: (notice?: string | null) => void; onRecorded: () => void; onCancel: () => void; /** What the cancel button says, when it leads back to the import. */ cancelLabel?: string }) {
   const [mode, setMode] = useState<ArenaMode>(initial?.mode ?? 'Arena');
   const [editedRound, setEditedRound] = useState<Round | null>(savedRound?.round ?? null);
   const [drafts, setDrafts] = useState<Draft[]>(() => initial?.drafts ?? [newDraft(reference)]);
@@ -59,8 +59,8 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
   });
   const sync = useRosterSync();
   // The saved fights of the mode, whose placements the "Place … as in saved fights" button offers; a saved battle being edited does not get them.
-  const loadedFights = useLoad(() => api.arenaBattles({ mode: [mode], limit: '1000' }), [mode, editing], editing == null);
-  const savedFights: ArenaBattle[] = Array.isArray(loadedFights.data) ? loadedFights.data : [];
+  const loadedFights = useLoad(() => api.arenaFights({ mode: [mode], limit: '1000' }), [mode, editing], editing == null);
+  const savedFights: ArenaFight[] = Array.isArray(loadedFights.data) ? loadedFights.data : [];
   // What a click replaced, per side and team, to undo it while the side is as the click left it.
   const [replaced, setReplaced] = useState<Record<Side, { team: number; before: Draft['formation'] | Draft['opponent']; after: Draft['formation'] | Draft['opponent'] }[]>>({ A: [], B: [] });
 
@@ -148,7 +148,7 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
         patchReference({ defaults });
         setError(null);
       },
-      `Saved as this week’s ${mode} default: new battles start with these maps${mode === 'Supreme Arena' ? ' and rules' : ''}.`,
+      `Saved as this week’s ${mode} default: new records start with these maps${mode === 'Supreme Arena' ? ' and rules' : ''}.`,
     );
     if (!saved) setStatus(null);
   }
@@ -176,9 +176,9 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
       // The teams of a Supreme Arena, Super League or Guild Duel battle are saved together, as one battle, or not at all.
       const codes = { formationId: formationIds.a, opponentFormationId: formationIds.b };
       let savedIds: number[] = [];
-      if (editing != null) await api.updateArenaBattleGroup(editing, filled.map(({ d, index }) => ({ ...toInput(mode, d), position: index + 1 })), codes, savedRound && editedRound ? { tournamentId: savedRound.tournamentId, round: editedRound } : undefined);
-      else if (TEAMS_PER_MODE[mode] > 1) savedIds = (await api.createArenaBattleGroup(mode, filled.map(({ d, index }) => ({ ...toInput(mode, d), position: index + 1 })), codes, initial?.round ? { tournamentId: initial.round.tournamentId, round: initial.round.round } : undefined)).fights.map((f) => f.id);
-      else savedIds = [(await api.createArenaBattle(toInput(mode, filled[0]!.d))).id];
+      if (editing != null) await api.updateArenaBattle(editing, filled.map(({ d, index }) => ({ ...toInput(mode, d), position: index + 1 })), codes, savedRound && editedRound ? { tournamentId: savedRound.tournamentId, round: editedRound } : undefined);
+      else if (TEAMS_PER_MODE[mode] > 1) savedIds = (await api.createArenaBattle(mode, filled.map(({ d, index }) => ({ ...toInput(mode, d), position: index + 1 })), codes, initial?.round ? { tournamentId: initial.round.tournamentId, round: initial.round.round } : undefined)).fights.map((f) => f.id);
+      else savedIds = [(await api.createArenaFight(toInput(mode, filled[0]!.d))).id];
       // The tiles of the teams just saved go to the Round Deployment teams that have none yet (ADR 0020).
       const left: (string | null)[] = [];
       if (initial?.round && editing == null) left.push(await stepAfterSave(() => fillTiles(filled), 'The Round Deployment could not be given the tiles'));
@@ -201,7 +201,7 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
     // Everything stays, so the same teams can be tried again with only the winner changed.
     setDrafts((old) => old.map(({ imported: _sent, ...d }) => ({ ...d, outcome: 'Win' as const })));
     setError(null);
-    setStatus(`${TEAMS_PER_MODE[mode] > 1 ? `Saved ${filled.length} ${filled.length === 1 ? 'team' : 'teams'} as one battle` : 'Saved 1 battle'}. The teams are still here: set the winner and save again.${notice ? ` ${notice}` : ''}`);
+    setStatus(`${TEAMS_PER_MODE[mode] > 1 ? `Saved ${filled.length} ${filled.length === 1 ? 'team' : 'teams'} as one record` : 'Saved 1 record'}. The teams are still here: set the winner and save again.${notice ? ` ${notice}` : ''}`);
     onRecorded();
   }
 
@@ -209,7 +209,7 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
     <>
     {sync.dialog}
     <RecordShell
-      title={editing != null ? `Edit ${mode} battle` : 'New battles'}
+      title={editing != null ? `Edit ${mode} record` : 'New record'}
       onSetDefault={weekly(mode) === null || editing != null ? undefined : () => void setDefault()}
       identity={<ArenaIdentity mode={mode} onMode={editing != null ? undefined : changeMode} draft={draft} reference={reference} onChange={change} />}
       result={<WinnerField draft={draft} onChange={change} />}
@@ -276,14 +276,14 @@ export function NewBattles({ reference, patchReference, initial, editing, savedR
       }}
       error={error ?? formAction.error}
       status={status}
-      saveLabel={editing != null ? 'Save changes' : `Save ${drafts.length > 1 ? 'battles' : 'battle'}`}
+      saveLabel={editing != null ? 'Save changes' : `Save ${drafts.length > 1 ? 'records' : 'record'}`}
       onSave={() => void save(false)}
       onSaveAnother={editing != null ? undefined : () => void save(true)}
       saving={saving.busy}
       onCancel={onCancel}
       cancelLabel={cancelLabel}
     >
-      <Board key={current} draft={draft} mode={mode} reference={reference} unavailable={unavailable} borrow={borrow} sideRosters={profileRoster} onChange={change} />
+      <FightEditor key={current} draft={draft} mode={mode} reference={reference} unavailable={unavailable} borrow={borrow} sideRosters={profileRoster} onChange={change} />
       {nameDialog}
       {saveDialog}
     </RecordShell>

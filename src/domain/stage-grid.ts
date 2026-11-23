@@ -79,9 +79,6 @@ export function buildLane(kind: StageKind, phase: number, boxes: GridBox[]): Lan
   };
 }
 
-/** The phase the page opens on: the highest with a record of the current season, else the first. */
-export const defaultPhase = (boxes: GridBox[]): number => Math.max(1, ...boxes.filter((b) => b.state === 'cleared').map(phaseOf));
-
 /**
  * Whether a lane is open when the page opens. A standard lane is open until its last box is cleared this season. An Apex lane is
  * closed until it has a record of the current season of its own, or both standard lanes of its phase are complete.

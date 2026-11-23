@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
-import type { BattleDraft, BattleImportPicture } from '../../../web/backend.js';
+import type { FightDraft, FightImportPicture } from '../../../web/backend.js';
 import { ArenaPage } from '../../../web/arena/ArenaPage.js';
 import { feedbackOf, fightCoverage, groupPictures, keptOwn, knownPlacementOpponent, knownPlacementOwn, misfitsMap, placeOpponent, placeOwn, reusedSide, savedPlacements, unplacedUnit } from '../../../web/reader/battle-import.js';
 import { draftSide } from '../../support/draft-side.js';
@@ -12,7 +12,7 @@ const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY :
 const hero = (name: string) => ({ name, tier: 'S', class: 'Mage', faction: 'Wilder', damageType: 'Magic', imagePath: null, owned: true, rank: 'Mythic+', equipmentLevel: 10 });
 const heroes = (...names: string[]) => names.map((hero, i) => ({ tile: `${hero}-${i}`, hero, rank: null as string | null, equipmentLevel: null as number | null }));
 
-const draft = (over: Partial<BattleDraft> = {}): BattleDraft => ({
+const draft = (over: Partial<FightDraft> = {}): FightDraft => ({
   mode: 'Guild Duel',
   number: 1,
   outcome: 'Win',
@@ -23,7 +23,7 @@ const draft = (over: Partial<BattleDraft> = {}): BattleDraft => ({
   duplicateOf: null,
   ...over,
 });
-const picture = (id: number, over: Partial<BattleDraft> = {}): BattleImportPicture => ({ id, label: `IMG_${id}.jpeg`, state: 'done', draft: draft(over) });
+const picture = (id: number, over: Partial<FightDraft> = {}): FightImportPicture => ({ id, label: `IMG_${id}.jpeg`, state: 'done', draft: draft(over) });
 
 describe('groupPictures', () => {
   it('keeps each picture of a mode with one fight a battle (Treasure Rush) in a battle of its own', () => {
@@ -102,7 +102,7 @@ describe('Battle import in the Arena page', () => {
         if (url === '/api/defaults') return Response.json({ 'Supreme Arena': { slots: [], updatedAt: null }, 'Super League': { slots: [], updatedAt: null }, 'Guild Duel': { slots: [], updatedAt: null }, 'Dream Hunt': { slots: [], updatedAt: null } });
         if (url === '/api/boss-rules') return Response.json([]);
         if (url === '/api/reference') return Response.json({ ranks: ['Elite', 'Mythic+'], equipmentLevels: [0, 10], caps: [{ rank: 'Mythic+', minLevel: 0, maxLevel: 10 }] });
-        if (url.startsWith('/api/pvp/battles') && method === 'GET') return Response.json([]);
+        if (url.startsWith('/api/pvp/fights') && method === 'GET') return Response.json([]);
         if (url === '/api/roster-import?kind=report') return Response.json({ canRead: true, reason: null, busy: false, queue });
         if (url.startsWith('/api/roster-import?ids=') && method === 'DELETE') return new Response(null, { status: 204 });
         return Response.json({}, { status: 404 });
@@ -167,7 +167,7 @@ describe('Battle import in the Arena page', () => {
     render(<ArenaPage />);
     await user.click(await screen.findByRole('button', { name: 'Import from pictures' }));
     await screen.findByRole('group', { name: 'Battle 1' });
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/battles') && url.includes('limit=1000') ? Response.json({ error: 'Network down' }, { status: 500 }) : stubbed(url, init))));
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/fights') && url.includes('limit=1000') ? Response.json({ error: 'Network down' }, { status: 500 }) : stubbed(url, init))));
     await user.click(screen.getByRole('button', { name: 'Open in the form' }));
     expect((await screen.findByRole('alert')).textContent).toBe('The saved Guild Duel battles could not be read: Network down');
     expect(screen.queryByLabelText('Profile of Side B')).toBeNull(); // the form did not open
@@ -313,7 +313,7 @@ describe('placing a known player as in a saved fight', () => {
     expect(reusedSide(savedPlacements([fight(1)], 'Super League', 2, 'B'), picked, { artifact: null, phantimal: null }, cells, TILE.ENEMY, null, null)).toBeNull();
   });
 
-  it('places a player as in a saved fight where they stood on the other side, the board turned upside down', () => {
+  it('places a player as in a saved fight where they stood on the other side, the map turned upside down', () => {
     const asSideA = fight(1, {
       playerIdA: '2222', playerIdB: '1111',
       formation: { heroes: [{ tile: 41, name: 'Zed', rank: 'Mythic', equipmentLevel: 5 }, { tile: 44, name: 'Evie', rank: null, equipmentLevel: null }], phantimal: { name: 'Orson', tile: 40 }, assist: null, artifact: 'Awakening'},
@@ -404,7 +404,7 @@ describe('offering the placement of a saved fight once the heroes are fixed', ()
     expect(knownPlacementOpponent([fight(1)], 'Super League', 3, '2222', current, cells)).toBeNull();
   });
 
-  it('finds a side that stood on the other side of the board, turned over, and falls back to other Players', () => {
+  it('finds a side that stood on the other side of the map, turned over, and falls back to other Players', () => {
     const own = { ...fight(1).opponent, heroes: [{ tile: 41, name: 'Zed', rank: null, equipmentLevel: null }, { tile: 44, name: 'Evie', rank: null, equipmentLevel: null }], phantimal: { name: 'Orson', tile: 40 } };
     const asSideA = fight(1, { formation: own, opponent: fight(1).formation, playerIdA: '2222', playerIdB: '1111' });
     const current = placeOpponent(cells, heroes('Zed', 'Evie'), { artifact: null, phantimal: 'Orson' });

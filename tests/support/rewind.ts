@@ -13,6 +13,9 @@ export function dropObjectsOfMigrationsFrom26(db: Database.Database): void {
     DROP TABLE parked_reading;
     DROP TABLE hero_back_mark;
     ALTER TABLE map DROP COLUMN boost_tiles;
+    ALTER TABLE season DROP COLUMN phase;
+    ALTER TABLE hero DROP COLUMN hand_made;
+    ALTER TABLE boss DROP COLUMN hand_made;
     DROP INDEX formation_by_attempt;
     DROP INDEX formation_by_formation_id;
     DROP INDEX arena_attempt_by_opp_formation_id;

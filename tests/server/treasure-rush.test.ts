@@ -34,21 +34,21 @@ const fight = (mapName: string, mode = 'Treasure Rush') => ({
 
 describe('Treasure Rush fights', () => {
   it('are one fight on Arena I, listed as their own mode', async () => {
-    const saved = await send('POST', '/api/pvp/battles', fight('Arena I'));
+    const saved = await send('POST', '/api/pvp/fights', fight('Arena I'));
     expect(saved.status).toBe(201);
     expect(await saved.json()).toMatchObject({ mode: 'Treasure Rush', mapName: 'Arena I' });
     expect(db.prepare("SELECT count(*) FROM v_side WHERE mode = 'Treasure Rush'").pluck().get()).toBe(2);
   });
 
   it('refuse any other map', async () => {
-    const refused = await send('POST', '/api/pvp/battles', fight('Arena II'));
+    const refused = await send('POST', '/api/pvp/fights', fight('Arena II'));
     expect(refused.status).toBe(400);
     expect(await refused.json()).toEqual({ error: 'Treasure Rush is fought on Arena I only' });
-    expect((await send('POST', '/api/pvp/battles', fight('Arena II', 'Arena'))).status).toBe(201); // the other modes are not locked
+    expect((await send('POST', '/api/pvp/fights', fight('Arena II', 'Arena'))).status).toBe(201); // the other modes are not locked
   });
 
   it('have no battle of several teams', async () => {
-    expect((await send('POST', '/api/pvp/battle-groups', { mode: 'Treasure Rush', fights: [fight('Arena I')] })).status).toBe(400);
+    expect((await send('POST', '/api/pvp/battles', { mode: 'Treasure Rush', fights: [fight('Arena I')] })).status).toBe(400);
   });
 
   it('can be planned as a scenario on Arena I only', async () => {

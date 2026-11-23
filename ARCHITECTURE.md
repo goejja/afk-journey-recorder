@@ -16,7 +16,7 @@ AFK Journey Recorder is a local web app. A Hono API and a SQLite file run on you
 |---|---|---|
 | `src/domain` | Pure rules and types: maps and tiles, layouts and deployments, units (a hero's parts and summons), formation checks, statistics maths, name matching. No database, no HTTP. | itself, `zod` |
 | `src/db` | `schema.sql` (the baseline), `views.sql`, one numbered file per migration in `migrations/`, and small queries on the stored data. | `src/domain` |
-| `src/import` | Importers of reference data (heroes, bosses, boards, artifacts) and the storing of pictures. | `src/domain`, `src/vision` |
+| `src/import` | Importers of reference data (heroes, bosses, maps, artifacts) and the storing of pictures. | `src/domain`, `src/vision` |
 | `src/vision` | Local readers of a picture's tiles: which hero, which rank, how many stars. | `src/domain` |
 | `src/query` | Read-only questions of the history, grouped by topic (filters, hero statistics, formations, players, stages, scenarios). | `src/db`, `src/domain`, `src/shared` |
 | `src/server` | The HTTP API, grouped by feature: `records` (battles and fights), `reference` (heroes, maps, seasons, profiles), `reader` (picture import and what the readers learnt), `review`, `stats`, `agent`. | all of the above |
@@ -54,13 +54,15 @@ Every route is described once, in `src/shared/contracts/<topic>.ts`, with `endpo
 
 The web app builds its Pages from shared pieces: `web/ui/` (components such as `Tabs`, `Dialog`, `Notice`, `Icon`, `Toast`), `web/hooks/` (`useLoad`, `useAction`, `useConfirmActions`), `web/records/` (the shared record lists of Arena and Dream Hunt) and `web/jobs/` (the job watcher). [docs/ui-conventions.md](./docs/ui-conventions.md) says when to use each and lists them.
 
-A page address can name a record: `#stages?record=12`, `#dreamHunt?record=12` or `#arena?record=12` opens that record's edit form (the Stages page keeps the rest of its state in the same query, `web/stages/page-state.ts`). `recordLink` in `src/domain/record-link.ts` makes the address from a record's mode (Stage to Stages, Dream Hunt to Dream Hunt, every other mode to PvP), and `useLinkedRecord` in `web/records/linked-record.ts` reads it once when the page opens, asks for that one record by its id (`GET /api/attempts/:id`, `/api/dream-hunt/attempts/:id` or `/api/pvp/battles/:id`, so its age does not matter) and takes `record` out of the address when the form closes. The Phantimal check and the Reader review link their records this way.
+The Events page (`web/events/`) has one tab for each game event; its Titan Reaver tab (`web/events/titan-reaver/`) holds the views of the event: This event (`ThisEvent.tsx`, the best runs of each Titan Reaver Phase, grouped in the browser by `groupBattles` in `src/domain/titan-reaver.ts` as Dream Hunt groups its days) Best teams (`BestTeams.tsx`, the teams against each boss at one team level, ranked by `bestTeams` in the same domain file) and Records, built from the same pieces as Dream Hunt (`RecordShell`, `FormationEditor`, `FormationIdField`, `useRecordList`). Its records are separate from the attempts (`src/server/records/titan-reaver.ts`, routes under `/api/titan-reaver/battles`).
+
+A page address can name a record: `#stages?record=12`, `#dreamHunt?record=12` or `#arena?record=12` opens that record's edit form (the Stages page keeps the rest of its state in the same query, `web/stages/page-state.ts`). `recordLink` in `src/domain/record-link.ts` makes the address from a record's mode (Stage to Stages, Dream Hunt to Dream Hunt, every other mode to PvP), and `useLinkedRecord` in `web/records/linked-record.ts` reads it once when the page opens, asks for that one record by its id (`GET /api/attempts/:id`, `/api/dream-hunt/attempts/:id` or `/api/pvp/fights/:id`, so its age does not matter) and takes `record` out of the address when the form closes. The Phantimal check and the Reader review link their records this way.
 
 Background work has one answer: `GET /api/jobs` (`src/server/agent/job-registry.ts`). Each kind of work (scenario runs, the Review explanation, the two picture queues) registers in a `JobRegistry`, and the Agent is started in the background only through `startAgentJob` (`src/server/agent/agent-job.ts`). The same summary is pushed as Server-Sent Events from `GET /api/jobs/stream` whenever it changes (ADR 0042). The web app listens in one place, `JobsProvider`, and Pages read from it.
 
 ## The Advisor
 
-Everything that estimates a chance or proposes a team (the Win Score, the generated formation, the Counter Advisor and the Dream Hunt plans) is the Advisor. It lives in three directories:
+Everything that estimates a chance or proposes a team (the Win Score, the generated formation, the Counter Advisor, the Dream Hunt plans and the Titan Reaver plans) is the Advisor. It lives in three directories:
 
 - `src/advisor`: the queries, rules, routes and CLI commands;
 - `web/advisor`: the screens;

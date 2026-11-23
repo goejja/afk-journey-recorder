@@ -36,17 +36,17 @@ const battle = (mine: string[], extra: object = {}) => ({
 
 describe('arena battles', () => {
   it('reads one fight by its id, whatever its age, and says when it is gone', async () => {
-    const saved = await json(send('POST', '/api/pvp/battles', battle(['A', 'B'], { mode: 'Guild Duel' })));
-    await json(send('POST', '/api/pvp/battles', battle(['C'])));
-    expect(await json(send('GET', `/api/pvp/battles/${saved.id}`))).toMatchObject({ id: saved.id, mode: 'Guild Duel' });
-    const gone = await send('GET', '/api/pvp/battles/9999');
+    const saved = await json(send('POST', '/api/pvp/fights', battle(['A', 'B'], { mode: 'Guild Duel' })));
+    await json(send('POST', '/api/pvp/fights', battle(['C'])));
+    expect(await json(send('GET', `/api/pvp/fights/${saved.id}`))).toMatchObject({ id: saved.id, mode: 'Guild Duel' });
+    const gone = await send('GET', '/api/pvp/fights/9999');
     expect(gone.status).toBe(404);
     expect((await gone.json()).error).toBe('Record 9999 no longer exists');
-    expect((await send('GET', '/api/pvp/battles/abc')).status).toBe(404);
+    expect((await send('GET', '/api/pvp/fights/abc')).status).toBe(404);
   });
 
   it('records a standalone battle with an opponent whose rank and artifact are unknown', async () => {
-    const response = await send('POST', '/api/pvp/battles', battle(['A', 'B'], { mode: 'Supreme Arena', rule: 'Berserk' }));
+    const response = await send('POST', '/api/pvp/fights', battle(['A', 'B'], { mode: 'Supreme Arena', rule: 'Berserk' }));
     expect(response.status).toBe(201);
     const saved = await response.json();
     expect(saved).toMatchObject({ mode: 'Supreme Arena', mapName: 'Duel', rule: 'Berserk', outcome: 'Win', opponent: { heroes: [{ tile: 0, name: 'H', rank: null }] } });
@@ -57,7 +57,7 @@ describe('arena battles', () => {
     const body = battle(['H']);
     body.formation.heroes[0] = { tile: 38, hero: 'H', rank: 'Mythic+', equipmentLevel: null } as never;
     body.opponent = { heroes: [{ tile: 0, hero: 'A' }] } as never; // A is in the roster, which does not matter here
-    const saved = await json(send('POST', '/api/pvp/battles', body));
+    const saved = await json(send('POST', '/api/pvp/fights', body));
     expect(saved.formation.heroes).toEqual([{ tile: 38, name: 'H', part: '', rank: 'Mythic+', equipmentLevel: null }]);
   });
 
@@ -67,7 +67,7 @@ describe('arena battles', () => {
     const body = battle(['A', 'B', 'C'], { mode: 'Supreme Arena' });
     body.formation.phantimal = { tile: 41, name: 'Gervan' } as never;
     (body.opponent as any) = { heroes: [{ tile: 2, hero: 'A' }, { tile: 3, hero: 'B' }, { tile: 4, hero: 'C' }], phantimal: { tile: 1, name: 'Gervan' } };
-    const response = await send('POST', '/api/pvp/battles', body);
+    const response = await send('POST', '/api/pvp/fights', body);
     expect(response.status).toBe(201);
     const saved = await response.json();
     expect(saved.formation.phantimal).toEqual({ name: 'Gervan', tile: 41 });
@@ -79,7 +79,7 @@ describe('arena battles', () => {
     db.prepare("UPDATE hero SET faction = 'Wilder' WHERE name IN ('A', 'B')").run();
     const body = battle(['A', 'B'], { mode: 'Supreme Arena' });
     body.formation.phantimal = { tile: 41, name: 'Gervan' } as never;
-    const response = await send('POST', '/api/pvp/battles', body);
+    const response = await send('POST', '/api/pvp/fights', body);
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'Gervan needs 3 Lightbearer heroes; this team has 0' });
   });
@@ -89,11 +89,11 @@ describe('arena battles', () => {
     db.prepare("UPDATE hero SET faction = 'Lightbearer' WHERE name IN ('A', 'B', 'C')").run();
     const arena = battle(['A', 'B', 'C'], { mode: 'Arena' });
     arena.formation.phantimal = { tile: 41, name: 'Gervan' } as never;
-    expect((await send('POST', '/api/pvp/battles', arena)).status).toBe(400);
+    expect((await send('POST', '/api/pvp/fights', arena)).status).toBe(400);
     const treasure = battle(['A', 'B', 'C'], { mode: 'Treasure Rush', mapName: 'Arena I' });
     treasure.formation.phantimal = { tile: 41, name: 'Gervan' } as never;
     db.prepare("INSERT OR IGNORE INTO map (name, tags, row_lengths, cells, source) VALUES ('Arena I', '[\"Arena\"]', '[2,5,6,6,7,6,6,5,2]', ?, 'manual')").run(JSON.stringify(cells));
-    expect((await send('POST', '/api/pvp/battles', treasure)).status).toBe(201);
+    expect((await send('POST', '/api/pvp/fights', treasure)).status).toBe(201);
   });
 
   it('records the Celestial wedges on two tiles per side, and refuses one without the other', async () => {
@@ -103,7 +103,7 @@ describe('arena battles', () => {
     const body = battle(['A', 'B', 'C'], { mode: 'Supreme Arena' });
     body.formation.phantimal = { tile: 41, name: 'Wedge of Matter', partnerTile: 42 } as never;
     (body.opponent as any) = { heroes: [{ tile: 2, hero: 'A' }, { tile: 3, hero: 'B' }, { tile: 4, hero: 'C' }], phantimal: { tile: 0, name: 'Wedge of Matter', partnerTile: 1 } };
-    const response = await send('POST', '/api/pvp/battles', body);
+    const response = await send('POST', '/api/pvp/fights', body);
     expect(response.status).toBe(201);
     const saved = await response.json();
     expect(saved.formation.phantimal).toEqual({ name: 'Wedge of Matter', tile: 41, partnerTile: 42 });
@@ -112,16 +112,16 @@ describe('arena battles', () => {
     const base = () => battle(['A', 'B', 'C'], { mode: 'Supreme Arena' });
     const alone = base();
     alone.formation.phantimal = { tile: 41, name: 'Wedge of Matter' } as never;
-    expect((await send('POST', '/api/pvp/battles', alone)).status).toBe(400);
+    expect((await send('POST', '/api/pvp/fights', alone)).status).toBe(400);
     const enemyAlone = base();
     (enemyAlone.opponent as any) = { heroes: [{ tile: 2, hero: 'A' }, { tile: 3, hero: 'B' }, { tile: 4, hero: 'C' }], phantimal: { tile: 0, name: 'Wedge of Matter' } };
-    expect((await send('POST', '/api/pvp/battles', enemyAlone)).status).toBe(400);
+    expect((await send('POST', '/api/pvp/fights', enemyAlone)).status).toBe(400);
     const sameTile = base();
     (sameTile.opponent as any) = { heroes: [{ tile: 2, hero: 'A' }, { tile: 3, hero: 'B' }, { tile: 4, hero: 'C' }], phantimal: { tile: 0, name: 'Wedge of Matter', partnerTile: 0 } };
-    expect((await send('POST', '/api/pvp/battles', sameTile)).status).toBe(400);
+    expect((await send('POST', '/api/pvp/fights', sameTile)).status).toBe(400);
     const wrongSide = base();
     (wrongSide.opponent as any) = { heroes: [{ tile: 2, hero: 'A' }, { tile: 3, hero: 'B' }, { tile: 4, hero: 'C' }], phantimal: { tile: 0, name: 'Wedge of Matter', partnerTile: 41 } };
-    expect((await send('POST', '/api/pvp/battles', wrongSide)).status).toBe(400);
+    expect((await send('POST', '/api/pvp/fights', wrongSide)).status).toBe(400);
   });
 
   it('refuses a second tile for a phantimal that stands on one, and keeps an older lone wedge valid', async () => {
@@ -129,11 +129,11 @@ describe('arena battles', () => {
     db.prepare("UPDATE hero SET faction = 'Lightbearer' WHERE name IN ('A', 'B', 'C')").run();
     const two = battle(['A', 'B', 'C'], { mode: 'Supreme Arena' });
     (two.opponent as any) = { heroes: [{ tile: 2, hero: 'A' }, { tile: 3, hero: 'B' }, { tile: 4, hero: 'C' }], phantimal: { tile: 0, name: 'Gervan', partnerTile: 1 } };
-    expect((await send('POST', '/api/pvp/battles', two)).status).toBe(400);
+    expect((await send('POST', '/api/pvp/fights', two)).status).toBe(400);
     db.prepare("UPDATE hero SET faction = 'Celestial' WHERE name IN ('A', 'B', 'C')").run();
     const lone = battle(['A', 'B', 'C'], { mode: 'Supreme Arena' });
     (lone.opponent as any) = { heroes: [{ tile: 2, hero: 'A' }, { tile: 3, hero: 'B' }, { tile: 4, hero: 'C' }], phantimal: { tile: 0, name: 'Wedge of Power' } };
-    expect((await send('POST', '/api/pvp/battles', lone)).status).toBe(201);
+    expect((await send('POST', '/api/pvp/fights', lone)).status).toBe(201);
   });
 
   it('refuses a Side B phantimal that is unknown, off the enemy tiles, or on a used tile', async () => {
@@ -142,30 +142,30 @@ describe('arena battles', () => {
     for (const phantimal of [{ tile: 1, name: 'Nobody' }, { tile: 39, name: 'Gervan' }, { tile: 0, name: 'Gervan' }]) {
       const body = battle(['A', 'B', 'C'], { mode: 'Supreme Arena' });
       (body.opponent as any) = { heroes: [{ tile: 0, hero: 'A' }, { tile: 2, hero: 'B' }, { tile: 3, hero: 'C' }], phantimal };
-      expect((await send('POST', '/api/pvp/battles', body)).status).toBe(400);
+      expect((await send('POST', '/api/pvp/fights', body)).status).toBe(400);
     }
   });
 
   it('allows the same hero in several battles', async () => {
-    expect((await send('POST', '/api/pvp/battles', battle(['A']))).status).toBe(201);
-    expect((await send('POST', '/api/pvp/battles', battle(['A']))).status).toBe(201);
+    expect((await send('POST', '/api/pvp/fights', battle(['A']))).status).toBe(201);
+    expect((await send('POST', '/api/pvp/fights', battle(['A']))).status).toBe(201);
   });
 
   it('lists battles newest first and filters by mode', async () => {
-    await send('POST', '/api/pvp/battles', battle(['A']));
-    await send('POST', '/api/pvp/battles', battle(['B'], { mode: 'Super League' }));
-    expect((await json(send('GET', '/api/pvp/battles'))).map((b: any) => b.mode)).toEqual(['Super League', 'Arena']);
-    expect(await json(send('GET', '/api/pvp/battles?mode=Arena'))).toHaveLength(1);
+    await send('POST', '/api/pvp/fights', battle(['A']));
+    await send('POST', '/api/pvp/fights', battle(['B'], { mode: 'Super League' }));
+    expect((await json(send('GET', '/api/pvp/fights'))).map((b: any) => b.mode)).toEqual(['Super League', 'Arena']);
+    expect(await json(send('GET', '/api/pvp/fights?mode=Arena'))).toHaveLength(1);
   });
 
   it('only allows a rule in Supreme Arena', async () => {
-    const response = await send('POST', '/api/pvp/battles', battle(['A'], { rule: 'Berserk' }));
+    const response = await send('POST', '/api/pvp/fights', battle(['A'], { rule: 'Berserk' }));
     expect(response.status).toBe(400);
     expect((await response.json()).error).toMatch(/Supreme Arena/);
   });
 
   it('rejects a non-Arena map, an unknown rule, an unknown mode and a bad opponent', async () => {
-    const post = (extra: object) => send('POST', '/api/pvp/battles', battle(['A'], extra));
+    const post = (extra: object) => send('POST', '/api/pvp/fights', battle(['A'], extra));
     expect((await post({ mapName: 'Open' })).status).toBe(400);
     expect((await post({ mode: 'Supreme Arena', rule: 'Nope' })).status).toBe(400);
     expect((await post({ mode: 'Chess' })).status).toBe(400);
@@ -175,26 +175,26 @@ describe('arena battles', () => {
   });
 
   it('edits a battle in place, keeping the rank entered for a hero that stays', async () => {
-    const created = await json(send('POST', '/api/pvp/battles', battle(['A', 'B'])));
+    const created = await json(send('POST', '/api/pvp/fights', battle(['A', 'B'])));
     const body = battle(['A', 'C'], { outcome: 'Loss', note: 'misclick' });
     body.formation.heroes[0] = { tile: 38, hero: 'A', rank: 'Mythic', equipmentLevel: null } as never;
-    const edited = await json(send('PUT', `/api/pvp/battles/${created.id}`, body));
+    const edited = await json(send('PUT', `/api/pvp/fights/${created.id}`, body));
     expect(edited).toMatchObject({ id: created.id, outcome: 'Loss', note: 'misclick' });
     expect(edited.formation.heroes.map((h: any) => [h.name, h.rank])).toEqual([['A', 'Mythic'], ['C', null]]);
-    expect(await json(send('GET', '/api/pvp/battles'))).toHaveLength(1);
+    expect(await json(send('GET', '/api/pvp/fights'))).toHaveLength(1);
   });
 
   it('refuses to edit an unknown battle, an invalid state, and keeps the rule from a non-Supreme edit', async () => {
-    expect((await send('PUT', '/api/pvp/battles/999', battle(['A']))).status).toBe(404);
-    const created = await json(send('POST', '/api/pvp/battles', battle(['A'])));
+    expect((await send('PUT', '/api/pvp/fights/999', battle(['A']))).status).toBe(404);
+    const created = await json(send('POST', '/api/pvp/fights', battle(['A'])));
     const bad = battle(['A']);
     bad.formation.heroes[0] = { tile: 38, hero: 'A', rank: 'Nonsense' } as never;
-    expect((await send('PUT', `/api/pvp/battles/${created.id}`, bad)).status).toBe(400);
-    expect((await send('PUT', `/api/pvp/battles/${created.id}`, battle(['A'], { rule: 'Berserk' }))).status).toBe(400);
+    expect((await send('PUT', `/api/pvp/fights/${created.id}`, bad)).status).toBe(400);
+    expect((await send('PUT', `/api/pvp/fights/${created.id}`, battle(['A'], { rule: 'Berserk' }))).status).toBe(400);
   });
 
   it('deletes a battle with the generic endpoint and keeps a rule in use from being deleted', async () => {
-    const created = await json(send('POST', '/api/pvp/battles', battle(['A'], { mode: 'Supreme Arena', rule: 'Berserk' })));
+    const created = await json(send('POST', '/api/pvp/fights', battle(['A'], { mode: 'Supreme Arena', rule: 'Berserk' })));
     expect((await send('DELETE', '/api/boss-rules/Berserk')).status).toBe(409);
     expect((await send('DELETE', `/api/attempts/${created.id}`)).status).toBe(204);
     expect(db.prepare('SELECT count(*) FROM arena_attempt').pluck().get()).toBe(0);
@@ -211,7 +211,7 @@ describe('formation ids', () => {
   };
 
   it('stores the code of each side in the library with its deployment and the map, and shows it on the record', async () => {
-    const saved = await json(send('POST', '/api/pvp/battles', withId(['A', 'B'], 'a1b2c3d4', 'ZZZZ9999')));
+    const saved = await json(send('POST', '/api/pvp/fights', withId(['A', 'B'], 'a1b2c3d4', 'ZZZZ9999')));
     expect(saved.formation.formationId).toBe('A1B2C3D4');
     expect(saved.opponent.formationId).toBe('ZZZZ9999');
     const library = await json(send('GET', '/api/formation-ids'));
@@ -221,16 +221,16 @@ describe('formation ids', () => {
   });
 
   it('keeps the code when the record is deleted', async () => {
-    const saved = await json(send('POST', '/api/pvp/battles', withId(['A'], 'A1B2C3D4')));
+    const saved = await json(send('POST', '/api/pvp/fights', withId(['A'], 'A1B2C3D4')));
     await send('DELETE', `/api/attempts/${saved.id}`);
     const library = await json(send('GET', '/api/formation-ids'));
     expect(library).toMatchObject([{ code: 'A1B2C3D4', records: 0 }]);
   });
 
   it('refuses a malformed code and a known code on other units, and saves nothing', async () => {
-    expect((await send('POST', '/api/pvp/battles', withId(['A'], 'nope'))).status).toBe(400);
-    await send('POST', '/api/pvp/battles', withId(['A', 'B'], 'A1B2C3D4'));
-    const clash = await send('POST', '/api/pvp/battles', withId(['A', 'C'], 'A1B2C3D4'));
+    expect((await send('POST', '/api/pvp/fights', withId(['A'], 'nope'))).status).toBe(400);
+    await send('POST', '/api/pvp/fights', withId(['A', 'B'], 'A1B2C3D4'));
+    const clash = await send('POST', '/api/pvp/fights', withId(['A', 'C'], 'A1B2C3D4'));
     expect(clash.status).toBe(400);
     expect((await clash.json()).error).toMatch(/A1B2C3D4 is stored with other units or tiles/);
     expect(db.prepare('SELECT count(*) FROM attempt').pluck().get()).toBe(1);

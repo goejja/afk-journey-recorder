@@ -9,12 +9,12 @@ const items = [
   { name: 'Gervan', part: null, faction: 'Lightbearer', class: 'Mage', seasons: [8], source: 'import' },
   { name: 'Aurelian', part: null, faction: 'Lightbearer', class: 'Support', seasons: [7], source: 'import' },
 ];
-let usage = { records: 0, deployments: 0, onBoard: 0 };
+let usage = { records: 0, deployments: 0, placements: 0 };
 let requests: { method: string; url: string; body?: any }[];
 
 beforeEach(() => {
   requests = [];
-  usage = { records: 0, deployments: 0, onBoard: 0 };
+  usage = { records: 0, deployments: 0, placements: 0 };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -78,7 +78,7 @@ describe('PhantimalsPage', () => {
     await waitFor(() => expect(requests.find((r) => r.method === 'PUT')?.body.part).toBe('Gervan shade'));
     cleanup();
 
-    usage = { records: 3, deployments: 1, onBoard: 4 };
+    usage = { records: 3, deployments: 1, placements: 4 };
     render(<PhantimalsPage />);
     await user.click(await screen.findByRole('button', { name: /Gervan/ }));
     await waitFor(() => expect((screen.getByLabelText('Second part') as HTMLInputElement).disabled).toBe(true));

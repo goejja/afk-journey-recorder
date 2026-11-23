@@ -5,12 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import type { RoundTeam } from '../../../src/domain/round-deployment.js';
 import { turnTeam } from '../../../src/domain/round-deployment.js';
-import type { BattleDraftSide } from '../../../web/backend.js';
+import type { FightDraftSide } from '../../../web/backend.js';
 import { emptyFormation, withHeroState } from '../../../web/FormationEditor.js';
 import { emptyOpponent } from '../../../web/arena/OpponentEditor.js';
 import { RoundDeploymentBar } from '../../../web/arena/RoundDeploymentBar.js';
 import { applyToOpponent, applyToOwn, applyTeamChange, deploymentsFromRecords, guessOf, mergeDeployments, opponentFromTeam, ownFromTeam, readSideOf, readSideOfTeam, teamOfOpponent, teamOfOwn, withoutGuess } from '../../../web/arena/round-deployment.js';
-import type { ArenaBattle, Profile } from '../../../web/backend.js';
+import type { ArenaFight, Profile } from '../../../web/backend.js';
 import { matchTeam } from '../../../src/domain/round-deployment.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
@@ -57,7 +57,7 @@ describe('the form and the Round Deployment', () => {
   });
 
   it('reads a picture side for matching: each hero once, the tiles nobody named counted', () => {
-    const side = { name: 'x', profile: null, heroes: [{ tile: 'a', hero: 'Evie', rank: 'Elite', equipmentLevel: null }, { tile: 'b', hero: 'Evie', rank: 'Elite', equipmentLevel: null }], artifact: { name: 'Crown', level: 3 }, phantimal: null, crops: null, unread: ['c'] } as BattleDraftSide;
+    const side = { name: 'x', profile: null, heroes: [{ tile: 'a', hero: 'Evie', rank: 'Elite', equipmentLevel: null }, { tile: 'b', hero: 'Evie', rank: 'Elite', equipmentLevel: null }], artifact: { name: 'Crown', level: 3 }, phantimal: null, crops: null, unread: ['c'] } as FightDraftSide;
     expect(readSideOf(side)).toEqual({ heroes: [{ hero: 'Evie', rank: 'Elite', equipmentLevel: null }], artifact: 'Crown', phantimal: null, unread: 1 });
   });
 });
@@ -121,13 +121,13 @@ describe('Round Deployments taken from saved Battles', () => {
     const heroes = [{ tile: tiles[0], name: hero, part: '', rank: 'Mythic+', equipmentLevel: 10 }, { tile: tiles[1], name: 'Fay', part: '', rank: 'Elite', equipmentLevel: null }];
     const mine = { artifact: 'Crown', heroes, phantimal: null, assist: null, formationId: null };
     const theirs = { artifact: null, heroes: [], phantimal: null, assist: null, formationId: null };
-    return { id, battlePosition: position, playerIdA: sideOfLuna === 'A' ? 'p1' : 'P9', playerIdB: sideOfLuna === 'B' ? 'P1' : 'P9', formation: sideOfLuna === 'A' ? mine : theirs, opponent: sideOfLuna === 'B' ? mine : theirs } as unknown as ArenaBattle;
+    return { id, battlePosition: position, playerIdA: sideOfLuna === 'A' ? 'p1' : 'P9', playerIdB: sideOfLuna === 'B' ? 'P1' : 'P9', formation: sideOfLuna === 'A' ? mine : theirs, opponent: sideOfLuna === 'B' ? mine : theirs } as unknown as ArenaFight;
   };
 
   it('keeps the earliest fight of each team of a Player, by Player ID on either side, turning a Side B team back', () => {
     const [entry] = deploymentsFromRecords([fight(10, 1, 'A', [38, 39]), fight(3, 1, 'B', [0, 1]), fight(5, 2, 'A', [40, 41], 'Gus'), fight(30, null, 'A', [1, 2])], [luna]);
     expect(entry).toMatchObject({ profileId: 1, name: 'Luna', recorded: [0, 1] });
-    // the earliest fight of team 1 (id 3) put Luna on Side B at tiles 0 and 1: on Side A's board that is 44 and 43
+    // the earliest fight of team 1 (id 3) put Luna on Side B at tiles 0 and 1: on Side A's map that is 44 and 43
     expect(entry!.teams[0]!.heroes.map((h) => [h.hero, h.tile, h.rank, h.equipmentLevel])).toEqual([['Evie', TILE_COUNT - 1, 'Mythic+', 10], ['Fay', TILE_COUNT - 2, 'Elite', null]]);
     expect(entry!.teams[0]!.artifact).toBe('Crown');
     expect(entry!.teams[1]!.heroes[0]!.hero).toBe('Gus');

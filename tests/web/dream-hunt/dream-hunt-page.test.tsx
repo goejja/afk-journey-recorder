@@ -47,8 +47,8 @@ beforeEach(() => {
       }
       if (url.startsWith('/api/dream-hunt/attempts') && method === 'GET') return Response.json([]);
       if (url === '/api/dream-hunt/attempts' && method === 'POST') return Response.json({ id: 1 }, { status: 201 });
-      if (url === '/api/dream-hunt/battle-groups/4' && method === 'PUT') return Response.json({ id: 4, fights: [] });
-      if (url === '/api/dream-hunt/battle-groups' && method === 'POST') return Response.json({ id: 1, fights: [] }, { status: 201 });
+      if (url === '/api/dream-hunt/battles/4' && method === 'PUT') return Response.json({ id: 4, fights: [] });
+      if (url === '/api/dream-hunt/battles' && method === 'POST') return Response.json({ id: 1, fights: [] }, { status: 201 });
       return Response.json({}, { status: 404 });
     }),
   );
@@ -57,14 +57,14 @@ afterEach(cleanup);
 
 const openForm = async (user: ReturnType<typeof userEvent.setup>, toasts = false) => {
   render(toasts ? <ToastProvider><DreamHuntPage /></ToastProvider> : <DreamHuntPage />);
-  await user.click(await screen.findByRole('tab', { name: 'Fights' }));
-  await user.click(await screen.findByRole('button', { name: 'New fights' }));
+  await user.click(await screen.findByRole('tab', { name: 'Records' }));
+  await user.click(await screen.findByRole('button', { name: 'New record' }));
 };
 const placeHero = async (user: ReturnType<typeof userEvent.setup>, name: RegExp) => {
   await user.click(within(screen.getByRole('list', { name: 'Heroes' })).getByRole('button', { name })); // a click places it on the first free tile
 };
 // A day is saved as one battle; each of its fights counts as a post here.
-const posts = () => requests.filter((r) => r.method === 'POST' && r.url === '/api/dream-hunt/battle-groups').flatMap((r) => (r.body.fights as any[]).map((fight) => ({ ...r, body: fight })));
+const posts = () => requests.filter((r) => r.method === 'POST' && r.url === '/api/dream-hunt/battles').flatMap((r) => (r.body.fights as any[]).map((fight) => ({ ...r, body: fight })));
 
 describe('Fights list', () => {
   it('gives every cell of a day and of a fight its own grid column, empty when it has no value', async () => {
@@ -77,7 +77,7 @@ describe('Fights list', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/dream-hunt/attempts') && (init?.method ?? 'GET') === 'GET' ? Response.json(attempts) : fetchBefore(url, init))));
     const user = userEvent.setup();
     render(<DreamHuntPage />);
-    await user.click(await screen.findByRole('tab', { name: 'Fights' }));
+    await user.click(await screen.findByRole('tab', { name: 'Records' }));
     const day = (await screen.findByRole('listitem', { name: 'Dream Hunt day' })).querySelector('.day-info')!;
     expect(day.children).toHaveLength(columnsOf('.day-info'));
     const line = document.querySelector('.fight-line:not(.in-battle)')!;
@@ -96,7 +96,7 @@ describe('Fights list', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/dream-hunt/attempts') && (init?.method ?? 'GET') === 'GET' ? Response.json(attempts) : fetchBefore(url, init))));
     const user = userEvent.setup();
     render(<DreamHuntPage />);
-    await user.click(await screen.findByRole('tab', { name: 'Fights' }));
+    await user.click(await screen.findByRole('tab', { name: 'Records' }));
     // the newest week is open, the older one is not
     await user.click(await screen.findByRole('button', { name: /Week of Jan 5/ }));
     const times = new Map([...document.querySelectorAll<HTMLElement>('.attempt-info > strong:not(:first-child)')].map((el) => [el.textContent, el.style.getPropertyValue('--worst')]));
@@ -116,7 +116,7 @@ describe('Fights list', () => {
     const fetchBefore = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/dream-hunt/attempts') && (init?.method ?? 'GET') === 'GET' ? Response.json(attempts) : fetchBefore(url, init))));
     render(<DreamHuntPage />);
-    await userEvent.setup().click(await screen.findByRole('tab', { name: 'Fights' }));
+    await userEvent.setup().click(await screen.findByRole('tab', { name: 'Records' }));
     const days = await screen.findAllByRole('listitem', { name: 'Dream Hunt day' });
     const shares = (card: HTMLElement) => [...card.querySelectorAll<HTMLElement>('.ranked')].map((el) => el.style.getPropertyValue('--worst'));
     expect(shares(days[0]!)).toEqual(['0', '0', '0', '0', '0', '0']); // the faster day (10 against 20): five boss times and the total
@@ -125,9 +125,9 @@ describe('Fights list', () => {
 });
 
 describe('Dream Hunt page', () => {
-  it('says when the maps could not be read, since the boards then show no map', async () => {
+  it('says when the maps could not be read, since the tables then show no map', async () => {
     const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
-    let asked = 0; // the page reads the maps for its own reference first; the board reads them again
+    let asked = 0; // the page reads the maps for its own reference first; the table reads them again
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/maps' && ++asked > 1 ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
     render(<DreamHuntPage />);
     const alerts = await screen.findAllByRole('alert');
@@ -147,11 +147,11 @@ describe('Dream Hunt page', () => {
       }),
     );
     render(<DreamHuntPage />);
-    await userEvent.setup().click(await screen.findByRole('tab', { name: 'Fights' }));
+    await userEvent.setup().click(await screen.findByRole('tab', { name: 'Records' }));
     expect(await screen.findByText('Loading…')).toBeTruthy();
-    expect(screen.queryByText('No boss fights recorded yet.')).toBeNull();
+    expect(screen.queryByText('No records yet.')).toBeNull();
     answer();
-    expect(await screen.findByText('No boss fights recorded yet.')).toBeTruthy();
+    expect(await screen.findByText('No records yet.')).toBeTruthy();
     expect(screen.queryByText('Loading…')).toBeNull();
   });
 
@@ -178,6 +178,7 @@ describe('Dream Hunt page', () => {
     render(<DreamHuntPage />);
     const table = within(await screen.findByRole('table', { name: 'This week' }));
     expect(await table.findByText('Mirage Frostspike')).toBeTruthy(); // the bosses are the column headings
+    await waitFor(() => expect(table.getAllByRole('row').length).toBeGreaterThan(1)); // the headings come with the weekly default, the rows with the attempts
     const rows = table.getAllByRole('row').slice(1);
     expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual(['Group 1', 'Group 2']); // days with a lost or untimed fight, or another week's bosses, are left out
     expect(within(rows[0]!).getByText('45.00s')).toBeTruthy(); // the group with the fastest day first: day 2 (45) of days 1, 2 and 3 (56.57, 45, 150)
@@ -223,7 +224,7 @@ describe('Dream Hunt page', () => {
     render(<DreamHuntPage />);
     const table = within(await screen.findByRole('table', { name: 'This week' }));
     await table.findByText('Mirage Frostspike');
-    expect(table.getAllByRole('row').slice(1)).toHaveLength(7);
+    await waitFor(() => expect(table.getAllByRole('row').slice(1)).toHaveLength(7)); // the headings come with the weekly default, the rows with the attempts
     await user.click(table.getByRole('button', { name: /Show the days of group 1/ }));
     expect(table.getAllByText('1 run')).toHaveLength(6); // a group of one day, and of one fight against each boss
     const barBefore = within(table.getByRole('row', { name: 'Range of the group' })).getAllByRole('img')[0]!.firstElementChild!.getAttribute('style');
@@ -248,13 +249,13 @@ describe('Dream Hunt page', () => {
     const before = globalThis.fetch;
     let releaseAny: () => void = () => undefined;
     const slowAny = new Promise<void>((resolve) => (releaseAny = resolve));
-    // only the board of the rule chosen last holds a team flagged "few clears"
-    const board = (rule: string, key: string) => ({ boss: 'King Croaker', rule, attempts: 1, compositions: [composition(key, { lowConfidence: rule === 'Berserk' })] });
+    // only the table of the rule chosen last holds a team flagged "few clears"
+    const leaderboard = (rule: string, key: string) => ({ boss: 'King Croaker', rule, attempts: 1, compositions: [composition(key, { lowConfidence: rule === 'Berserk' })] });
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       if (!url.startsWith('/api/dream-hunt/leaderboard')) return before(url, init);
-      if (url.includes('rule=Berserk')) return Response.json(board('Berserk', 'berserk-team'));
+      if (url.includes('rule=Berserk')) return Response.json(leaderboard('Berserk', 'berserk-team'));
       await slowAny; // the first request, for every rule, answers only after the second one
-      return Response.json(board('any', 'any-team'));
+      return Response.json(leaderboard('any', 'any-team'));
     }));
     render(<DreamHuntPage />);
     await user.click(await screen.findByRole('tab', { name: 'Best teams' }));
@@ -293,7 +294,7 @@ describe('Dream Hunt page', () => {
     const user = userEvent.setup();
     await openForm(user);
     await placeHero(user, /^Evie/);
-    await user.click(screen.getByRole('button', { name: 'Save fights' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/clear time/i);
     expect(requests.some((r) => r.method === 'POST')).toBe(false);
   });
@@ -301,8 +302,8 @@ describe('Dream Hunt page', () => {
   it('offers only the current season’s artifacts', async () => {
     const user = userEvent.setup();
     render(<DreamHuntPage />);
-    await user.click(await screen.findByRole('tab', { name: 'Fights' }));
-    await user.click(await screen.findByRole('button', { name: 'New fights' }));
+    await user.click(await screen.findByRole('tab', { name: 'Records' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.click(await screen.findByRole('button', { name: 'Choose artifact' }));
     const names = within(screen.getByRole('list', { name: 'Artifacts' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
     expect(names).toEqual(['Bladestorm']);
@@ -324,7 +325,7 @@ describe('Dream Hunt page', () => {
     await user.click(screen.getByRole('tab', { name: /^Fight 5/ }));
     expect(screen.getByLabelText('Rule')).toBeTruthy();
     await user.click(screen.getByRole('tab', { name: /^Fight 1/ }));
-    await user.click(screen.getByRole('button', { name: 'Save fights' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(posts()).toHaveLength(1)); // fights without heroes are skipped
     expect(posts()[0]!.body).toMatchObject({ boss: 'King Croaker', timeSeconds: 70, outcome: 'Win' });
   });
@@ -336,7 +337,7 @@ describe('Dream Hunt page', () => {
     await user.type(screen.getByLabelText('Clear time'), '1:10');
     await user.click(screen.getByRole('button', { name: 'Save and record another' }));
     await waitFor(() => expect(posts()).toHaveLength(1));
-    expect((await screen.findByRole('status')).textContent).toMatch(/Saved 1 fight/);
+    expect((await screen.findByRole('status')).textContent).toMatch(/Saved as one record/);
     expect((screen.getByLabelText('Clear time') as HTMLInputElement).value).toBe('');
     expect(within(screen.getByRole('list', { name: 'Placed on Your formation' })).getByText('Evie')).toBeTruthy();
 
@@ -361,7 +362,7 @@ describe('Dream Hunt page', () => {
     await placeHero(user, /^Evie/); // tile 38 on Open
     await user.selectOptions(screen.getByLabelText('Map'), 'Shifted');
     await user.type(screen.getByLabelText('Clear time'), '1:10');
-    await user.click(screen.getByRole('button', { name: 'Save fights' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]!.body.formation.heroes).toEqual([expect.objectContaining({ tile: 40, hero: 'Evie' })]);
   });
@@ -373,12 +374,12 @@ describe('Dream Hunt page', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) =>
       url.startsWith('/api/dream-hunt/attempts') && (init?.method ?? 'GET') === 'GET' ? Response.json([saved]) : base(url, init)));
     render(<DreamHuntPage />);
-    await user.click(await screen.findByRole('tab', { name: 'Fights' }));
+    await user.click(await screen.findByRole('tab', { name: 'Records' }));
     await user.click(await screen.findByRole('button', { name: 'Clone' }));
     expect(within(screen.getByRole('list', { name: 'Placed on Your formation' })).getByText('Evie')).toBeTruthy();
     expect((screen.getByLabelText('Clear time') as HTMLInputElement).value).toBe('');
     await user.type(screen.getByLabelText('Clear time'), '1:20');
-    await user.click(screen.getByRole('button', { name: 'Save fights' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]!.body).toMatchObject({ boss: 'King Croaker', outcome: 'Win', timeSeconds: 80, note: '', tags: ['Luna'], formation: { heroes: [{ hero: 'Evie' }] } });
   });
@@ -391,9 +392,9 @@ describe('Dream Hunt page', () => {
     await user.type(screen.getByLabelText('Clear time'), '1:10');
     await user.click(screen.getByRole('tab', { name: /^Fight 2/ }));
     expect(screen.getByText('Luna', { selector: '.badge' })).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Save fights' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(posts()).toHaveLength(1));
-    expect(requests.filter((r) => r.url === '/api/dream-hunt/battle-groups')).toHaveLength(1);
+    expect(requests.filter((r) => r.url === '/api/dream-hunt/battles')).toHaveLength(1);
     expect(posts()[0]!.body).toMatchObject({ position: 1, tags: ['Luna'] });
   });
 
@@ -411,7 +412,7 @@ describe('Dream Hunt page', () => {
     });
     const open = async (user: ReturnType<typeof userEvent.setup>) => {
       render(<DreamHuntPage />);
-      await user.click(await screen.findByRole('tab', { name: 'Fights' }));
+      await user.click(await screen.findByRole('tab', { name: 'Records' }));
       return screen.findByRole('listitem', { name: 'Dream Hunt day' });
     };
 
@@ -446,15 +447,15 @@ describe('Dream Hunt page', () => {
       const user = userEvent.setup();
       const day = within(await open(user));
       await user.click(day.getByRole('button', { name: 'Edit' }));
-      expect(screen.getByRole('heading', { name: 'Edit Dream Hunt day' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Edit Dream Hunt record' })).toBeTruthy();
       expect(screen.getAllByRole('tab', { name: /^Fight \d/ }).map((t) => t.textContent)).toEqual(['Fight 1 (1)', 'Fight 2 (1)', 'Fight 3', 'Fight 4', 'Fight 5']);
       expect((screen.getByLabelText('Clear time') as HTMLInputElement).value).toBe('1:10'); // an edit keeps the saved time
       expect(screen.queryByRole('button', { name: 'Save and record another' })).toBeNull();
       await user.clear(screen.getByLabelText('Clear time'));
       await user.type(screen.getByLabelText('Clear time'), '9.69');
       await user.click(screen.getByRole('button', { name: 'Save changes' }));
-      await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/dream-hunt/battle-groups/4')).toBeTruthy());
-      const fights = requests.find((r) => r.url === '/api/dream-hunt/battle-groups/4')!.body.fights;
+      await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/dream-hunt/battles/4')).toBeTruthy());
+      const fights = requests.find((r) => r.url === '/api/dream-hunt/battles/4')!.body.fights;
       expect(fights.map((f: any) => [f.position, f.timeSeconds])).toEqual([[1, 9.69], [2, null]]);
     });
 
@@ -487,7 +488,7 @@ describe('Dream Hunt page', () => {
     await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Elite' }));
     expect(document.querySelector('.tile-tag')).toBeNull(); // Dream Hunt draws no rank tags; the Stages form does
     await user.type(screen.getByLabelText('Clear time'), '1:10');
-    await user.click(screen.getByRole('button', { name: 'Save fights' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]!.body.formation.heroes[0]).toMatchObject({ hero: 'Evie', rank: 'Elite', equipmentLevel: null });
   });
@@ -508,7 +509,7 @@ describe('Dream Hunt page', () => {
     await openForm(user);
     await placeHero(user, /^Evie/);
     await user.type(screen.getByLabelText('Clear time'), '9s69');
-    await user.click(screen.getByRole('button', { name: 'Save fights' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]!.body.timeSeconds).toBe(9.69);
   });
@@ -519,7 +520,7 @@ describe('Dream Hunt page', () => {
       await user.type(screen.getByLabelText('Clear time'), '9.69');
       await user.click(within(screen.getByRole('group', { name: 'Your formation map' })).getAllByRole('button', { name: /Player deployment|Evie/ })[0]!);
       await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: rank }));
-      await user.click(screen.getByRole('button', { name: 'Save fights' }));
+      await user.click(screen.getByRole('button', { name: 'Save record' }));
     };
 
     it('offers an upgrade ticked, and updates the roster of the default profile when asked', async () => {
@@ -552,7 +553,7 @@ describe('Dream Hunt page', () => {
       vi.stubGlobal(
         'fetch',
         vi.fn(async (url: string, init?: RequestInit) => {
-          if (url === '/api/dream-hunt/battle-groups' && init?.method === 'POST') {
+          if (url === '/api/dream-hunt/battles' && init?.method === 'POST') {
             await base(url, init); // keep the request in the log
             return Response.json({ id: 1, fights: [{ id: 41 }] }, { status: 201 });
           }
@@ -579,7 +580,7 @@ describe('Dream Hunt page', () => {
       await openForm(user);
       await placeHero(user, /^Evie/);
       await user.type(screen.getByLabelText('Clear time'), '9.69');
-      await user.click(screen.getByRole('button', { name: 'Save fights' }));
+      await user.click(screen.getByRole('button', { name: 'Save record' }));
       await waitFor(() => expect(posts()).toHaveLength(1));
       expect(screen.queryByRole('dialog', { name: 'Update the roster?' })).toBeNull();
     });
@@ -587,7 +588,7 @@ describe('Dream Hunt page', () => {
 
   it('has no Rules tab: rules are managed in Admin', async () => {
     render(<DreamHuntPage />);
-    await screen.findByRole('tab', { name: 'Fights' });
+    await screen.findByRole('tab', { name: 'Records' });
     expect(screen.queryByRole('tab', { name: 'Rules' })).toBeNull();
   });
 });
@@ -603,7 +604,7 @@ describe('Fights, older than the list', () => {
     listing(101);
     const user = userEvent.setup();
     render(<DreamHuntPage />);
-    await user.click(await screen.findByRole('tab', { name: 'Fights' }));
+    await user.click(await screen.findByRole('tab', { name: 'Records' }));
     expect(await screen.findByRole('button', { name: 'Show older fights' })).toBeTruthy();
     expect(requests.some((r) => r.url.startsWith('/api/dream-hunt/attempts?') && r.url.includes('limit=101'))).toBe(true);
   });
@@ -612,7 +613,7 @@ describe('Fights, older than the list', () => {
     listing(100);
     const user = userEvent.setup();
     render(<DreamHuntPage />);
-    await user.click(await screen.findByRole('tab', { name: 'Fights' }));
+    await user.click(await screen.findByRole('tab', { name: 'Records' }));
     await waitFor(() => expect(requests.some((r) => r.url.startsWith('/api/dream-hunt/attempts?'))).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByRole('button', { name: 'Show older fights' })).toBeNull();
@@ -632,9 +633,9 @@ describe('a link to a record', () => {
     withRecord(() => Response.json(linked));
     const user = userEvent.setup();
     render(<DreamHuntPage />);
-    expect(await screen.findByRole('heading', { name: 'Edit boss fight' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Edit record' })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(await screen.findByRole('tab', { name: 'Fights', selected: true })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Records', selected: true })).toBeTruthy();
     expect(window.location.hash).toBe('#dreamHunt');
   });
 
@@ -643,7 +644,7 @@ describe('a link to a record', () => {
     withRecord(() => Response.json({ error: 'Record 99 no longer exists' }, { status: 404 }));
     render(<DreamHuntPage />);
     expect((await screen.findByRole('alert')).textContent).toContain('Record 99 no longer exists');
-    expect(screen.queryByRole('heading', { name: 'Edit boss fight' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Edit record' })).toBeNull();
     await waitFor(() => expect(window.location.hash).toBe('#dreamHunt')); // the address is cleaned in an effect after the message shows
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ARENA_MODES, TEAMS_PER_MODE } from '../../src/domain/arena.js';
-import { api, type ArenaBattle } from '../backend.js';
+import { api, type ArenaFight } from '../backend.js';
 import { RecordToolbar, useGroupedList, type ListItem as GroupedItem } from '../records/GroupedList.js';
 import { FightRow } from '../records/FightRow.js';
 import { GroupCard } from '../records/GroupCard.js';
@@ -9,7 +9,7 @@ import { useRecordList } from '../records/useRecordList.js';
 import { useLinkedRecord } from '../records/linked-record.js';
 import { toPayload } from '../FormationEditor.js';
 import { toOpponentPayload } from './OpponentEditor.js';
-import { BattleMapPreview } from './BattleMapPreview.js';
+import { FightMapPreview } from './FightMapPreview.js';
 import { TeamOverview } from '../stats/TeamOverview.js';
 import { BattleImport, type ImportStart } from '../reader/BattleImport.js';
 import { type Round } from '../../src/domain/tournament.js';
@@ -18,33 +18,34 @@ import { feedbackOf, type ImportGroup } from '../reader/battle-import.js';
 import { sendFeedback, useParkedToast, type FeedbackAnswer } from '../reader/parked-toast.js';
 import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { useConfirmActions } from '../hooks/confirm.js';
+import { useDebouncedValue } from '../hooks/debounced.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { FormationIdBadge } from '../FormationIdField.js';
 import { TagBadges, TagFilter } from '../Tags.js';
 import { toggled } from '../format.js';
 import { joinNotices, stepAfterSave } from '../hooks/saved.js';
 import { type PatchReference, type Reference, toInput, type Clone, cloneOf, savedOfMode, rostersOf, pairOf, loadRoundDeployments, fillSavedDeploymentTiles, cloneFromImport, type Side } from './draft.js';
-import { ModeChip, Players } from './BoardParts.js';
-import { NewBattles } from './NewBattles.js';
-import { EditBattle } from './EditBattle.js';
+import { ModeChip, Players } from './FightParts.js';
+import { NewFights } from './NewFights.js';
+import { EditFight } from './EditFight.js';
 import { Notice } from '../ui/Notice.js';
 
-type ListItem = GroupedItem<ArenaBattle>;
+type ListItem = GroupedItem<ArenaFight>;
 
 interface FightRowProps {
-  fight: ArenaBattle;
+  fight: ArenaFight;
   reference: Reference;
   shown: Set<number>;
   onToggleMap: (id: number) => void;
-  onEdit: (fight: ArenaBattle) => void;
-  onDelete: (fight: ArenaBattle) => void;
-  onClone: (fights: ArenaBattle[], side?: Side) => void;
+  onEdit: (fight: ArenaFight) => void;
+  onDelete: (fight: ArenaFight) => void;
+  onClone: (fights: ArenaFight[], side?: Side) => void;
   /** Inside a battle's card: it shows the team number, and leaves the date and tags to the battle. */
   inBattle?: boolean;
 }
 
 /** The Union Level of each side of a Guild Duel fight, as shown in the recap; empty when neither is known. */
-function UnionRecap({ fight }: { fight: ArenaBattle }) {
+function UnionRecap({ fight }: { fight: ArenaFight }) {
   if (fight.unionLevel == null && fight.opponentUnionLevel == null) return null;
   return (
     <span className="muted" title="Union Level of each side">
@@ -83,11 +84,11 @@ function ArenaFightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDele
           {shown.has(b.id) ? 'Hide map' : 'Show map'}
         </button>
       }
-      cloneTitle="Start a new battle from this fight"
+      cloneTitle="Start a new record from this one"
       cloneVariants={
         <>
-          <button title="Start a new battle with only the heroes of Side A" onClick={() => onClone([b], 'A')}>Clone A</button>
-          <button title="Start a new battle with only the heroes of Side B" onClick={() => onClone([b], 'B')}>Clone B</button>
+          <button title="Start a new record with only the heroes of Side A" onClick={() => onClone([b], 'A')}>Clone A</button>
+          <button title="Start a new record with only the heroes of Side B" onClick={() => onClone([b], 'B')}>Clone B</button>
         </>
       }
       onEdit={() => onEdit(b)}
@@ -101,12 +102,15 @@ function ArenaFightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDele
         <span className="muted">vs</span>
         <TeamOverview label="Side B" side="b" outcome={b.outcome === 'Win' ? 'lost' : 'won'} heroes={b.opponent.heroes} phantimal={b.opponent.phantimal} artifact={b.opponent.artifact} size={36} />
       </div>
-      {shown.has(b.id) && <BattleMapPreview battle={b} map={reference.maps.find((m) => m.name === b.mapName)} />}
+      {shown.has(b.id) && <FightMapPreview battle={b} map={reference.maps.find((m) => m.name === b.mapName)} />}
     </FightRow>
   );
 }
 
-const NO_BATTLES: ArenaBattle[] = [];
+const NO_BATTLES: ArenaFight[] = [];
+
+/** How long the Player search waits after the last key before it asks the server. */
+const PLAYER_SEARCH_WAIT_MS = 250;
 
 export function Battles({ reference, patchReference }: { reference: Reference; patchReference: PatchReference }) {
   const [mode, setMode] = useState<string[]>([]);
@@ -119,7 +123,7 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
   /** How many pictures wait in the import queue, to resume the import after leaving it. */
   const [waiting, setWaiting] = useState(0);
   const [cloning, setCloning] = useState<Clone | null>(null);
-  const [editing, setEditing] = useState<ArenaBattle | null>(null);
+  const [editing, setEditing] = useState<ArenaFight | null>(null);
   const [editingBattle, setEditingBattle] = useState<{ id: number; clone: Clone; round: Round | null; tournamentId: number | null } | null>(null);
   /** The roster sync a batch save offers, as the form does for one side (ADR 0021). */
   const sync = useRosterSync();
@@ -127,9 +131,12 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
   const reportParked = useParkedToast();
   const toggleMap = (id: number) => setShownMaps((old) => toggled(old, id));
 
+  /** The Player typed once the typing has paused; the input shows `player`, the list and its "no match" message follow this. */
+  const askedPlayer = useDebouncedValue(player.trim(), PLAYER_SEARCH_WAIT_MS);
+
   const { loaded, limit, showMore, notice, setNotice, run, error } = useRecordList({
-    load: (page) => api.arenaBattles({ limit: String(page), mode, tag, player: player.trim() }),
-    deps: [mode, tag, player],
+    load: (page) => api.arenaFights({ limit: String(page), mode, tag, player: askedPlayer }),
+    deps: [mode, tag, askedPlayer],
     formOpen: adding || editing !== null || editingBattle !== null,
   });
   const linkError = useLinkedRecord(api.arenaBattle, (fight) => (setAdding(false), setEditing(fight)), adding || editing !== null || editingBattle !== null);
@@ -137,11 +144,11 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
   const battles = loaded.data ?? NO_BATTLES;
   const reload = loaded.reload;
 
-  const remove = (battle: ArenaBattle) => confirmRun({ title: `Delete this ${battle.mode} fight?`, confirmLabel: 'Delete' }, () => api.deleteArenaBattle(battle.id), reload);
-  const removeBattle = (id: number, fights: number) => confirmRun({ title: `Delete this battle and its ${fights} fights?`, confirmLabel: 'Delete' }, () => api.deleteBattleGroup(id, true), reload);
+  const remove = (battle: ArenaFight) => confirmRun({ title: `Delete this ${battle.mode} record?`, confirmLabel: 'Delete' }, () => api.deleteArenaFight(battle.id), reload);
+  const removeBattle = (id: number) => confirmRun({ title: 'Delete this record?', confirmLabel: 'Delete' }, () => api.deleteBattleGroup(id, true), reload);
 
   const list = useGroupedList(battles);
-  const rowProps = { reference, shown: shownMaps, onToggleMap: toggleMap, onEdit: (f: ArenaBattle) => (setAdding(false), setEditing(f)), onDelete: (f: ArenaBattle) => void remove(f), onClone: (fights: ArenaBattle[], side?: Side) => (setEditing(null), setCloning(cloneOf(reference, fights, false, side)), setAdding(true)) };
+  const rowProps = { reference, shown: shownMaps, onToggleMap: toggleMap, onEdit: (f: ArenaFight) => (setAdding(false), setEditing(f)), onDelete: (f: ArenaFight) => void remove(f), onClone: (fights: ArenaFight[], side?: Side) => (setEditing(null), setCloning(cloneOf(reference, fights, false, side)), setAdding(true)) };
 
   useEffect(() => {
     if (importing || adding) return;
@@ -219,15 +226,15 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
         onToggle={() => list.toggle(item.id)}
         editTitle="Edit all the teams of this battle"
         onEdit={() => (setAdding(false), setEditingBattle({ id: item.id, clone: cloneOf(reference, item.fights, true), round: item.fights[0]?.round ?? null, tournamentId: item.fights[0]?.tournamentId ?? null }))}
-        cloneTitle="Start a new battle from this one"
+        cloneTitle="Start a new record from this one"
         onClone={() => rowProps.onClone(item.fights)}
         cloneVariants={
           <>
-            <button title="Start a new battle with only the heroes of Side A" onClick={() => rowProps.onClone(item.fights, 'A')}>Clone A</button>
-            <button title="Start a new battle with only the heroes of Side B" onClick={() => rowProps.onClone(item.fights, 'B')}>Clone B</button>
+            <button title="Start a new record with only the heroes of Side A" onClick={() => rowProps.onClone(item.fights, 'A')}>Clone A</button>
+            <button title="Start a new record with only the heroes of Side B" onClick={() => rowProps.onClone(item.fights, 'B')}>Clone B</button>
           </>
         }
-        onDelete={() => void removeBattle(item.id, item.fights.length)}
+        onDelete={() => void removeBattle(item.id)}
         renderFight={(fight) => <ArenaFightRow fight={fight} inBattle {...rowProps} />}
       />
     );
@@ -303,7 +310,7 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
               const filled = clone.drafts.map((d, index) => ({ d, index })).filter(({ d }) => d.formation.placed.length > 0 || d.opponent.placed.length > 0);
               // a Super League Battle is all five fights (ADR 0021): a partial one is opened in the form and saved there by hand
               if (options.round && filled.length !== TEAMS_PER_MODE[group.mode]) throw new Error(`only ${filled.length} of ${TEAMS_PER_MODE[group.mode]} fights have a team`);
-              const result = await api.createArenaBattleGroup(group.mode, filled.map(({ d, index }) => ({ ...toInput(group.mode, d), position: index + 1 })), { formationId: '', opponentFormationId: '' }, { tournamentId: options.round.tournamentId, round: options.round.round });
+              const result = await api.createArenaBattle(group.mode, filled.map(({ d, index }) => ({ ...toInput(group.mode, d), position: index + 1 })), { formationId: '', opponentFormationId: '' }, { tournamentId: options.round.tournamentId, round: options.round.round });
               done.push(group.key);
               // The Battle is saved from here on, so a step that fails is told after "saved" and never makes the Battle a failed one.
               const left: (string | null)[] = [];
@@ -355,7 +362,7 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
     );
   if (adding)
     return (
-      <NewBattles
+      <NewFights
         reference={reference}
         patchReference={patchReference}
         initial={cloning}
@@ -365,12 +372,12 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
         cancelLabel={fromImport ? 'Back to the import' : undefined}
       />
     );
-  if (editingBattle) return <NewBattles key={`battle-${editingBattle.id}`} reference={reference} patchReference={patchReference} initial={editingBattle.clone} editing={editingBattle.id} savedRound={editingBattle.tournamentId != null && editingBattle.round ? { tournamentId: editingBattle.tournamentId, round: editingBattle.round } : null} onSaved={done} onRecorded={() => undefined} onCancel={() => setEditingBattle(null)} />;
-  if (editing) return <EditBattle key={editing.id} battle={editing} reference={reference} patchReference={patchReference} onSaved={done} onCancel={() => setEditing(null)} />;
+  if (editingBattle) return <NewFights key={`battle-${editingBattle.id}`} reference={reference} patchReference={patchReference} initial={editingBattle.clone} editing={editingBattle.id} savedRound={editingBattle.tournamentId != null && editingBattle.round ? { tournamentId: editingBattle.tournamentId, round: editingBattle.round } : null} onSaved={done} onRecorded={() => undefined} onCancel={() => setEditingBattle(null)} />;
+  if (editing) return <EditFight key={editing.id} battle={editing} reference={reference} patchReference={patchReference} onSaved={done} onCancel={() => setEditing(null)} />;
 
   return (
     <div>
-      <RecordToolbar list={list} group="battle" newLabel="New battles" onNew={() => (setEditing(null), setCloning(null), setAdding(true))}>
+      <RecordToolbar list={list} group="battle" newLabel="New record" onNew={() => (setEditing(null), setCloning(null), setAdding(true))}>
         <button onClick={() => (setFromImport(null), setImporting(true))} title={waiting > 0 ? `${waiting} pictures wait in the import queue: open to carry on` : 'Read battle reports from screenshots and start the records from them'}>
           Import from pictures
           {waiting > 0 && <span className="badge"> {waiting} waiting</span>}
@@ -395,9 +402,9 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
         olderLabel="Show older battles"
         onOlder={showMore}
         empty={battles.length === 0}
-        filtered={mode.length > 0 || tag.length > 0 || player.trim() !== ''}
-        none="No battles recorded yet."
-        noMatch="No battles match these filters."
+        filtered={mode.length > 0 || tag.length > 0 || askedPlayer !== ''}
+        none="No records yet."
+        noMatch="No records match these filters."
       />
       {dialog}
     </div>

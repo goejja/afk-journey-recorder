@@ -31,8 +31,8 @@ const makeCurrent = async (season: number) => {
 
 const team = (hero = 'A') => ({ heroes: [{ tile: 38, hero }], phantimal: null, assistHero: null, artifact: null });
 const fight = (hero = 'A', extra: object = {}) => ({ mapName: 'Open', outcome: 'Win', formation: team(hero), opponent: { heroes: [{ tile: 0, hero: 'X' }] }, ...extra });
-const pvp = (extra: object = {}) => send('POST', '/api/pvp/battles', { mode: 'Arena', ...fight(), ...extra });
-const group = (extra: object = {}, mode = 'Super League', hero = 'A') => send('POST', '/api/pvp/battle-groups', { mode, fights: [fight(hero)], ...extra });
+const pvp = (extra: object = {}) => send('POST', '/api/pvp/fights', { mode: 'Arena', ...fight(), ...extra });
+const group = (extra: object = {}, mode = 'Super League', hero = 'A') => send('POST', '/api/pvp/battles', { mode, fights: [fight(hero)], ...extra });
 const dream = () => send('POST', '/api/dream-hunt/attempts', { boss: 'King Croaker', mapName: 'Open', outcome: 'Win', timeSeconds: 90, formation: team() });
 const stageAttempt = async () => {
   const stage = await json(send('POST', '/api/stages', { season: 7, phase: 0, kind: 'Normal', number: 100, mapName: 'Open' }));
@@ -55,7 +55,7 @@ describe('the season a record was played in (ADR 0038)', () => {
     const saved = await json(pvp({ season: 3 }));
     expect(saved.season).toBe(8);
     await makeCurrent(9);
-    const edited = await json(send('PUT', `/api/pvp/battles/${saved.id}`, fight('B', { mode: 'Arena' })));
+    const edited = await json(send('PUT', `/api/pvp/fights/${saved.id}`, fight('B', { mode: 'Arena' })));
     expect(edited.season).toBe(8);
   });
 
@@ -70,9 +70,9 @@ describe('the season a record was played in (ADR 0038)', () => {
   });
 
   it('is the season of the fights a Battle already has for a fight added to it later', async () => {
-    const created = await json(send('POST', '/api/pvp/battle-groups', { mode: 'Supreme Arena', fights: [fight('A')] }));
+    const created = await json(send('POST', '/api/pvp/battles', { mode: 'Supreme Arena', fights: [fight('A')] }));
     await makeCurrent(9);
-    const edited = await json(send('PUT', `/api/pvp/battle-groups/${created.id}`, { fights: [fight('A'), fight('B')] }));
+    const edited = await json(send('PUT', `/api/pvp/battles/${created.id}`, { fights: [fight('A'), fight('B')] }));
     expect(edited.fights.map((f: any) => f.season)).toEqual([8, 8]);
   });
 

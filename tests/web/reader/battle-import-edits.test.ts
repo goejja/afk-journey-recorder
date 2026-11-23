@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { BattleImportPicture, Profile } from '../../../web/backend.js';
+import type { FightImportPicture, Profile } from '../../../web/backend.js';
 import { groupPictures } from '../../../web/reader/battle-import.js';
 import { applyEdits, namesOf, noEdits, pruneEdits } from '../../../web/reader/battle-import-edits.js';
 
 const side = (name: string, profile: { id: number; name: string; playerId: string | null } | null = null) => ({ name, profile, heroes: [], artifact: null, phantimal: null, crops: null, unread: [] });
-const picture = (id: number, key: string | undefined, a: string, b: string, number: number | null = null): BattleImportPicture =>
-  ({ id, key, label: null, state: 'done', draft: { mode: 'Guild Duel', number, outcome: 'Win', sideA: side(a), sideB: side(b) } }) as unknown as BattleImportPicture;
+const picture = (id: number, key: string | undefined, a: string, b: string, number: number | null = null): FightImportPicture =>
+  ({ id, key, label: null, state: 'done', draft: { mode: 'Guild Duel', number, outcome: 'Win', sideA: side(a), sideB: side(b) } }) as unknown as FightImportPicture;
 const profile = (id: number, name: string): Profile => ({ id, name, playerId: null }) as unknown as Profile;
 
 describe('pruneEdits', () => {

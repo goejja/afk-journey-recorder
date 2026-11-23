@@ -33,7 +33,7 @@ describe('layoutKey', () => {
 });
 
 describe('rotateLayout', () => {
-  it('turns the board upside down: tile i goes to the tile 44 - i', () => {
+  it('turns the map upside down: tile i goes to the tile 44 - i', () => {
     const turned = rotateLayout({
       units: [
         { kind: 'hero', hero: 'Alna', part: '', tile: 0 },

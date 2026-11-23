@@ -20,7 +20,7 @@ export interface FormationIdEntry {
   deployment: Deployment;
   /** Where the code was seen: context, not part of a match. */
   maps: string[];
-  /** How many records (fights on their own, or battles) name this code. */
+  /** How many records (fights on their own, battles, or Titan Reaver Battles) name this code. */
   records: number;
 }
 
@@ -37,7 +37,8 @@ const recordCount = (db: Database.Database, code: string): number =>
       `SELECT count(*) FROM (
          SELECT 'f', attempt_id FROM formation WHERE formation_id = @code
          UNION SELECT 'f', attempt_id FROM arena_attempt WHERE opp_formation_id = @code
-         UNION SELECT 'b', id FROM battle WHERE formation_id = @code OR opp_formation_id = @code)`,
+         UNION SELECT 'b', id FROM battle WHERE formation_id = @code OR opp_formation_id = @code
+         UNION SELECT 't', id FROM titan_reaver_battle WHERE formation_id = @code)`,
     )
     .pluck()
     .get({ code }) as number;
@@ -52,7 +53,8 @@ const recordCounts = (db: Database.Database): Map<string, number> =>
              SELECT formation_id AS code, 'f' AS kind, attempt_id AS id FROM formation WHERE formation_id IS NOT NULL
              UNION SELECT opp_formation_id, 'f', attempt_id FROM arena_attempt WHERE opp_formation_id IS NOT NULL
              UNION SELECT formation_id, 'b', id FROM battle WHERE formation_id IS NOT NULL
-             UNION SELECT opp_formation_id, 'b', id FROM battle WHERE opp_formation_id IS NOT NULL)
+             UNION SELECT opp_formation_id, 'b', id FROM battle WHERE opp_formation_id IS NOT NULL
+             UNION SELECT formation_id, 't', id FROM titan_reaver_battle WHERE formation_id IS NOT NULL)
            GROUP BY code`,
         )
         .all() as { code: string; records: number }[]

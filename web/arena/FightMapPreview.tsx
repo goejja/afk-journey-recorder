@@ -1,10 +1,10 @@
-import type { ArenaBattle, GameMap } from '../backend.js';
+import type { ArenaFight, GameMap } from '../backend.js';
 import { ArtifactSlot } from '../ArtifactSlot.js';
 import { UnitsOnMap, type MapUnit } from '../admin/UnitsOnMap.js';
 import { phantimalAt, rowName } from '../units.js';
 
 /** A saved battle on its map: both formations where they stood, and each side's artifact. Read only. */
-export function BattleMapPreview({ battle, map }: { battle: ArenaBattle; map: GameMap | undefined }) {
+export function FightMapPreview({ battle, map }: { battle: ArenaFight; map: GameMap | undefined }) {
   if (!map) return <p className="muted">The map “{battle.mapName}” no longer exists.</p>;
   const a = battle.formation;
   const b = battle.opponent;

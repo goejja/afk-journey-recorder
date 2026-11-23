@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useAction } from '../hooks/action.js';
-import { api, type ArenaBattle } from '../backend.js';
-import { SideProfileBar } from './BattleEditor.js';
+import { api, type ArenaFight } from '../backend.js';
+import { SideProfileBar } from './FightTeamsEditor.js';
 import { useSideProfiles } from './useSideProfiles.js';
 import { RecordShell } from '../RecordShell.js';
-import { type PatchReference, type Reference, draftFromBattle, toInput, profileByPlayerId } from './draft.js';
-import { ArenaIdentity, WinnerField, Board, FightFormationIds, UnionLevels } from './BoardParts.js';
+import { type PatchReference, type Reference, draftFromFight, toInput, profileByPlayerId } from './draft.js';
+import { ArenaIdentity, WinnerField, FightEditor, FightFormationIds, UnionLevels } from './FightParts.js';
 
-export function EditBattle({ battle, reference, patchReference, onSaved, onCancel }: { battle: ArenaBattle; reference: Reference; patchReference: PatchReference; onSaved: () => void; onCancel: () => void }) {
+export function EditFight({ battle, reference, patchReference, onSaved, onCancel }: { battle: ArenaFight; reference: Reference; patchReference: PatchReference; onSaved: () => void; onCancel: () => void }) {
   const [mode, setMode] = useState(battle.mode);
-  const [draft, setDraft] = useState(() => draftFromBattle(battle));
+  const [draft, setDraft] = useState(() => draftFromFight(battle));
   const { error, busy, setError, run } = useAction();
   // As in a new battle: the profile of each side, found from its Player ID; choosing one sets the side's Player ID (the recorded states stay).
   const { profileRoster, barProps } = useSideProfiles({
@@ -23,12 +23,12 @@ export function EditBattle({ battle, reference, patchReference, onSaved, onCance
   });
 
   async function save() {
-    await run(() => api.updateArenaBattle(battle.id, toInput(mode, draft)), onSaved);
+    await run(() => api.updateArenaFight(battle.id, toInput(mode, draft)), onSaved);
   }
 
   return (
     <RecordShell
-      title="Edit battle"
+      title="Edit record"
       identity={<ArenaIdentity mode={mode} onMode={setMode} draft={draft} reference={reference} onChange={setDraft} />}
       result={<WinnerField draft={draft} onChange={setDraft} />}
       note={draft.note}
@@ -49,7 +49,7 @@ export function EditBattle({ battle, reference, patchReference, onSaved, onCance
       onSave={() => void save()}
       onCancel={onCancel}
     >
-      <Board draft={draft} mode={mode} reference={reference} sideRosters={profileRoster} onChange={setDraft} />
+      <FightEditor draft={draft} mode={mode} reference={reference} sideRosters={profileRoster} onChange={setDraft} />
     </RecordShell>
   );
 }

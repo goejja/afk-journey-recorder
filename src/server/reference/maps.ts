@@ -22,6 +22,8 @@ function toJson(row: MapRow): GameMap {
     cells: JSON.parse(row.cells) as number[],
     boostTiles: JSON.parse(row.boost_tiles) as number[],
     source: row.source,
+    // Drawn here while the import's source lacked it (an Arena map with no imported original): the next import takes it over when the source lists it (#297).
+    handMade: row.source === 'manual' && row.original_cells === null && (JSON.parse(row.tags) as string[]).includes('Arena'),
     // An edited import can go back to its scraped version.
     canRestore: row.original_cells !== null && row.original_cells !== row.cells,
   };

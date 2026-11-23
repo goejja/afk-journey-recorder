@@ -28,7 +28,7 @@ describe('partnersAt', () => {
   });
 
   it('takes the allies of the same diagonal game row, not those of the same editor line', () => {
-    // A board read from the game's formation generator: only Senea shares Alna's game row, though Daimon and Zorya stand on her editor line
+    // A layout read from the game's formation generator: only Senea shares Alna's game row, though Daimon and Zorya stand on her editor line
     expect(partnersAt('sameRow', 38, units({ kazim: 19, daimon: 40, zorya: 42, senea: 43 }))).toEqual(['senea']);
   });
 

@@ -21,7 +21,7 @@ const send = (url: string, body?: unknown) =>
   app.request(url, { method: body === undefined ? 'GET' : 'POST', headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
 const json = async (response: Response | Promise<Response>) => (await response).json() as Promise<any>;
 const battle = (mine: string, enemy: string, outcome: 'Win' | 'Loss', mapName = 'Open', mode = 'Arena') =>
-  send('/api/pvp/battles', {
+  send('/api/pvp/fights', {
     mode,
     mapName,
     outcome,

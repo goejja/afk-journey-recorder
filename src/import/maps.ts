@@ -2,22 +2,23 @@ import type Database from 'better-sqlite3';
 import { ROW_LENGTHS } from '../domain/map.js';
 import { MAP_CORRECTIONS } from './map-corrections.js';
 import { evalConst, parseChunk, type Json } from './static-eval.js';
+import { takeOverMap, type TakenOver } from './take-over.js';
 
-export interface BoardRow {
+export interface MapRow {
   name: string;
   rowLengths: number[];
   cells: number[];
 }
 
-const MIN_BOARDS = 20;
-/** The editor's empty scratch board; it is not a real arena. */
-const BLANK_BOARD = 'Custom';
+const MIN_MAPS = 20;
+/** The editor's empty scratch row; it is not a real arena. */
+const BLANK_MAP = 'Custom';
 const CELL_VALUES = new Set([-3, -2, -1, 0, 1]);
 
 const isNumberArray = (value: Json | undefined): value is number[] =>
   Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'number');
 
-function isBoardTable(value: Json | undefined): value is Record<string, number[]> {
+function isMapTable(value: Json | undefined): value is Record<string, number[]> {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -40,10 +41,10 @@ function rowLengthsOf(value: Json | undefined): number[] | null {
 }
 
 /**
- * Reads the Arena board table and its row layout from the editor's chunks.
+ * Reads the Arena row table and its row layout from the editor's chunks.
  * Cells are listed row by row, left to right, in the order of the row lengths.
  */
-export function extractBoards(chunkSources: string[]): BoardRow[] {
+export function extractMaps(chunkSources: string[]): MapRow[] {
   let table: Record<string, number[]> | undefined;
   let rowLengths: number[] | null = null;
   for (const source of chunkSources) {
@@ -51,32 +52,33 @@ export function extractBoards(chunkSources: string[]): BoardRow[] {
       if (node.type !== 'ObjectExpression' && node.type !== 'ArrayExpression') continue;
       const value = evalConst(node, ancestors);
       if (value === undefined) continue;
-      if (!table && isBoardTable(value)) table = value;
+      if (!table && isMapTable(value)) table = value;
       rowLengths ??= rowLengthsOf(value);
     }
   }
-  if (!table) throw new Error('Arena board table not found in chunks');
-  if (!rowLengths) throw new Error('Board row layout not found in chunks');
+  if (!table) throw new Error('Arena row table not found in chunks');
+  if (!rowLengths) throw new Error('Map row layout not found in chunks');
   const cellCount = rowLengths.reduce((sum, n) => sum + n, 0);
 
-  const boards: BoardRow[] = [];
+  const maps: MapRow[] = [];
   for (const [name, cells] of Object.entries(table)) {
-    if (name === BLANK_BOARD) continue;
-    if (cells.length !== cellCount) throw new Error(`Board ${name} has ${cells.length} cells, expected ${cellCount}`);
+    if (name === BLANK_MAP) continue;
+    if (cells.length !== cellCount) throw new Error(`Map ${name} has ${cells.length} cells, expected ${cellCount}`);
     const unknown = cells.find((c) => !CELL_VALUES.has(c));
-    if (unknown !== undefined) throw new Error(`Board ${name} has unknown cell value ${unknown}`);
-    boards.push({ name, rowLengths, cells });
+    if (unknown !== undefined) throw new Error(`Map ${name} has unknown cell value ${unknown}`);
+    maps.push({ name, rowLengths, cells });
   }
-  if (boards.length < MIN_BOARDS) throw new Error(`Only ${boards.length} boards found; expected at least ${MIN_BOARDS}`);
-  return boards;
+  if (maps.length < MIN_MAPS) throw new Error(`Only ${maps.length} maps found; expected at least ${MIN_MAPS}`);
+  return maps;
 }
 
 /**
  * Upserts the imported Arena maps. The imported version is always refreshed in `original_cells`,
  * but a map the player edited (source = 'manual') keeps its own tiles. A map with a known correction
- * takes the corrected tiles as its imported version.
+ * takes the corrected tiles as its imported version. A map the player drew by hand while the source lacked it is taken over when the
+ * source lists it (said in what it returns).
  */
-export function storeArenaMaps(db: Database.Database, boards: BoardRow[], corrections: Record<string, number[]> = MAP_CORRECTIONS): void {
+export function storeArenaMaps(db: Database.Database, maps: MapRow[], corrections: Record<string, number[]> = MAP_CORRECTIONS): TakenOver[] {
   const upsert = db.prepare(
     `INSERT INTO map (name, tags, row_lengths, cells, original_cells, source)
      VALUES (@name, '["Arena"]', @rowLengths, @cells, @cells, 'import')
@@ -85,13 +87,17 @@ export function storeArenaMaps(db: Database.Database, boards: BoardRow[], correc
        row_lengths = CASE WHEN map.source = 'import' THEN excluded.row_lengths ELSE map.row_lengths END,
        cells = CASE WHEN map.source = 'import' THEN excluded.cells ELSE map.cells END`,
   );
+  const taken: TakenOver[] = [];
   db.transaction(() => {
-    for (const board of boards) {
-      const cells = corrections[board.name] ?? board.cells;
-      if (cells.length !== board.cells.length) throw new Error(`The correction of ${board.name} has ${cells.length} tiles, expected ${board.cells.length}`);
-      upsert.run({ name: board.name, rowLengths: JSON.stringify(board.rowLengths), cells: JSON.stringify(cells) });
+    for (const row of maps) {
+      const cells = corrections[row.name] ?? row.cells;
+      if (cells.length !== row.cells.length) throw new Error(`The correction of ${row.name} has ${cells.length} tiles, expected ${row.cells.length}`);
+      const over = takeOverMap(db, row.name, row.rowLengths, cells);
+      if (over) taken.push(over);
+      upsert.run({ name: row.name, rowLengths: JSON.stringify(row.rowLengths), cells: JSON.stringify(cells) });
     }
   })();
+  return taken;
 }
 
 const STAGE_MAP_NAMES = ['Open', 'Wall left', 'Wall right', 'Wall center', 'Walls both sides'];

@@ -1,10 +1,11 @@
-import { extractBoards, seedStageMaps, storeArenaMaps } from '../src/import/boards.js';
+import { extractMaps, seedStageMaps, storeArenaMaps } from '../src/import/maps.js';
 import { extname } from 'node:path';
 import { openDb } from '../src/db/open.js';
 import { parseCards, type Card } from '../src/import/cards.js';
 import { discoverChunkUrls } from '../src/import/discover.js';
 import { createCachedFetcher } from '../src/import/fetch.js';
 import { storeBosses, storeHeroes } from '../src/import/store-cards.js';
+import { takeOverLines } from '../src/import/take-over.js';
 import { fetchEnemies, storeEnemies, type Enemy } from '../src/import/wiki.js';
 import { storeReferenceData } from '../src/import/store-reference.js';
 import { extractReferenceData } from '../src/import/yaphalla-data.js';
@@ -26,12 +27,12 @@ for (const url of chunkUrls) sources.push(await fetcher.text(url));
 const data = extractReferenceData(sources);
 const db = openDb(dbPath);
 storeReferenceData(db, data);
-const boards = extractBoards(sources);
-storeArenaMaps(db, boards);
+const maps = extractMaps(sources);
+const takenMaps = storeArenaMaps(db, maps);
 seedStageMaps(db);
 console.log(
   `Imported ${data.ranks.length} ranks, ${data.equipmentLevels.length} equipment levels, ` +
-    `${data.rankEquipmentCaps.length} caps, ${data.artifacts.length} artifacts into ${dbPath}; ${boards.length} Arena boards`,
+    `${data.rankEquipmentCaps.length} caps, ${data.artifacts.length} artifacts into ${dbPath}; ${maps.length} Arena maps`,
 );
 
 // Heroes and bosses: server-rendered list pages, plus portrait images.
@@ -52,9 +53,10 @@ async function importCards(page: string, kind: 'heroes' | 'bosses', minimum: num
 
 const heroes = await importCards('/heroes', 'heroes', MIN_HEROES);
 const bosses = await importCards('/bosses', 'bosses', MIN_BOSSES);
-storeHeroes(db, heroes.cards, heroes.imagePathFor);
-storeBosses(db, bosses.cards, bosses.imagePathFor);
+const takenHeroes = storeHeroes(db, heroes.cards, heroes.imagePathFor);
+const takenBosses = storeBosses(db, bosses.cards, bosses.imagePathFor);
 console.log(`Imported ${heroes.cards.length} heroes and ${bosses.cards.length} bosses`);
+for (const line of takeOverLines([...takenMaps, ...takenHeroes, ...takenBosses])) console.log(line);
 
 // Enemies: the fandom wiki's API (the article pages themselves are blocked to plain fetches).
 const wikiFetcher = createCachedFetcher('cache/wiki', refresh);

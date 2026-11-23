@@ -4,7 +4,7 @@ import { withRosterStates } from '../FormationEditor.js';
 import type { useAction } from '../hooks/action.js';
 import { useNewest } from '../hooks/load.js';
 import { useProfileRosters } from '../reader/useProfileRosters.js';
-import type { SideProfileBarProps } from './BattleEditor.js';
+import type { SideProfileBarProps } from './FightTeamsEditor.js';
 import type { Draft, PatchReference, Side } from './draft.js';
 import { withRosterOpponent } from './OpponentEditor.js';
 

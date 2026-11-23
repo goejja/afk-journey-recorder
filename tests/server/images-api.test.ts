@@ -22,7 +22,7 @@ beforeEach(() => {
 
   const db = openDb(':memory:');
   db.prepare("INSERT INTO hero (name, image_path) VALUES ('Evie', 'images/heroes/Evie.png'), ('Fay', NULL)").run();
-  db.prepare("INSERT INTO enemy (name, category) VALUES ('Grunt', 'Common')").run();
+  db.prepare("INSERT INTO enemy (name, kind) VALUES ('Grunt', 'Common')").run();
   db.prepare("INSERT INTO boss (name) VALUES ('King Croaker')").run();
   db.prepare("INSERT INTO artifact (name, grp) VALUES ('Bladestorm', 'Season 8')").run();
   db.prepare("INSERT INTO phantimal (name) VALUES ('Gervan'), ('Seralyth')").run();

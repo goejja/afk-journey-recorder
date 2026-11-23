@@ -20,7 +20,7 @@ beforeEach(() => {
 const team = (names: string[]) => ({ heroes: names.map((hero, i) => ({ tile: 38 + i, hero })), phantimal: null, assistHero: null, artifact: null});
 /** A fight of `mine` against a lone hero `Z`-side stand-in (`M`), which is too small to form a group. */
 const fight = (outcome: 'Win' | 'Loss', mine: string[], extra: Record<string, unknown> = {}) =>
-  app.request('/api/pvp/battles', {
+  app.request('/api/pvp/fights', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ mode: 'Arena', mapName: 'Open', outcome, formation: team(mine), opponent: { heroes: [{ tile: 0, hero: 'M' }] }, ...extra }),

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { correctHeroes, feedbackOf, knownTeams, type KnownTeam } from '../../../web/reader/battle-import.js';
-import type { BattleDraftSide } from '../../../web/backend.js';
+import type { FightDraftSide } from '../../../web/backend.js';
 import { draftSide } from '../../support/draft-side.js';
 
-const side = (names: string[], unread: string[] = []): BattleDraftSide => draftSide({
+const side = (names: string[], unread: string[] = []): FightDraftSide => draftSide({
   name: 'Rover',
   profile: null,
   heroes: names.map((hero, i) => ({ tile: `t${i}`, hero, rank: 'Supreme', equipmentLevel: 15 })),

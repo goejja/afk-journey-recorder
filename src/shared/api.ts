@@ -155,7 +155,7 @@ export interface Scenario {
   slots: { position: number; mapName: string; rule: string | null; mine: ScenarioHero[]; enemy: ScenarioHero[] }[];
 }
 
-export interface GeneratedBoard {
+export interface GeneratedTeam {
   position: number;
   map: string | null;
   enemy: string[];
@@ -172,11 +172,11 @@ export interface GeneratedBoard {
   evidence?: 'win-score' | 'guess' | 'pinned';
   score?: { estimate: number; low: number; high: number; interval: string } | null;
   effectiveSample?: number;
-  comparableBattles?: number;
+  comparableFights?: number;
   recordedGames?: number;
   notes?: string[];
   note?: string;
-  /** The Formation groups that beat the group this board's enemy looks like, from the owner's own PvP records (a hint, never part of the Win Score). */
+  /** The Formation groups that beat the group this team's enemy looks like, from the owner's own PvP records (a hint, never part of the Win Score). */
   pastCounters?: PastCounters;
   /** The Placement Rules of the proposed team and whether its tiles satisfy them (ADR 0036). A preference, never part of the Win Score. */
   rules?: PlacementRuleLine[];
@@ -218,12 +218,12 @@ interface Swap {
   delta: number;
   evidence: 'win-score' | 'guess';
   effectiveSample: number;
-  comparableBattles: number;
+  comparableFights: number;
   small: boolean;
   tile: number | null;
 }
 
-/** The Counter Advisor's answer: up to three sets of teams, one board each. */
+/** The Counter Advisor's answer: up to three sets of teams, one team each. */
 /** A stored record whose Phantimal its own heroes cannot have brought, most likely a misread in a Battle import (ADR 0029). */
 export interface FactionMismatch {
   attemptId: number;
@@ -236,7 +236,7 @@ export interface FactionMismatch {
 
 export interface CounterAdvice {
   mode: ArenaMode;
-  sets: { matchChance: number; boards: GeneratedBoard[] }[];
+  sets: { matchChance: number; teams: GeneratedTeam[] }[];
   notes: string[];
 }
 
@@ -255,9 +255,9 @@ export interface GeneratedFormation {
   scenario: { id: number | null; name: string; mode: ArenaMode };
   matchChance: number | null;
   matchChanceFromGuesses: boolean | null;
-  boards: GeneratedBoard[];
-  /** Up to three sets of teams, best first, each differing from the others by at least two heroes in a team. The first is `boards`. */
-  sets: { matchChance: number; boards: GeneratedBoard[] }[];
+  teams: GeneratedTeam[];
+  /** Up to three sets of teams, best first, each differing from the others by at least two heroes in a team. The first is `teams`. */
+  sets: { matchChance: number; teams: GeneratedTeam[] }[];
   notes: string[];
 }
 
@@ -319,7 +319,7 @@ export interface MapStat {
   winRate: number;
 }
 
-/** A hero's results in one row of the board, counted from the back edge of its own side (1 is the back row). */
+/** A hero's results in one row of the team, counted from the back edge of its own side (1 is the back row). */
 export interface RowStat {
   row: number;
   games: number;
@@ -426,7 +426,7 @@ export interface PlacementMap extends RateRecord {
 export interface FormationProfileStat extends FormationGroupRow {
   artifacts: (RateRecord & { artifact: string; share: number })[];
   variations: (RateRecord & { flex: string[] })[];
-  otherLineups: (RateRecord & { heroes: string[] })[];
+  otherFormations: (RateRecord & { heroes: string[] })[];
   heroImpact: { hero: string; with: RateRecord; without: RateRecord }[];
   strongAgainst: (RateRecord & { enemy: string[] })[];
   weakAgainst: (RateRecord & { enemy: string[] })[];
@@ -514,7 +514,7 @@ export interface OpponentInput {
   formationId?: string | null;
 }
 
-export interface ArenaBattle {
+export interface ArenaFight {
   id: number;
   mode: ArenaMode;
   createdAt: string;
@@ -567,7 +567,13 @@ export type { DefaultMode, DefaultSlot };
 /** The Tournament and Round a Super League battle is saved in; `null` for both clears them. */
 export type BattleRound = { tournamentId: number; round: Round } | { tournamentId: null; round: null };
 
-export interface ArenaBattleInput {
+/** A Battle of a PvP mode: the teams (Fights) of one Supreme Arena, Super League or Guild Duel game, saved together. */
+export interface ArenaBattle {
+  id: number;
+  fights: ArenaFight[];
+}
+
+export interface ArenaFightInput {
   mode: ArenaMode;
   mapName: string;
   rule: string | null;
@@ -597,7 +603,7 @@ export interface DraftHero {
   candidates?: string[];
 }
 
-export interface BattleDraftSide {
+export interface FightDraftSide {
   /** The name as the game shows it. */
   name: string | null;
   /** The Profile with that name, when there is one: its Player ID goes on the side. */
@@ -616,7 +622,7 @@ export interface BattleDraftSide {
 }
 
 /** What one picture of a PvP battle report says, as the start of a record. Nothing here is saved. */
-export interface BattleDraft {
+export interface FightDraft {
   mode: ArenaMode;
   /** The fight's number in its battle, or null when the report has none. */
   number: number | null;
@@ -624,8 +630,8 @@ export interface BattleDraft {
   outcome: 'Win' | 'Loss' | null;
   unionLevelA: number | null;
   unionLevelB: number | null;
-  sideA: BattleDraftSide;
-  sideB: BattleDraftSide;
+  sideA: FightDraftSide;
+  sideB: FightDraftSide;
   /** A saved fight of this mode with the same heroes on both sides and the same result. */
   duplicateOf: { id: number; createdAt: string } | null;
 }
@@ -859,6 +865,7 @@ export interface TierCheck {
 export type * from './contracts/tags.js';
 export type * from './contracts/seasons.js';
 export type * from './contracts/artifacts.js';
+export type * from './contracts/bosses.js';
 export type * from './contracts/profiles.js';
 export type * from './contracts/defaults.js';
 export type * from './contracts/maps.js';
@@ -966,4 +973,40 @@ export interface ParkedList {
   counts: Record<ParkKind, number>;
   /** The most readings kept of each kind: a full kind parks no more. */
   caps: Record<ParkKind, number>;
+}
+
+/** One fight of a Titan Reaver Battle: its team against one boss and the damage dealt in it. */
+export interface TitanReaverFight {
+  position: 1 | 2;
+  boss: string;
+  damage: number;
+  formation: FormationJson;
+}
+
+/** A Titan Reaver record: two fights, one team against each boss of a Titan Reaver Phase; the total damage is what the game ranks. */
+export interface TitanReaverBattle {
+  id: number;
+  createdAt: string;
+  /** The season it was played in (ADR 0038), set when it was saved. */
+  season: number;
+  /** Which Titan Reaver event: the Season Phase it was held in (1 to 3). */
+  seasonPhase: number;
+  titanPhase: 'Charge' | 'Clash' | 'Conquer';
+  level: number;
+  note: string | null;
+  tags: string[];
+  /** The Formation ID of both teams, if any. */
+  formationId: string | null;
+  fights: TitanReaverFight[];
+  total: number;
+}
+
+export interface TitanReaverBattleInput {
+  seasonPhase: number;
+  titanPhase: string;
+  level: number;
+  note: string;
+  tags?: string[];
+  formationId?: string | null;
+  fights: { boss: string; damage: number; formation: FormationInput }[];
 }

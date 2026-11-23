@@ -4,7 +4,7 @@ import { api, type DreamHuntAttempt } from '../backend.js';
 import { RecordShell } from '../RecordShell.js';
 import { FormationIdField } from '../FormationIdField.js';
 import { type Reference, draftFromFight, toFight } from './draft.js';
-import { FightIdentity, FightResult, FightBoard } from './FightParts.js';
+import { FightIdentity, FightResult, FightEditor } from './FightParts.js';
 
 export function EditFight({ fight, reference, onSaved, onCancel }: { fight: DreamHuntAttempt; reference: Reference; onSaved: () => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(() => draftFromFight(fight));
@@ -18,7 +18,7 @@ export function EditFight({ fight, reference, onSaved, onCancel }: { fight: Drea
 
   return (
     <RecordShell
-      title="Edit boss fight"
+      title="Edit record"
       identity={<FightIdentity draft={draft} reference={reference} showRule onChange={setDraft} />}
       result={<FightResult draft={draft} onChange={setDraft} />}
       note={draft.note}
@@ -33,7 +33,7 @@ export function EditFight({ fight, reference, onSaved, onCancel }: { fight: Drea
       onSave={() => void save()}
       onCancel={onCancel}
     >
-      <FightBoard draft={draft} reference={reference} onChange={setDraft} />
+      <FightEditor draft={draft} reference={reference} onChange={setDraft} />
     </RecordShell>
   );
 }

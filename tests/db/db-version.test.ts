@@ -264,4 +264,19 @@ describe('database versions (ADR 0023)', () => {
     expect(after.pragma('user_version', { simple: true })).toBe(0);
     after.close();
   });
+
+  it('renames enemy.category to enemy.kind and keeps the enemies and the Common, Elite, Boss check (#269)', () => {
+    const path = tempFile();
+    openDb(path).close();
+    const old = new Database(path);
+    old.exec('ALTER TABLE enemy RENAME COLUMN kind TO category');
+    old.exec("INSERT INTO enemy (name, category) VALUES ('Grunt', 'Common'), ('Captain', 'Elite')");
+    old.pragma('user_version = 37');
+    old.close();
+    const db = openDb(path);
+    expect(db.prepare("SELECT name FROM pragma_table_info('enemy') WHERE name IN ('category', 'kind')").pluck().all()).toEqual(['kind']);
+    expect(db.prepare('SELECT name, kind FROM enemy ORDER BY name').all()).toEqual([{ name: 'Captain', kind: 'Elite' }, { name: 'Grunt', kind: 'Common' }]);
+    expect(() => db.prepare("INSERT INTO enemy (name, kind) VALUES ('X', 'Strange')").run()).toThrow(/CHECK/);
+    db.close();
+  });
 });

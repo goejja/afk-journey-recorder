@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 
 const battle = (a: string[], b: string[], outcome: 'Win' | 'Loss', extra: object = {}) =>
-  app.request('/api/pvp/battles', {
+  app.request('/api/pvp/fights', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -77,9 +77,9 @@ describe('partner statistics', () => {
 });
 
 describe('positional partner statistics', () => {
-  /** A battle with each side's heroes on named tiles (the opponent's in the board's own numbering, as the editor records them). */
+  /** A battle with each side's heroes on named tiles (the opponent's in the map's own numbering, as the editor records them). */
   const placed = (mine: Record<string, number>, theirs: Record<string, number>, outcome: 'Win' | 'Loss', extra: object = {}) =>
-    app.request('/api/pvp/battles', {
+    app.request('/api/pvp/fights', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -103,7 +103,7 @@ describe('positional partner statistics', () => {
     ]);
   });
 
-  it('reads Side B from its own back edge, the board turned', async () => {
+  it('reads Side B from its own back edge, the map turned', async () => {
     // the opponent's tiles 4 and 1 are tiles 40 and 43 once turned: Y stands behind Gunnar
     expect((await placed({ B: 38 }, { Gunnar: 4, Y: 1 }, 'Loss')).status).toBe(201);
     expect(positionalPartners(db, 'Gunnar', 'behind').partners.map((p) => p.hero)).toEqual(['Y']);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { urlOf } from '../src/shared/contract.js';
 import { imagesContract } from '../src/shared/contracts/images.js';
 
@@ -17,17 +17,19 @@ function GameIcon({ kind, name }: { kind: IconKind; name: string }) {
   return <img className="game-icon" src={urlOf(imagesContract.icon, { params: { kind, name } })} alt="" title={name} loading="lazy" onError={() => setMissing(true)} />;
 }
 
-/** The strip beside a hero's portrait: its tier as a coloured letter, then its class and faction icons. */
-export function HeroIcons({ tier, heroClass, faction }: { tier: string | null; heroClass: string | null; faction: string | null }) {
+/** The strip beside a hero's portrait: its tier as a coloured letter, then its class and faction icons. In a `row` (a list) the three keep their places whether or not there is one, so the icons of the rows line up. */
+export function HeroIcons({ tier, heroClass, faction, row = false }: { tier: string | null; heroClass: string | null; faction: string | null; row?: boolean }) {
+  const slot = (shown: boolean, content: ReactNode) => (shown ? content : row ? <span className="icon-slot" /> : null);
   return (
-    <span className="hero-icons">
-      {tier && (
+    <span className={row ? 'hero-icons hero-icons-row' : 'hero-icons'}>
+      {slot(
+        !!tier,
         <span className={`tier-letter tier-${tier}`} title={`Tier ${tier}`}>
           {tier}
-        </span>
+        </span>,
       )}
-      {heroClass && <GameIcon kind="class" name={heroClass} />}
-      {faction && <GameIcon kind="faction" name={faction} />}
+      {slot(!!heroClass, heroClass && <GameIcon kind="class" name={heroClass} />)}
+      {slot(!!faction, faction && <GameIcon kind="faction" name={faction} />)}
     </span>
   );
 }

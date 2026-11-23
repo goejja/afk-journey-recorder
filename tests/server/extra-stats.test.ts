@@ -18,7 +18,7 @@ beforeEach(async () => {
   app = createApp(db);
   const side = (units: [string, number][], artifact: string | null = null) => ({ heroes: units.map(([hero, tile]) => ({ tile, hero })), phantimal: null, assistHero: null, artifact});
   const fight = (mode: string, mapName: string, outcome: string, mine: [string, number][], enemy: [string, number][], extra: Record<string, unknown> = {}, artifact: string | null = null) =>
-    send('POST', '/api/pvp/battles', { mode, mapName, outcome, formation: side(mine, artifact), opponent: { heroes: enemy.map(([hero, tile]) => ({ tile, hero })) }, ...extra });
+    send('POST', '/api/pvp/fights', { mode, mapName, outcome, formation: side(mine, artifact), opponent: { heroes: enemy.map(([hero, tile]) => ({ tile, hero })) }, ...extra });
   await fight('Arena', 'Open', 'Win', [['A', 44], ['B', 38]], [['X', 0]], {}, 'Bladestorm');
   await fight('Arena', 'Open', 'Loss', [['A', 38]], [['X', 0]], {}, 'Bladestorm');
   await fight('Supreme Arena', 'Other', 'Win', [['B', 43]], [['X', 4]], { rule: 'Berserk' });

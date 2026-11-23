@@ -46,7 +46,7 @@ function Rate({ r }: { r: RateRecord }) {
   );
 }
 
-/** Where the group stands on one map: the example board (each hero on its most used free tile) and the list behind it. */
+/** Where the group stands on one map: the example layout (each hero on its most used free tile) and the list behind it. */
 function Placement({ placement, maps }: { placement: PlacementMap[]; maps: GameMap[] }) {
   const [chosen, setChosen] = useState(placement[0]?.map ?? '');
   const current = placement.find((p) => p.map === chosen) ?? placement[0];
@@ -70,7 +70,7 @@ function Placement({ placement, maps }: { placement: PlacementMap[]; maps: GameM
         <HexMap
           rowLengths={map.rowLengths}
           cells={map.cells}
-          label={`Example board on ${current.map}`}
+          label={`Example Layout on ${current.map}`}
           tileTitle={(index) => heroAt.get(index)}
           renderTile={(index) => (heroAt.has(index) ? <Portrait kind="hero" name={heroAt.get(index)!} size={30} /> : undefined)}
         />
@@ -166,7 +166,7 @@ function CounterMatrix({ report }: { report: GroupCounterReport }) {
       <p className="muted">
         The {shown.length} most played groups. Each cell is the win rate of the row group against the column group, with the games under it; green is above 50%, red below, and a faded cell has fewer than {report.rule.minGames} games.
       </p>
-      <table className="board counter-matrix" aria-label="Win rate of each group against each other">
+      <table className="data-table counter-matrix" aria-label="Win rate of each group against each other">
         <thead>
           <tr>
             <th scope="col">Group</th>
@@ -205,7 +205,7 @@ function Profile({ core, filters, maps, counters }: { core: string[]; filters: F
       {profile.artifacts.length === 0 ? (
         <p className="muted">No artifact recorded.</p>
       ) : (
-        <table className="board" aria-label="Artifacts of the group">
+        <table className="data-table" aria-label="Artifacts of the group">
           <thead><tr><th>Artifact</th><th>Used on</th><th>Record</th></tr></thead>
           <tbody>
             {profile.artifacts.map((a) => (
@@ -220,7 +220,7 @@ function Profile({ core, filters, maps, counters }: { core: string[]; filters: F
       )}
       <h4>Common variations</h4>
       {profile.variations.length === 0 ? (
-        <p className="muted">No lineup was recorded 3 times.</p>
+        <p className="muted">No Formation was recorded 3 times.</p>
       ) : (
         <ul className="stats-detail">
           {profile.variations.map((v) => (
@@ -230,11 +230,11 @@ function Profile({ core, filters, maps, counters }: { core: string[]; filters: F
           ))}
         </ul>
       )}
-      {profile.otherLineups.length > 0 && (
+      {profile.otherFormations.length > 0 && (
         <>
-          <h4>Other recorded lineups</h4>
+          <h4>Other recorded Formations</h4>
           <ul className="stats-detail">
-            {profile.otherLineups.map((l) => (
+            {profile.otherFormations.map((l) => (
               <li key={l.heroes.join('/')}>
                 {plain(l.heroes)} — <Rate r={l} />
               </li>
@@ -418,7 +418,7 @@ export function FormationGroups({ filters }: { filters: Filters }) {
   return (
     <>
       <p className="muted">
-        A group is a set of lineups that differ by one hero. A core hero is in at least 80% of the group's games and a flex hero in 15% to below 80%, each with its share. Groups that share two or more core heroes sit under one archetype. The win rate is set against all sides under these filters ({report ? percent(report.baseline) : '…'}).
+        A group is a set of Formations that differ by one hero. A core hero is in at least 80% of the group's games and a flex hero in 15% to below 80%, each with its share. Groups that share two or more core heroes sit under one archetype. The win rate is set against all sides under these filters ({report ? percent(report.baseline) : '…'}).
       </p>
       <div className="filters">
         <MultiSelect label="Hero" options={heroes} value={picked} onChange={setPicked} />

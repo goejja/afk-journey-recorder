@@ -52,13 +52,13 @@ describe('fetchEnemies', () => {
     const byName = Object.fromEntries(enemies.map((e) => [e.name, e]));
     expect(byName['Alpha Bear']).toEqual({
       name: 'Alpha Bear',
-      category: 'Boss',
+      kind: 'Boss',
       class: 'Warrior',
       damageType: 'Physical',
       imageUrl: 'https://img.test/bear.png',
     });
-    expect(byName['Grunt 0']?.category).toBe('Boss');
-    expect(byName['Captain']).toMatchObject({ category: 'Elite', class: null, imageUrl: null });
+    expect(byName['Grunt 0']?.kind).toBe('Boss');
+    expect(byName['Captain']).toMatchObject({ kind: 'Elite', class: null, imageUrl: null });
   });
 
   it('fails when far fewer enemies than expected come back', async () => {
@@ -69,7 +69,7 @@ describe('fetchEnemies', () => {
 describe('storeEnemies', () => {
   it('stores idempotently and keeps manual edits', () => {
     const db = openDb(':memory:');
-    const enemy = { name: 'Alpha Bear', category: 'Boss' as const, class: 'Warrior', damageType: 'Physical' as const, imageUrl: null };
+    const enemy = { name: 'Alpha Bear', kind: 'Boss' as const, class: 'Warrior', damageType: 'Physical' as const, imageUrl: null };
     storeEnemies(db, [enemy], () => null);
     storeEnemies(db, [enemy], () => null);
     expect(db.prepare('SELECT count(*) FROM enemy').pluck().get()).toBe(1);

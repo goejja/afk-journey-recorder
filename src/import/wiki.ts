@@ -6,18 +6,18 @@ const API = 'https://afk-journey.fandom.com/api.php';
 const IMAGE_BATCH = 50;
 const MIN_ENEMIES = 300;
 
-type EnemyCategory = 'Common' | 'Elite' | 'Boss';
+type EnemyKind = 'Common' | 'Elite' | 'Boss';
 
 export interface Enemy {
   name: string;
-  category: EnemyCategory;
+  kind: EnemyKind;
   class: string | null;
   damageType: 'Physical' | 'Magic' | null;
   imageUrl: string | null;
 }
 
-// Listed from lowest to highest priority: an enemy listed under several wins its highest category.
-const CATEGORY_PAGES: [EnemyCategory, string][] = [
+// Listed from lowest to highest priority: an enemy listed under several wins its highest kind.
+const KIND_PAGES: [EnemyKind, string][] = [
   ['Common', 'Common Enemies'],
   ['Elite', 'Elite Enemies'],
   ['Boss', 'Boss Enemies'],
@@ -66,9 +66,9 @@ async function pageImages(fetcher: Fetcher, titles: string[]): Promise<Map<strin
 }
 
 export async function fetchEnemies(fetcher: Fetcher): Promise<Enemy[]> {
-  const categoryOf = new Map<string, EnemyCategory>();
-  for (const [category, page] of CATEGORY_PAGES) {
-    for (const title of await categoryMembers(fetcher, page)) categoryOf.set(title, category);
+  const kindOf = new Map<string, EnemyKind>();
+  for (const [kind, page] of KIND_PAGES) {
+    for (const title of await categoryMembers(fetcher, page)) kindOf.set(title, kind);
   }
   const classOf = new Map<string, string>();
   for (const cls of CLASSES) {
@@ -78,14 +78,14 @@ export async function fetchEnemies(fetcher: Fetcher): Promise<Enemy[]> {
   for (const kind of ['Physical', 'Magic'] as const) {
     for (const title of await categoryMembers(fetcher, `${kind} Damage Dealing Enemies`)) damageOf.set(title, kind);
   }
-  const names = [...categoryOf.keys()];
+  const names = [...kindOf.keys()];
   if (names.length < MIN_ENEMIES) {
     throw new Error(`Only ${names.length} enemies found on the wiki; expected at least ${MIN_ENEMIES}`);
   }
   const images = await pageImages(fetcher, names);
   return names.map((name) => ({
     name,
-    category: categoryOf.get(name)!,
+    kind: kindOf.get(name)!,
     class: classOf.get(name) ?? null,
     damageType: damageOf.get(name) ?? null,
     imageUrl: images.get(name) ?? null,
@@ -94,12 +94,12 @@ export async function fetchEnemies(fetcher: Fetcher): Promise<Enemy[]> {
 
 /** Upserts enemies; enemies the player edited by hand (source = 'manual') are left alone. */
 export function storeEnemies(db: Database.Database, enemies: Enemy[], imagePathFor: (enemy: Enemy) => string | null): void {
-  const upsert = upsertImported(db, 'enemy', ['name', 'name'], [['category', 'category'], ['class', 'class'], ['damage_type', 'damageType'], ['image_path', 'imagePath']]);
+  const upsert = upsertImported(db, 'enemy', ['name', 'name'], [['kind', 'kind'], ['class', 'class'], ['damage_type', 'damageType'], ['image_path', 'imagePath']]);
   db.transaction(() => {
     for (const enemy of enemies) {
       upsert.run({
         name: enemy.name,
-        category: enemy.category,
+        kind: enemy.kind,
         class: enemy.class,
         damageType: enemy.damageType,
         imagePath: imagePathFor(enemy),

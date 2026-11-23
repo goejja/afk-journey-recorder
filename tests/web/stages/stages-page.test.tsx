@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
+import { phaseOf, type GridBox } from '../../../src/domain/stage-grid.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import { StagesPage } from '../../../web/stages/StagesPage.js';
@@ -19,19 +20,21 @@ const data: Record<string, unknown> = {
     { name: 'Arc Burst', group: 'Season 7' },
     { name: 'Awakening', group: 'Pre-Season' },
   ],
-  '/api/enemies': [{ name: 'Grunt', category: 'Common', class: null, damageType: null, imagePath: null, uses: 0 }],
+  '/api/enemies': [{ name: 'Grunt', kind: 'Common', class: null, damageType: null, imagePath: null, uses: 0 }],
   '/api/phantimals': [{ name: 'Gervan', faction: 'Lightbearer', class: 'Mage', seasons: [8], source: 'import' }],
 };
 
 let requests: { method: string; url: string; body?: any }[];
 let attempts: unknown[];
 let gridBoxes: unknown[];
+let gridPhase: number | null;
 let holdCreate: Promise<void> | null;
 
 beforeEach(() => {
   requests = [];
   attempts = [];
   gridBoxes = [];
+  gridPhase = null;
   holdCreate = null;
   window.history.replaceState(null, '', '#stages'); // the page state lives in the address
   vi.stubGlobal('window', Object.assign(window, { confirm: () => true }));
@@ -42,7 +45,7 @@ beforeEach(() => {
       const method = init?.method ?? 'GET';
       requests.push({ method, url, body });
       if (url === '/api/reference') return Response.json({ ranks: ['Elite', 'Mythic+'], equipmentLevels: [0, 10], caps: [{ rank: 'Mythic+', minLevel: 0, maxLevel: 10 }] });
-      if (url === '/api/stage-grid') return Response.json({ season: 8, boxes: gridBoxes });
+      if (url === '/api/stage-grid') return Response.json({ season: 8, phase: gridPhase ?? Math.max(1, ...(gridBoxes as GridBox[]).filter((b) => b.state === 'cleared').map(phaseOf)), boxes: gridBoxes });
       if (url.startsWith('/api/attempts') && method === 'GET') return Response.json(attempts);
       if (url === '/api/attempts' && method === 'POST') {
         await holdCreate;
@@ -75,7 +78,7 @@ const yourTiles = () =>
 
 async function openForm(user: ReturnType<typeof userEvent.setup>) {
   render(<StagesPage />);
-  await user.click(await screen.findByRole('button', { name: 'New attempt' }));
+  await user.click(await screen.findByRole('button', { name: 'New record' }));
 }
 
 describe('StagesPage', () => {
@@ -107,7 +110,7 @@ describe('StagesPage', () => {
     await user.click(within(screen.getByRole('list', { name: 'Artifacts' })).getByRole('button', { name: 'Bladestorm' }));
     expect(screen.queryByLabelText(/Artifact level/)).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
     expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation).toMatchObject({ assistHero: 'Fay', artifact: 'Bladestorm'});
   });
@@ -120,7 +123,7 @@ describe('StagesPage', () => {
     await user.type(screen.getByLabelText('Stage number'), '100');
     await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
     await user.click(yourTiles()[0]!);
-    await user.dblClick(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.dblClick(screen.getByRole('button', { name: 'Save record' }));
     const saving = await screen.findByRole('button', { name: 'Saving…' });
     expect((saving as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Save and record another' }) as HTMLButtonElement).disabled).toBe(true);
@@ -158,7 +161,7 @@ describe('StagesPage', () => {
     await user.click(within(screen.getByRole('list', { name: 'Artifacts' })).getByRole('button', { name: 'Bladestorm' }));
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(document.querySelector('.map-slot .hex-slot:not(.hex-slot-empty)')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
     const formation = requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation;
     expect(formation).toEqual({ heroes: [{ tile: 38, hero: 'Evie' }], phantimal: null, assistHero: 'Fay', artifact: 'Bladestorm', formationId: null });
@@ -176,13 +179,13 @@ describe('StagesPage', () => {
     render(<StagesPage />);
     await user.click(await screen.findByRole('button', { name: 'Apex Normal stage 100, cleared this season' }));
     await user.click(await screen.findByRole('button', { name: 'Clone' }));
-    expect(screen.getByText('New attempt', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByText('New record', { selector: 'h2' })).toBeTruthy();
     expect((screen.getByLabelText('Stage number') as HTMLInputElement).value).toBe('100');
     await waitFor(() => expect(requests.some((r) => r.url.startsWith('/api/stages?') && r.url.includes('season=8'))).toBe(true)); // the stage of this season, not the cloned record's
     expect(await screen.findByLabelText(/Buff level/)).toBeTruthy();
     expect((screen.getByLabelText(/Buff level/) as HTMLInputElement).value).toBe('12');
     expect(within(await screen.findByRole('list', { name: 'Placed on Your formation' })).getByText('Evie')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')).toBeTruthy());
     expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body).toMatchObject({
       stageId: 7, buffLevel: 12, note: '', tags: ['Luna'], formation: { heroes: [{ tile: 38, hero: 'Evie' }] },
@@ -204,7 +207,8 @@ describe('StagesPage', () => {
     expect(laneHead('Apex Phantisomal').textContent).toContain('Apex Phantisomal · 1–667 · Collapsed');
   });
 
-  it('opens on the highest phase with a record of this season, and shows that phase’s numbers', async () => {
+  it('opens on the stored Season Phase, and shows that phase’s numbers', async () => {
+    gridPhase = 2;
     gridBoxes = [box('Normal', 1), box('Phantisomal', 700), box('Phantisomal', 1300, 'older')];
     render(<StagesPage />);
     expect((await screen.findByRole('tab', { name: 'Phase 2' })).getAttribute('aria-selected')).toBe('true');
@@ -310,7 +314,7 @@ describe('StagesPage', () => {
     expect(await screen.findByText('Nothing recorded for this stage yet.')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Record a clear' }));
     expect((screen.getByLabelText('Stage number') as HTMLInputElement).value).toBe('12');
-    expect(screen.getByText('New attempt', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByText('New record', { selector: 'h2' })).toBeTruthy();
   });
 
   it('adds a clear to an older box on the map of its newest record', async () => {
@@ -390,7 +394,7 @@ describe('StagesPage', () => {
     await user.click(yourTiles()[0]!);
     expect(heroes.getByRole('button', { name: /Evie/ }).hasAttribute('disabled')).toBe(true);
 
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
     // a stage that is new is created when the attempt is saved
     expect(requests.find((r) => r.url === '/api/stages' && r.method === 'POST')!.body).toMatchObject({ season: 8, phase: 0, kind: 'Normal', number: 100, mapName: 'Open' });
@@ -417,7 +421,7 @@ describe('StagesPage', () => {
     expect(locked.querySelector('button')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Remove tag AFK range' })).toBeNull();
     expect(screen.queryByText('Result')).toBeNull(); // a range is only cleared stages
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
 
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts/range')).toBe(true));
     expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(false);
@@ -451,7 +455,7 @@ describe('StagesPage', () => {
     await user.clear(screen.getByLabelText('Stage number'));
     await user.type(screen.getByLabelText('Stage number'), '101');
     await screen.findByRole('list', { name: 'Heroes' });
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
     expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.formation.heroes).toEqual([{ tile: 40, hero: 'Evie' }]);
     data['/api/maps'] = [{ name: 'Open', tags: ['Stage'], rowLengths, cells, source: 'manual', canRestore: false }];
@@ -471,7 +475,7 @@ describe('StagesPage', () => {
     expect((phantimals.getByRole('button', { name: 'No Phantimal' }) as HTMLButtonElement).disabled).toBe(false);
     expect((phantimals.getByRole('button', { name: 'Gervan' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/Three heroes of one faction bring a Phantimal/)).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
     const saved = requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!;
     expect(saved.body.formation.phantimal).toBeNull();
@@ -490,7 +494,7 @@ describe('StagesPage', () => {
     await user.type(buff, '12');
     await user.click(within(screen.getByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
     await user.click(yourTiles()[0]!);
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
     expect(requests.find((r) => r.url === '/api/attempts' && r.method === 'POST')!.body.buffLevel).toBe(12);
     expect(requests.find((r) => r.url === '/api/stages' && r.method === 'POST')!.body).toMatchObject({ kind: 'Apex Normal', phase: 2, number: 30 });
@@ -512,7 +516,7 @@ describe('StagesPage', () => {
     await user.click(screen.getByRole('button', { name: 'Remove Lucca' }));
     await user.click(within(await screen.findByRole('list', { name: 'Heroes' })).getByRole('button', { name: /Evie/ }));
     await user.click(yourTiles()[0]!);
-    await user.click(screen.getByRole('button', { name: 'Save attempt' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.some((r) => r.url === '/api/attempts' && r.method === 'POST')).toBe(true));
     expect(requests.find((r) => r.method === 'PUT')!.body).toEqual({ mapName: 'Open', enemies: [{ enemy: 'Grunt', hero: null, count: 1 }] });
   });
@@ -554,7 +558,7 @@ describe('a link to a record', () => {
     withRecord(() => Response.json(record(5, { stage })));
     const user = userEvent.setup();
     render(<StagesPage />);
-    expect(await screen.findByRole('heading', { name: 'Edit attempt' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Edit record' })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(await screen.findByRole('tab', { name: 'Phase 2', selected: true })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Apex Normal stage 40/, pressed: true })).toBeTruthy();
@@ -567,7 +571,7 @@ describe('a link to a record', () => {
     withRecord(() => Response.json({ error: 'Record 99 no longer exists' }, { status: 404 }));
     render(<StagesPage />);
     expect((await screen.findByRole('alert')).textContent).toContain('Record 99 no longer exists');
-    expect(screen.queryByRole('heading', { name: 'Edit attempt' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Edit record' })).toBeNull();
     await waitFor(() => expect(window.location.hash).toBe('#stages')); // the address is cleaned in an effect after the message shows
   });
 });

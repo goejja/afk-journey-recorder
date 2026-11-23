@@ -24,7 +24,7 @@ const send = (method: string, url: string, body?: unknown) =>
 const json = async (response: Response | Promise<Response>) => (await response).json() as Promise<any>;
 const fight = async () =>
   json(
-    send('POST', '/api/pvp/battles', {
+    send('POST', '/api/pvp/fights', {
       mode: 'Arena', mapName: 'Duel', outcome: 'Win',
       formation: { heroes: [{ tile: 38, hero: 'A', rank: 'Mythic', equipmentLevel: 0 }, { tile: 39, hero: 'B', rank: 'Mythic', equipmentLevel: 0 }], phantimal: null, assistHero: null, artifact: null},
       opponent: { heroes: [{ tile: 0, hero: 'H', rank: 'Mythic', equipmentLevel: 0 }] },
@@ -36,7 +36,7 @@ describe('correcting the states a record stored', () => {
     const saved = await fight();
     const res = await send('POST', '/api/records/hero-states', { attemptIds: [saved.id], side: 'A', heroes: [{ hero: 'A', rank: 'Mythic+', equipmentLevel: 10 }, { hero: 'H', rank: 'Mythic+', equipmentLevel: 10 }] });
     expect(await res.json()).toEqual({ corrected: 1 }); // H is on Side B, not on the side asked
-    const after = (await json(send('GET', '/api/pvp/battles')))[0];
+    const after = (await json(send('GET', '/api/pvp/fights')))[0];
     expect(after.formation.heroes.map((h: any) => [h.name, h.rank, h.equipmentLevel])).toEqual([['A', 'Mythic+', 10], ['B', 'Mythic', 0]]);
     expect(after.opponent.heroes[0]).toMatchObject({ name: 'H', rank: 'Mythic', equipmentLevel: 0 });
   });
@@ -44,7 +44,7 @@ describe('correcting the states a record stored', () => {
   it('corrects Side B too', async () => {
     const saved = await fight();
     await send('POST', '/api/records/hero-states', { attemptIds: [saved.id], side: 'B', heroes: [{ hero: 'H', rank: 'Mythic+', equipmentLevel: 5 }] });
-    expect((await json(send('GET', '/api/pvp/battles')))[0].opponent.heroes[0]).toMatchObject({ rank: 'Mythic+', equipmentLevel: 5 });
+    expect((await json(send('GET', '/api/pvp/fights')))[0].opponent.heroes[0]).toMatchObject({ rank: 'Mythic+', equipmentLevel: 5 });
   });
 
   it('refuses a state the rules do not allow, an unknown record and a bad request, and changes nothing', async () => {
@@ -54,6 +54,6 @@ describe('correcting the states a record stored', () => {
     expect((await send('POST', '/api/records/hero-states', { attemptIds: [999], side: 'A', heroes: [{ hero: 'A', rank: 'Mythic+', equipmentLevel: null }] })).status).toBe(404);
     expect((await send('POST', '/api/records/hero-states', { attemptIds: [saved.id], side: 'C', heroes: [{ hero: 'A', rank: null, equipmentLevel: null }] })).status).toBe(400);
     expect((await send('POST', '/api/records/hero-states', { attemptIds: [], side: 'A', heroes: [{ hero: 'A', rank: null, equipmentLevel: null }] })).status).toBe(400);
-    expect((await json(send('GET', '/api/pvp/battles')))[0].formation.heroes[0]).toMatchObject({ rank: 'Mythic', equipmentLevel: 0 });
+    expect((await json(send('GET', '/api/pvp/fights')))[0].formation.heroes[0]).toMatchObject({ rank: 'Mythic', equipmentLevel: 0 });
   });
 });

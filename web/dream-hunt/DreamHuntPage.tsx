@@ -20,7 +20,7 @@ const VIEWS: { key: View; label: string }[] = [
   { key: 'simulator', label: 'Simulator' },
   { key: 'best', label: 'Best teams' },
   { key: 'finder', label: 'Finder' },
-  { key: 'fights', label: 'Fights' },
+  { key: 'fights', label: 'Records' },
 ];
 
 export function DreamHuntPage() {

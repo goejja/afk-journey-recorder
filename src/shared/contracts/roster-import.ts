@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BattleDraft } from '../api.js';
+import type { FightDraft } from '../api.js';
 import { Binary, endpoint, Upload, queryText as text } from '../contract.js';
 
 // The Roster and Battle import: pictures of the game's screens that an agent reads, queued and reviewed before anything is saved.
@@ -60,14 +60,14 @@ export interface RosterImportState {
 }
 
 /** A picture given to the Battle import, and what was read of it once done. */
-export interface BattleImportPicture {
+export interface FightImportPicture {
   id: number;
   /** What identifies the picture across restarts (a hash of it), to keep the player's edits with it. */
   key?: string;
   label: string | null;
   state: 'queued' | 'running' | 'done' | 'failed';
   error?: string;
-  draft?: BattleDraft;
+  draft?: FightDraft;
   /** The artifact and phantimal crops of each side as PNG data URLs, fetched when the picture is opened in the form (the server forgets the picture then). */
   cropData?: Record<'A' | 'B', ImportFeedbackSide['crops']>;
   /** The picture itself as a data URL, fetched with the crops, to keep with the saved fight (ADR 0016); null when it could not be fetched. */
@@ -100,7 +100,7 @@ export interface BattleImportState {
   canRead: boolean;
   reason: string | null;
   busy: boolean;
-  queue: BattleImportPicture[];
+  queue: FightImportPicture[];
 }
 
 export interface ImportApplySection {

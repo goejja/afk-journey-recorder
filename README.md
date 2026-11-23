@@ -8,7 +8,7 @@ This edition has no Advisor: it records, imports and counts. It does not estimat
 
 ```
 npm install
-npm run import:reference   # one-time: heroes, bosses, boards, artifacts, enemies (cached afterwards)
+npm run import:reference   # one-time: heroes, bosses, maps, artifacts, enemies (cached afterwards)
 npm run dev                # API on http://127.0.0.1:3000, UI on http://127.0.0.1:5173
 npm test
 ```
@@ -27,7 +27,7 @@ In Admin → Images, "Crop and frame" turns any picture into a hexagonal, framed
 
 AFK Journey, its heroes, bosses, enemies, artifacts and all related art belong to Lilith Games. This is an unofficial, personal, non-commercial tool and is not affiliated with or endorsed by Lilith Games.
 
-Reference data (names, classes, factions, boards, ranks, artifacts) is imported for personal use from fan resources: [Yaphalla](https://www.yaphalla.com) and the [AFK Journey Fandom wiki](https://afk-journey.fandom.com); artifact icons come from [AFK Global](https://www.afk.global).
+Reference data (names, classes, factions, maps, ranks, artifacts) is imported for personal use from fan resources: [Yaphalla](https://www.yaphalla.com) and the [AFK Journey Fandom wiki](https://afk-journey.fandom.com); artifact icons come from [AFK Global](https://www.afk.global).
 
 If you want to see what shared game data across many players can show, [Stargazer](https://github.com/tmdict/stargazer) by tmdict is an interesting open project and worth a look. This repository does not use or contain its data.
 

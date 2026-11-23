@@ -62,7 +62,7 @@ export function FightResult({ draft, onChange }: { draft: Draft; onChange: (draf
   );
 }
 
-export function FightBoard({ draft, reference, unavailable, borrow, onChange }: { draft: Draft; reference: Reference; unavailable?: Map<string, string>; borrow?: Borrow; onChange: (draft: Draft) => void }) {
+export function FightEditor({ draft, reference, unavailable, borrow, onChange }: { draft: Draft; reference: Reference; unavailable?: Map<string, string>; borrow?: Borrow; onChange: (draft: Draft) => void }) {
   const map = reference.maps.find((m) => m.name === draft.mapName);
   if (!map) return <p className="muted">Pick a map.</p>;
   return (

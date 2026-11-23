@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../../../src/db/open.js';
 import type { HeroStateRules } from '../../../src/domain/hero-state.js';
 import type { ImportPlayer } from '../../../src/domain/roster-import.js';
-import { draftOf } from '../../../src/server/records/battle-draft.js';
+import { draftOf } from '../../../src/server/records/fight-draft.js';
 
 const rules: HeroStateRules = { ranks: ['Mythic'], equipmentLevels: [0, 10], caps: [] };
 let db: Database.Database;

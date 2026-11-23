@@ -124,7 +124,7 @@ export function BoxPanel({ box, state, newestSeason, maps, version, onEdit, onCl
               <button className="small" onClick={() => onEdit(a)}>
                 Edit
               </button>
-              <button className="small" title="Start a new clear from this one, on this season's stage" onClick={() => onClone(a)}>
+              <button className="small" title="Start a new record from this one, on this season's stage" onClick={() => onClone(a)}>
                 Clone
               </button>
               <button className="danger small" onClick={() => onDelete(a)}>

@@ -7,6 +7,8 @@ import { dropEmptyBattles } from './battles.js';
 import { anyOf, limitParam, listParam } from '../params.js';
 import { hasAnyTag, loadTags, saveTags } from './tags.js';
 import { fightFormationIdProblem, formationContext, insertFormation, loadFormation, replaceFormation } from './formations.js';
+import { currentSeasonPhase, raiseSeasonPhase } from '../season-phase.js';
+import { phaseOf } from '../../domain/stage-grid.js';
 import { currentSeason, heroNameSet, heroNames, mapCells } from '../db-helpers.js';
 import { inTransaction } from '../transaction.js';
 import type { Enemy } from '../../shared/contracts/stages.js';
@@ -62,7 +64,7 @@ export function stageRoutes(db: Database.Database): Hono {
   serve(app, stagesContract.enemies, () =>
     (db
       .prepare(
-        `SELECT name, category, class, damage_type AS damageType, image_path AS imagePath,
+        `SELECT name, kind, class, damage_type AS damageType, image_path AS imagePath,
                 (SELECT count(*) FROM stage_enemy WHERE enemy_name = enemy.name) AS uses
          FROM enemy ORDER BY name`,
       )
@@ -83,7 +85,7 @@ export function stageRoutes(db: Database.Database): Hono {
          ORDER BY s.kind, s.phase, s.number`,
       )
       .all(season) as { kind: StageKind; phase: number; number: number; newestSeason: number; thisSeason: number }[];
-    return { season, boxes: rows.map((r) => ({ kind: r.kind, phase: r.phase, number: r.number, state: r.thisSeason ? ('cleared' as const) : ('older' as const), newestSeason: r.newestSeason })) };
+    return { season, phase: currentSeasonPhase(db), boxes: rows.map((r) => ({ kind: r.kind, phase: r.phase, number: r.number, state: r.thisSeason ? ('cleared' as const) : ('older' as const), newestSeason: r.newestSeason })) };
   });
 
   serve(app, stagesContract.list, (_, c) => {
@@ -189,6 +191,7 @@ export function stageRoutes(db: Database.Database): Hono {
           db.prepare('UPDATE stage_attempt SET stage_id = ? WHERE stage_id = ?').run(target.id, old.id);
           db.prepare('DELETE FROM stage WHERE id = ?').run(old.id);
         }
+        if (moved > 0) raiseForStage({ ...old, kind: newKind }); // the Phase a stage shows under can change with its kind
         result.stages++;
         result.attempts += moved;
       }
@@ -236,12 +239,18 @@ export function stageRoutes(db: Database.Database): Hono {
     return { stage, buffLevel: buffLevel as number | null, note, tags: tags.tags };
   }
 
+  /** A cleared stage of the current Season says the Season is at least at its Phase. Call inside a transaction. */
+  function raiseForStage(stage: StageRow): void {
+    raiseSeasonPhase(db, stage.season, phaseOf({ kind: stage.kind, phase: stage.phase, number: stage.number }));
+  }
+
   /** Inserts one checked attempt. Call inside a transaction. */
   function insertAttempt(body: any, checked: Exclude<ReturnType<typeof check>, { error: string }>): number {
     const attemptId = Number(db.prepare("INSERT INTO attempt (mode, outcome, note, season) VALUES ('Stage', 'Win', ?, ?)").run(checked.note, currentSeason(db)).lastInsertRowid);
     db.prepare('INSERT INTO stage_attempt (attempt_id, stage_id, buff_level) VALUES (?, ?, ?)').run(attemptId, checked.stage.id, checked.buffLevel);
     insertFormation(db, attemptId, body.formation, new Map(), checked.stage.map_name);
     saveTags(db, attemptId, checked.tags);
+    raiseForStage(checked.stage);
     return attemptId;
   }
 
@@ -297,6 +306,7 @@ export function stageRoutes(db: Database.Database): Hono {
       db.prepare('UPDATE stage_attempt SET stage_id = ?, buff_level = ? WHERE attempt_id = ?').run(checked.stage.id, checked.buffLevel, id);
       replaceFormation(db, id, body.formation, new Map(), checked.stage.map_name);
       saveTags(db, id, checked.tags);
+      raiseForStage(checked.stage);
     })();
     return loadAttempts({ id })[0]!;
   });

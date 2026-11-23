@@ -179,7 +179,7 @@ export function CompositionTable({ boss, compositions, maps, send }: { boss: str
   const toggle = (key: string) => setOpen((current) => toggled(current, key));
   const scaleMax = Math.max(1, ...compositions.flatMap((c) => [c.worstSeconds ?? 0, c.rule?.worstSeconds ?? 0]));
   return (
-    <table className="board">
+    <table className="data-table">
       <thead>
         <tr>
           <th>#</th>
@@ -252,7 +252,7 @@ export function BestTeams({ bosses, rules, send }: { bosses: Boss[]; rules: Boss
   }, [bosses, boss]);
 
   // Only the latest request counts: a slow answer for an earlier boss or filter must not replace the one the player asked for last.
-  const { data: board = null, error } = useLoad(
+  const { data: leaderboard = null, error } = useLoad(
     () => api.leaderboard(boss, rule, tag, thisWeek ? weekStart(new Date().toISOString()) : '', include, exclude),
     [boss, rule, tag, thisWeek, include.join('|'), exclude.join('|')],
     boss !== '',
@@ -306,10 +306,10 @@ export function BestTeams({ bosses, rules, send }: { bosses: Boss[]; rules: Boss
           {error}
         </Notice>
       )}
-      {board && board.compositions.length === 0 && (
+      {leaderboard && leaderboard.compositions.length === 0 && (
         <p className="muted">{include.length + exclude.length > 0 ? 'No recorded team matches these heroes.' : 'No fights recorded for this boss yet.'}</p>
       )}
-      {board && board.compositions.length > 0 && <CompositionTable boss={board.boss} compositions={board.compositions} maps={maps} send={send} />}
+      {leaderboard && leaderboard.compositions.length > 0 && <CompositionTable boss={leaderboard.boss} compositions={leaderboard.compositions} maps={maps} send={send} />}
     </div>
   );
 }

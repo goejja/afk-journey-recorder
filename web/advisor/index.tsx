@@ -10,6 +10,15 @@ import type { SentTeam } from '../dream-hunt/sentTeams.js';
 /** A team to start a new fight from: a fight of the record, or a team the player placed by hand. */
 export type RecordPick = { index: number; attemptId: number } | { index: number; pin: { mapName: string; formation: FormationState } };
 
+/** A Titan Reaver plan to start a new record from. */
+export interface TitanRecordPlan {
+  seasonPhase: number;
+  titanPhase: 'Charge' | 'Clash' | 'Conquer';
+  level: number;
+  bosses: (string | null)[];
+  picks: ({ battleId: number; boss: string } | null)[];
+}
+
 const Missing = ({ name }: { name: string }) => (
   <p className="muted">
     The {name} is not part of this build.
@@ -32,3 +41,8 @@ export const TeamGenerator = () => <Missing name="Team generator" />;
 export const PlacementRulesAdmin = (_props: { hero: string }) => null;
 
 export const ScoreSettingsAdmin = () => null;
+
+export const TitanReaverAdvisor = (_props: { onRecord: (plan: TitanRecordPlan) => void }) => <Missing name="Advisor" />;
+
+/** Whether the Advisor screens are part of this build. */
+export const advisorInstalled = false;

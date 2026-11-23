@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLane, defaultPhase, laneRange, openByDefault, panelAfter, phaseOf, standardPhase, type GridBox } from '../../src/domain/stage-grid.js';
+import { buildLane, laneRange, openByDefault, panelAfter, phaseOf, standardPhase, type GridBox } from '../../src/domain/stage-grid.js';
 
 const box = (kind: GridBox['kind'], number: number, state: GridBox['state'] = 'cleared', phase = 0): GridBox => ({ kind, phase, number, state, newestSeason: state === 'cleared' ? 8 : 7 });
 
@@ -43,13 +43,6 @@ describe('the Stages grid lanes', () => {
     expect(openByDefault(apex([]), standard(true, true))).toBe(true); // unlocked, no record yet
     expect(openByDefault(apex([box('Apex Normal', 3, 'cleared', 1)]), standard(false, false))).toBe(true);
     expect(openByDefault(apex([box('Apex Normal', 3, 'older', 1)]), standard(false, false))).toBe(false);
-  });
-
-  it('opens on the highest phase with a record of the current season, else the first', () => {
-    expect(defaultPhase([])).toBe(1);
-    expect(defaultPhase([box('Normal', 5, 'older'), box('Normal', 700, 'older')])).toBe(1);
-    expect(defaultPhase([box('Normal', 5), box('Phantisomal', 700), box('Apex Normal', 3, 'older', 3)])).toBe(2);
-    expect(defaultPhase([box('Apex Normal', 3, 'cleared', 3)])).toBe(3);
   });
 
   it('puts the panel of a box after the last box of its row', () => {

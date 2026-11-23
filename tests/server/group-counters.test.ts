@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../../src/db/open.js';
 import { TILE, TILE_COUNT } from '../../src/domain/map.js';
 import { groupCounters, groupSides } from '../../src/query/index.js';
-import { counterBattles, type CounterBattle } from '../../src/query/formations.js';
+import { counterFights, type CounterFight } from '../../src/query/formations.js';
 import { createApp } from '../../src/server/app.js';
 
 const RULE = { winRate: 0.65, minGames: 5 };
@@ -13,12 +13,12 @@ const ICE = ['F', 'G', 'H', 'I', 'J'];
 const WIND = ['K', 'L', 'M', 'N', 'O'];
 
 /** `times` battles of `a` against `b`, `aWins` of them won by `a`. */
-const battles = (a: string[], b: string[], times: number, aWins: number): CounterBattle[] =>
+const battles = (a: string[], b: string[], times: number, aWins: number): CounterFight[] =>
   Array.from({ length: times }, (_, i) => [
     { heroes: a, won: Number(i < aWins) },
     { heroes: b, won: Number(i >= aWins) },
   ]);
-const groupsOf = (all: CounterBattle[]) => groupSides(all.flatMap((pair) => pair.map((s) => ({ ...s, playerId: null }))));
+const groupsOf = (all: CounterFight[]) => groupSides(all.flatMap((pair) => pair.map((s) => ({ ...s, playerId: null }))));
 const indexOf = (groups: ReturnType<typeof groupsOf>, hero: string) => groups.findIndex((g) => g.core.some((c) => c.hero === hero));
 
 describe('groupCounters', () => {
@@ -103,7 +103,7 @@ describe('counter battles and the counters report', () => {
 
   const side = (names: string[], base: number) => names.map((hero, i) => ({ tile: base + i, hero }));
   const fight = (outcome: 'Win' | 'Loss', mine: string[], theirs: string[], extra: Record<string, unknown> = {}) =>
-    app.request('/api/pvp/battles', {
+    app.request('/api/pvp/fights', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ mode: 'Arena', mapName: 'Open', outcome, formation: { heroes: side(mine, 38), phantimal: null, assistHero: null, artifact: null }, opponent: { heroes: side(theirs, 0) }, ...extra }),
@@ -115,7 +115,7 @@ describe('counter battles and the counters report', () => {
   it('reads both sides of each battle, as Side A and Side B', async () => {
     await record(2, 2, FIRE, ICE);
 
-    const battles = counterBattles(db, {});
+    const battles = counterFights(db, {});
     expect(battles).toHaveLength(2);
     expect(battles[0]).toEqual([{ heroes: FIRE, won: 1 }, { heroes: ICE, won: 0 }]);
   });

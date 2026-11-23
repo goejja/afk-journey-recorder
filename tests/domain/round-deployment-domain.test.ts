@@ -61,7 +61,7 @@ describe('matching a picture with the Round Deployment', () => {
     expect(sameReading(read(['A'], { artifact: 'Crown' }), read(['A']))).toBe(false);
   });
 
-  it('turns the board over for a Player who stood on Side B', () => {
+  it('turns the map over for a Player who stood on Side B', () => {
     const match = matchTeam(deployed, read(['A', 'B', 'C']), 'B');
     expect(match.state).toBe('fits');
     if (match.state === 'fits') expect(match.team.heroes.map((h) => h.tile)).toEqual([TILE_COUNT - 1 - 38, TILE_COUNT - 1 - 39, TILE_COUNT - 1 - 40]);
@@ -125,11 +125,11 @@ describe('the rules of a Round Deployment', () => {
     expect(roundDeploymentProblem(five([deployed, team([hero('D', 38)], 'Scepter')]))).toBeNull();
   });
 
-  it('refuses a hero or an artifact on two teams, a shared tile, a tile off the board and a wrong number of teams', () => {
+  it('refuses a hero or an artifact on two teams, a shared tile, a tile off the map and a wrong number of teams', () => {
     expect(roundDeploymentProblem(five([deployed, team([hero('A', 38)])]))).toMatch(/A is on teams 1 and 2/);
     expect(roundDeploymentProblem(five([deployed, team([hero('D', 38)])]))).toMatch(/Crown is on teams 1 and 2/);
     expect(roundDeploymentProblem(five([team([hero('A', 38), hero('B', 38)])]))).toMatch(/one tile/);
-    expect(roundDeploymentProblem(five([team([hero('A', TILE_COUNT)])]))).toMatch(/off the board/);
+    expect(roundDeploymentProblem(five([team([hero('A', TILE_COUNT)])]))).toMatch(/off the map/);
     expect(roundDeploymentProblem([deployed])).toMatch(/5 teams/);
   });
 
@@ -142,15 +142,15 @@ describe('tiles that are not known yet', () => {
   const unplaced = team([hero('A', null as unknown as number), hero('B', null as unknown as number)]);
   const noTiles = (heroes: RoundHero[]) => heroes.map((h) => ({ ...h, tile: null }));
 
-  it('are allowed in a Deployment, and turning the board leaves them unknown', () => {
+  it('are allowed in a Deployment, and turning the map leaves them unknown', () => {
     const open = team(noTiles([hero('A', 0), hero('B', 0)]), 'Crown', { name: 'Orson', tile: null });
     expect(roundDeploymentProblem([open, null, null, null, null])).toBeNull();
     expect(turnTeam(open).heroes.map((h) => h.tile)).toEqual([null, null]);
     expect(turnTeam(open).phantimal?.tile).toBeNull();
   });
 
-  it('still refuse a tile off the board or shared by two units', () => {
-    expect(roundDeploymentProblem([team([{ ...hero('A', 0), tile: null }, hero('B', TILE_COUNT)]), null, null, null, null])).toMatch(/off the board/);
+  it('still refuse a tile off the map or shared by two units', () => {
+    expect(roundDeploymentProblem([team([{ ...hero('A', 0), tile: null }, hero('B', TILE_COUNT)]), null, null, null, null])).toMatch(/off the map/);
     expect(roundDeploymentProblem([team([{ ...hero('A', 0), tile: 40 }, hero('B', 40)]), null, null, null, null])).toMatch(/one tile/);
   });
 

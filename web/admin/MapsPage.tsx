@@ -194,6 +194,7 @@ export function MapsPage() {
             )}
             <Legend boost />
 
+            {current?.handMade && <p className="muted">Not on Yaphalla yet: the next import takes over its tiles.</p>}
             <div className="actions">
               <button className="primary" onClick={() => void save()} disabled={busy || !dirty || draft.name.trim() === ''}>
                 {current ? 'Save' : 'Create map'}

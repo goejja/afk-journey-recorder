@@ -3,7 +3,7 @@ import { checkFactionRequirement, checkUnits, heroCount, isSummon, PAIR_PHANTIMA
 
 /**
  * A Round Deployment: the teams one Player fields for a whole Round of a Super League Tournament (ADR 0020). Tiles are kept as Side A
- * stands (the player's zone); a picture where the Player is on Side B is matched with the board turned upside down.
+ * stands (the player's zone); a picture where the Player is on Side B is matched with the map turned upside down.
  */
 export const TEAMS_IN_ROUND = 5;
 
@@ -73,7 +73,7 @@ export type TeamMatch =
 
 const turn = <T extends number | null | undefined>(tile: T): T => (typeof tile === 'number' ? ((TILE_COUNT - 1 - tile) as T) : tile);
 
-/** The team with the whole board turned upside down (tile `i` becomes `TILE_COUNT - 1 - i`). */
+/** The team with the whole map turned upside down (tile `i` becomes `TILE_COUNT - 1 - i`). */
 /** Whether two pictures said the same of a side: the same heroes with the same ranks and equipment, artifact, phantimal and unread tiles. */
 export function sameReading(a: ReadSide, b: ReadSide): boolean {
   const key = (r: ReadSide) =>
@@ -183,9 +183,9 @@ export function roundDeploymentProblem(deployment: RoundDeployment, factions?: R
   for (const [index, team] of deployment.entries()) {
     if (isEmptyTeam(team)) continue;
     const label = `Team ${index + 1}`;
-    // a tile still unknown (null) is allowed; the ones given must be on the board and apart
+    // a tile still unknown (null) is allowed; the ones given must be on the map and apart
     const tiles = [...team.heroes.map((h) => h.tile), ...(team.phantimal ? [team.phantimal.tile, team.phantimal.partnerTile] : [])].filter((t): t is number => t !== null && t !== undefined);
-    if (tiles.some((t) => !Number.isInteger(t) || t < 0 || t >= TILE_COUNT)) return `${label}: a tile is off the board`;
+    if (tiles.some((t) => !Number.isInteger(t) || t < 0 || t >= TILE_COUNT)) return `${label}: a tile is off the map`;
     if (new Set(tiles).size !== tiles.length) return `${label}: two units are on one tile`;
     const units = checkUnits(team.heroes.map((h) => ({ hero: h.hero, part: partOf(h) })));
     if (units) return `${label}: ${units}`;

@@ -25,7 +25,20 @@ export const hasAnyTag = (tags: string[]) => ({
 /** The routes of the tags in use: list, rename and remove (`tagsContract`). */
 export function tagRoutes(db: Database.Database): Hono {
   const app = new Hono();
-  serve(app, tagsContract.list, () => db.prepare('SELECT tag, count(DISTINCT attempt_id) AS count FROM attempt_tag GROUP BY tag ORDER BY tag').all() as TagCount[]);
+  // A Titan Reaver Battle carries its tags in `titan_reaver_tag`; the vocabulary is shared, and a record counts once for each tag.
+  serve(
+    app,
+    tagsContract.list,
+    () =>
+      db
+        .prepare(
+          `SELECT tag, count(*) AS count FROM (
+             SELECT tag, 'a' AS kind, attempt_id AS id FROM attempt_tag
+             UNION SELECT tag, 't', battle_id FROM titan_reaver_tag)
+           GROUP BY tag ORDER BY tag`,
+        )
+        .all() as TagCount[],
+  );
 
   serve(app, tagsContract.rename, ({ params, body }) => {
     const cleaned = normalizeTags([body.name]);
@@ -33,18 +46,25 @@ export function tagRoutes(db: Database.Database): Hono {
     const name = cleaned.tags[0]!;
     const records = db.transaction(() => {
       const ids = db.prepare('SELECT attempt_id FROM attempt_tag WHERE tag = ?').pluck().all(params.tag) as number[];
-      if (ids.length === 0) return null;
+      const battles = db.prepare('SELECT battle_id FROM titan_reaver_tag WHERE tag = ?').pluck().all(params.tag) as number[];
+      if (ids.length + battles.length === 0) return null;
       db.prepare('DELETE FROM attempt_tag WHERE tag = ?').run(params.tag);
+      db.prepare('DELETE FROM titan_reaver_tag WHERE tag = ?').run(params.tag);
       const insert = db.prepare('INSERT OR IGNORE INTO attempt_tag (attempt_id, tag) VALUES (?, ?)');
       for (const id of ids) insert.run(id, name);
-      return ids.length;
+      const insertBattle = db.prepare('INSERT OR IGNORE INTO titan_reaver_tag (battle_id, tag) VALUES (?, ?)');
+      for (const id of battles) insertBattle.run(id, name);
+      return ids.length + battles.length;
     })();
     return records === null ? fail(404, 'Unknown tag') : { name, records };
   });
 
   serve(app, tagsContract.remove, ({ params }) => {
-    const removed = db.prepare('SELECT count(DISTINCT attempt_id) FROM attempt_tag WHERE tag = ?').pluck().get(params.tag) as number;
+    const removed =
+      (db.prepare('SELECT count(DISTINCT attempt_id) FROM attempt_tag WHERE tag = ?').pluck().get(params.tag) as number) +
+      (db.prepare('SELECT count(DISTINCT battle_id) FROM titan_reaver_tag WHERE tag = ?').pluck().get(params.tag) as number);
     db.prepare('DELETE FROM attempt_tag WHERE tag = ?').run(params.tag);
+    db.prepare('DELETE FROM titan_reaver_tag WHERE tag = ?').run(params.tag);
     return removed === 0 ? fail(404, 'Unknown tag') : { removed };
   });
 

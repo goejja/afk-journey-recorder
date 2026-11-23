@@ -1,7 +1,7 @@
 import { useReference } from '../hooks/load.js';
 import { api } from '../backend.js';
 import { type PatchReference } from './draft.js';
-import { Battles } from './BattleList.js';
+import { Battles } from './FightList.js';
 import { Notice } from '../ui/Notice.js';
 
 export function ArenaPage() {

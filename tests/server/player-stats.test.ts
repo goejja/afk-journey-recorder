@@ -22,7 +22,7 @@ const send = (method: string, url: string, body?: unknown) =>
 const json = async (response: Response | Promise<Response>) => (await response).json() as Promise<any>;
 const team = (names: string[]) => ({ heroes: names.map((hero, i) => ({ tile: 38 + i, hero })), phantimal: null, assistHero: null, artifact: null});
 const fight = (mode: string, outcome: 'Win' | 'Loss', mine: string[], extra: Record<string, unknown>) =>
-  send('POST', '/api/pvp/battles', { mode, mapName: 'Open', outcome, formation: team(mine), opponent: { heroes: [{ tile: 0, hero: 'H' }] }, ...extra });
+  send('POST', '/api/pvp/fights', { mode, mapName: 'Open', outcome, formation: team(mine), opponent: { heroes: [{ tile: 0, hero: 'H' }] }, ...extra });
 
 describe('player statistics', () => {
   beforeEach(async () => {

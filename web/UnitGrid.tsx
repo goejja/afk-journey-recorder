@@ -4,7 +4,7 @@ import { dragProps } from './placement.js';
 
 interface Unit {
   name: string;
-  /** A category the grid can be narrowed by, for example an enemy's Common / Elite / Boss. */
+  /** A kind the grid can be narrowed by, for example an enemy's Common / Elite / Boss. */
   group?: string | null;
 }
 

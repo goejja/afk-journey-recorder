@@ -15,7 +15,7 @@ import { ArtifactSlot } from './ArtifactSlot.js';
 import { heldIcons, type Borrow } from './arena/borrow.js';
 import { confirmBorrowedMove, placePhantimalPart } from './placement.js';
 import { addHeroUnits, addUnit, firstFreeTile, phantimalAt, phantimalTileOf, missingPhantimalPart, swapPhantimal, swapTiles, resolveUnit, rowName, selectorHeroes, unitsUnavailable, type PlacedRow } from './units.js';
-import { derivePhantimal, type PhantimalOption } from './phantimal.js';
+import { derivePhantimal, eligiblePhantimals, type PhantimalOption } from './phantimal.js';
 import { PhantimalField } from './PhantimalField.js';
 import { useConfirm } from './ui/Dialog.js';
 import { HeroStateButtons } from './ui/HeroStateButtons.js';
@@ -125,10 +125,12 @@ interface Props {
   withAssist?: boolean;
   /** Lets heroes and artifacts that other teams of the contest hold be taken from them, once the player agrees. */
   borrow?: Borrow;
+  /** The mode always brings the Phantimal its heroes allow (Titan Reaver): it appears with the third hero of a faction and goes below three, and there is no picker. */
+  autoPhantimal?: boolean;
 }
 
 /** Placing your heroes on the map's player tiles, plus the assist hero and artifact. */
-export function FormationEditor({ map, heroes, artifacts, phantimals, season, value, onChange, unavailable, rules, heroSource = 'roster', mapLabel = 'Your formation map', heroesOnly = false, stateTags = true, withState = true, withAssist = true, borrow }: Props) {
+export function FormationEditor({ map, heroes, artifacts, phantimals, season, value, onChange, unavailable, rules, heroSource = 'roster', mapLabel = 'Your formation map', heroesOnly = false, stateTags = true, withState = true, withAssist = true, borrow, autoPhantimal = false }: Props) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Picked | null>(null);
@@ -152,7 +154,11 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
   const phantimalOptions: PhantimalOption[] = (phantimals ?? []).filter((p) => !PARTNER_PHANTIMALS.has(p.name)).map((p) => ({ name: p.name, faction: p.faction }));
   const heroFactions = new Map(heroes.map((h) => [h.name, h.faction]));
   /** Every change to the team re-derives the Phantimal, so it appears and disappears with the heroes. */
-  const change = (next: FormationState) => onChange(derivePhantimal(next, map.cells, TILE.PLAYER, phantimalOptions, heroFactions));
+  const change = (next: FormationState) => {
+    // In a mode that always brings one, the heroes choose it: the Phantimal of the faction three of them share, or none.
+    const chosen = autoPhantimal ? { ...next, phantimalChoice: eligiblePhantimals(next.placed, phantimalOptions, heroFactions)[0] ?? '' } : next;
+    onChange(derivePhantimal(chosen, map.cells, TILE.PLAYER, phantimalOptions, heroFactions));
+  };
   const choosePhantimal = (name: string) => change({ ...value, phantimalChoice: name, phantimal: null });
   // A selection only counts while its hero is still placed.
   const isSelectedTile = (tile: number) => selected !== null && value.placed.some((p) => p.tile === tile && p.hero === selected && !isSummon(p));
@@ -283,7 +289,7 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
                   kind: 'hero' as const,
                   onRemove: () => change({ ...value, placed: value.placed.filter((p) => p.hero !== hero) }),
                 })),
-                ...(value.phantimal ? [{ key: 'phantimal', name: value.phantimal.name, kind: 'phantimal' as const, onRemove: () => change({ ...value, phantimal: null, phantimalChoice: '' }) }] : []),
+                ...(value.phantimal ? [{ key: 'phantimal', name: value.phantimal.name, kind: 'phantimal' as const, ...(autoPhantimal ? {} : { onRemove: () => change({ ...value, phantimal: null, phantimalChoice: '' }) }) }] : []),
               ]}
             />
             {stateRules && selected && selectedTile !== undefined && anchor && (
@@ -311,7 +317,7 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
               hint={everyone ? undefined : (h) => h.rank ?? 'no rank'}
             />
             {owned.length === 0 && <p className="muted">{everyone ? 'No heroes imported yet.' : 'Your roster is empty. Add heroes in the Roster tab.'}</p>}
-            {phantimals && (
+            {phantimals && !autoPhantimal && (
               <>
                 <h4>Phantimal</h4>
                 <PhantimalField phantimals={phantimals} placed={value.placed} heroes={heroes} choice={value.phantimalChoice ?? ''} shown={value.phantimal} onChoose={choosePhantimal} />

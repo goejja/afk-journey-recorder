@@ -116,7 +116,7 @@ describe('hero admin API', () => {
   it('creates a hero as the player\'s own, with no image path, and says nothing is needed from the importer', async () => {
     const response = await send('POST', '/api/admin/heroes', thane);
     expect(response.status).toBe(201);
-    expect(await response.json()).toMatchObject({ name: 'Thane', tier: 'S', class: 'Warrior', faction: 'Lightbearer', damageType: 'Physical', source: 'manual' });
+    expect(await response.json()).toMatchObject({ name: 'Thane', tier: 'S', class: 'Warrior', faction: 'Lightbearer', damageType: 'Physical', source: 'manual', handMade: true });
     expect(db.prepare("SELECT image_path FROM hero WHERE name = 'Thane'").pluck().get()).toBeNull();
   });
 
@@ -161,16 +161,16 @@ describe('hero admin API', () => {
     expect(PAIR_HEROES.Thane).toBeUndefined();
   });
 
-  it('locks the units a hero brings once a record, a scenario or a Formation ID has it on a board', async () => {
+  it('locks the units a hero brings once a record, a scenario or a Formation ID has it on a team', async () => {
     await send('POST', '/api/admin/heroes', thane);
     db.prepare("INSERT INTO attempt (id, mode, outcome) VALUES (1, 'Arena', 'Win')").run();
     db.prepare("INSERT INTO formation (id, attempt_id) VALUES (1, 1)").run();
     db.prepare("INSERT INTO formation_hero (formation_id, tile, hero_name, part) VALUES (1, 30, 'Thane', '')").run();
     const response = await send('PUT', '/api/admin/heroes/Thane', { ...thane, summon: { part: 'Drone', count: 1 } });
     expect(response.status).toBe(409);
-    expect(await error(response)).toMatch(/Thane is on a board in 1 records/);
+    expect(await error(response)).toMatch(/Thane is placed in 1 record,/);
     expect((await send('PUT', '/api/admin/heroes/Thane', { ...thane, tier: 'A' })).status).toBe(200); // the information stays editable
-    expect(await (await send('GET', '/api/admin/heroes/Thane/usage')).json()).toMatchObject({ records: 1, onBoard: 1 });
+    expect(await (await send('GET', '/api/admin/heroes/Thane/usage')).json()).toMatchObject({ records: 1, placements: 1 });
 
     await send('POST', '/api/admin/heroes', { ...thane, name: 'Mira' });
     db.prepare("INSERT INTO formation_id (code, deployment) VALUES ('ABCD1234', ?)").run(JSON.stringify({ teams: [{ units: [{ kind: 'hero', hero: 'Mira', part: '', tile: 3 }], artifact: null }] }));
@@ -188,7 +188,7 @@ describe('hero admin API', () => {
     db.prepare("INSERT INTO hero_look (hero_name, file) VALUES ('Alna', '1.png')").run();
     const blocked = await send('DELETE', '/api/admin/heroes/Alna');
     expect(blocked.status).toBe(409);
-    expect(await error(blocked)).toBe('Alna is used by 1 roster entries, 1 reader pictures, so it cannot be deleted');
+    expect(await error(blocked)).toBe('Alna is used by 1 roster entry, 1 reader picture, so it cannot be deleted');
     expect(await list()).toHaveLength(1);
   });
 });

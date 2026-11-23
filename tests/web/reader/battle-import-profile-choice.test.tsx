@@ -2,20 +2,20 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BattleDraft, BattleImportPicture } from '../../../web/backend.js';
+import type { FightDraft, FightImportPicture } from '../../../web/backend.js';
 import { BattleImport } from '../../../web/reader/BattleImport.js';
 import type { ImportGroup } from '../../../web/reader/battle-import.js';
 import { draftSide } from '../../support/draft-side.js';
 
 const hero = (name: string) => ({ tile: `${name}-0`, hero: name, rank: 'Mythic+' as string | null, equipmentLevel: 10 as number | null });
-const draft = (over: Partial<BattleDraft> = {}): BattleDraft => ({
+const draft = (over: Partial<FightDraft> = {}): FightDraft => ({
   mode: 'Guild Duel', number: 1, outcome: 'Win', unionLevelA: 57, unionLevelB: 37,
   sideA: draftSide({ name: 'Luna', profile: { id: 2, name: 'Luna', playerId: '2222' }, heroes: [hero('Evie')] }),
   sideB: draftSide({ name: 'Rovr', profile: null, heroes: [hero('Zed')] }),
   duplicateOf: null,
   ...over,
 });
-const picture = (id: number): BattleImportPicture => ({ id, label: `IMG_${id}.jpeg`, state: 'done', draft: draft() });
+const picture = (id: number): FightImportPicture => ({ id, label: `IMG_${id}.jpeg`, state: 'done', draft: draft() });
 
 let requests: { method: string; url: string }[];
 

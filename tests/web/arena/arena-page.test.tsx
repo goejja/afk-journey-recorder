@@ -4,7 +4,7 @@ import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import { ArenaPage } from '../../../web/arena/ArenaPage.js';
-import { Battles } from '../../../web/arena/BattleList.js';
+import { Battles } from '../../../web/arena/FightList.js';
 import { api } from '../../../web/backend.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
@@ -45,13 +45,13 @@ beforeEach(() => {
       if (url === '/api/defaults') return Response.json({ 'Supreme Arena': { slots: [], updatedAt: null }, 'Super League': { slots: [], updatedAt: null }, 'Guild Duel': { slots: [], updatedAt: null }, 'Dream Hunt': { slots: [], updatedAt: null } });
       if (url === '/api/boss-rules') return Response.json([{ name: 'Berserk', description: '' }]);
       if (url === '/api/reference') return Response.json({ ranks: ['Elite', 'Mythic+'], equipmentLevels: [0, 10], caps: [{ rank: 'Mythic+', minLevel: 0, maxLevel: 10 }] });
-      if (url === '/api/pvp/battles/5' && method === 'GET') return Response.json(battle);
-      if (url === '/api/pvp/battles/99' && method === 'GET') return Response.json({ error: 'Record 99 no longer exists' }, { status: 404 });
-      if (url.startsWith('/api/pvp/battles') && method === 'GET') return Response.json([battle]);
-      if (url === '/api/pvp/battle-groups' && method === 'POST') return Response.json({ id: 9, fights: [battle] }, { status: 201 });
-      if (url.startsWith('/api/pvp/battle-groups/') && method === 'PUT') return Response.json({ id: 4, fights: [battle] });
-      if (url === '/api/pvp/battles' && method === 'POST') return Response.json(battle, { status: 201 });
-      if (url.startsWith('/api/pvp/battles/') && method === 'PUT') return Response.json(battle);
+      if (url === '/api/pvp/fights/5' && method === 'GET') return Response.json(battle);
+      if (url === '/api/pvp/fights/99' && method === 'GET') return Response.json({ error: 'Record 99 no longer exists' }, { status: 404 });
+      if (url.startsWith('/api/pvp/fights') && method === 'GET') return Response.json([battle]);
+      if (url === '/api/pvp/battles' && method === 'POST') return Response.json({ id: 9, fights: [battle] }, { status: 201 });
+      if (url.startsWith('/api/pvp/battles/') && method === 'PUT') return Response.json({ id: 4, fights: [battle] });
+      if (url === '/api/pvp/fights' && method === 'POST') return Response.json(battle, { status: 201 });
+      if (url.startsWith('/api/pvp/fights/') && method === 'PUT') return Response.json(battle);
       return Response.json({}, { status: 404 });
     }),
   );
@@ -80,7 +80,7 @@ describe('Arena page', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
-        if (!url.startsWith('/api/pvp/battles') || (init?.method ?? 'GET') !== 'GET') return base(url, init);
+        if (!url.startsWith('/api/pvp/fights') || (init?.method ?? 'GET') !== 'GET') return base(url, init);
         if (!first) return Response.json([]);
         first = false;
         return Response.json(await held);
@@ -89,20 +89,20 @@ describe('Arena page', () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
     expect(await screen.findByText('Loading…')).toBeTruthy();
-    expect(screen.queryByText('No battles recorded yet.')).toBeNull(); // not before the answer
+    expect(screen.queryByText('No records yet.')).toBeNull(); // not before the answer
     answer([]);
-    expect(await screen.findByText('No battles recorded yet.')).toBeTruthy();
+    expect(await screen.findByText('No records yet.')).toBeTruthy();
     await user.type(screen.getByRole('searchbox', { name: 'Player' }), 'Luna');
-    expect(await screen.findByText('No battles match these filters.')).toBeTruthy();
-    expect(screen.queryByText('No battles recorded yet.')).toBeNull();
+    expect(await screen.findByText('No records match these filters.')).toBeTruthy();
+    expect(screen.queryByText('No records yet.')).toBeNull();
   });
 
   it('says only why when the first load failed, not that nothing is recorded', async () => {
     const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/battles') && (init?.method ?? 'GET') === 'GET' ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/fights') && (init?.method ?? 'GET') === 'GET' ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
     render(<ArenaPage />);
     expect((await screen.findByRole('alert')).textContent).toBe('Network down');
-    expect(screen.queryByText('No battles recorded yet.')).toBeNull();
+    expect(screen.queryByText('No records yet.')).toBeNull();
     expect(screen.queryByText('Loading…')).toBeNull();
   });
 
@@ -110,13 +110,37 @@ describe('Arena page', () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
     await user.type(await screen.findByRole('searchbox', { name: 'Player' }), 'Luna');
-    await waitFor(() => expect(requests.some((r) => r.method === 'GET' && r.url.includes('/api/pvp/battles') && r.url.includes('player=Luna'))).toBe(true));
+    await waitFor(() => expect(requests.some((r) => r.method === 'GET' && r.url.includes('/api/pvp/fights') && r.url.includes('player=Luna'))).toBe(true));
+  });
+
+  it('asks for the battles of a Player once after the typing stops, not on every keystroke', async () => {
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    const search = await screen.findByRole('searchbox', { name: 'Player' });
+    const asked = () => requests.filter((r) => r.method === 'GET' && r.url.startsWith('/api/pvp/fights') && r.url.includes('player='));
+    await user.type(search, 'Lunaperez1'); // 10 keystrokes, each well inside the wait
+    expect((search as HTMLInputElement).value).toBe('Lunaperez1'); // the input itself is not held back
+    await waitFor(() => expect(asked().some((r) => r.url.includes('player=Lunaperez1'))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 400)); // nothing more is coming
+    expect(asked().map((r) => r.url)).toHaveLength(1);
+  });
+
+  it('does not ask again when the Player text only gains a space', async () => {
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    const search = await screen.findByRole('searchbox', { name: 'Player' });
+    const asked = () => requests.filter((r) => r.method === 'GET' && r.url.startsWith('/api/pvp/fights') && r.url.includes('player=Luna'));
+    await user.type(search, 'Luna');
+    await waitFor(() => expect(asked()).toHaveLength(1));
+    await user.type(search, ' ');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(asked()).toHaveLength(1);
   });
 
   it('offers every hero for a battle, not only the ones in the roster', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     const yours = within(screen.getByRole('list', { name: 'Side A heroes' }));
     expect(yours.getByRole('button', { name: /^Lucca/ })).toBeTruthy();
   });
@@ -124,7 +148,7 @@ describe('Arena page', () => {
   it('names a placed hero in the tile tooltip', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     expect(within(screen.getByRole('group', { name: 'Battle map' })).getByRole('tooltip').textContent).toBe('Evie');
   });
@@ -132,7 +156,7 @@ describe('Arena page', () => {
   it('places a hero dragged from the icons onto a tile of its side', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     const icon = within(screen.getByRole('list', { name: 'Side A heroes' })).getByRole('button', { name: /^Evie/ });
     const data: Record<string, string> = {};
     const dataTransfer = { setData: (k: string, v: string) => (data[k] = v), getData: (k: string) => data[k], effectAllowed: '' };
@@ -149,7 +173,7 @@ describe('Arena page', () => {
   it('places a clicked icon on the first free tile of the side being edited, without a second click', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     const map = within(screen.getByRole('group', { name: 'Battle map' }));
     const cellOf = (button: HTMLElement) => button.parentElement!;
     const tooltipCells = () => map.getAllByRole('tooltip').map((t) => t.parentElement);
@@ -166,7 +190,7 @@ describe('Arena page', () => {
   it('moves a placed hero to another tile of its own side by dragging it', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     const dataTransfer = { setData: () => undefined, getData: () => '', effectAllowed: '' };
     const map = within(screen.getByRole('group', { name: 'Battle map' }));
@@ -185,7 +209,7 @@ describe('Arena page', () => {
   it('swaps two heroes of the same side when one is dragged onto the other, never with the other side, and shows the dragged hero’s side', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await placeFirstHero(user, /^Fay/);
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Enemy deployment/ })[0]!); // edit Side B
@@ -207,7 +231,7 @@ describe('Arena page', () => {
   it('offers the season’s Phantimal beside the team, and only the ones its faction lets it bring', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     const options = () => fieldablePhantimals();
     expect((screen.getByLabelText('Phantimal season') as HTMLSelectElement).value).toBe('8');
@@ -227,7 +251,7 @@ describe('Arena page', () => {
   it('adds the chosen Phantimal to each side as soon as its faction is there, and sends it with the battle', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     await user.selectOptions(screen.getByLabelText('Phantimal season'), '7');
     await placeFirstHero(user, /^Evie/);
@@ -239,7 +263,7 @@ describe('Arena page', () => {
     await user.click(screen.getByRole('tab', { name: /Side B/ }));
     for (const name of [/^Evie/, /^Fay/, /^Zed/]) await user.click(within(screen.getByRole('list', { name: 'Side B heroes' })).getByRole('button', { name }));
     await user.click(phantimalPicker().getByRole('button', { name: 'Olden' }));
-    await user.click(screen.getByRole('button', { name: 'Save battles' }));
+    await user.click(screen.getByRole('button', { name: 'Save records' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'POST')).toBe(true));
     const sent = requests.find((r) => r.method === 'POST')!.body;
     expect(sent.fights[0].formation.phantimal).toEqual({ tile: 41, name: 'Olden' });
@@ -249,7 +273,7 @@ describe('Arena page', () => {
   it('removes the Phantimal with the third hero of its faction, and brings it back with it', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     await user.selectOptions(screen.getByLabelText('Phantimal season'), '7');
     for (const name of [/^Evie/, /^Fay/, /^Zed/]) await placeFirstHero(user, name);
@@ -268,7 +292,7 @@ describe('Arena page', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/heroes' ? Response.json(celestial) : base(url, init))));
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     for (const name of [/^Senea/, /^Rolan/, /^Lucca/]) await placeFirstHero(user, name);
     const map = () => within(screen.getByRole('group', { name: 'Battle map' }));
@@ -278,7 +302,7 @@ describe('Arena page', () => {
     expect(map().getByTitle('Wedge of Power')).toBeTruthy();
     await user.click(screen.getByRole('tab', { name: /Side B/ }));
     await user.click(within(screen.getByRole('list', { name: 'Side B heroes' })).getByRole('button', { name: /^Senea/ }));
-    await user.click(screen.getByRole('button', { name: 'Save battles' }));
+    await user.click(screen.getByRole('button', { name: 'Save records' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'POST')).toBe(true));
     const sent = requests.find((r) => r.method === 'POST')!.body;
     expect(sent.fights[0].formation.phantimal).toEqual({ name: 'Wedge of Matter', tile: 41, partnerTile: 42 });
@@ -287,7 +311,7 @@ describe('Arena page', () => {
   it('keeps the teams after "Save and record another", resetting only the winner', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await user.click(screen.getByRole('tab', { name: /Side B/ }));
     await user.click(within(screen.getByRole('list', { name: 'Side B heroes' })).getByRole('button', { name: /^Zed/ }));
@@ -296,7 +320,7 @@ describe('Arena page', () => {
     await user.click(screen.getByRole('button', { name: 'Save and record another' }));
     await waitFor(() => expect(requests.filter((r) => r.method === 'POST')).toHaveLength(1));
     expect(requests.find((r) => r.method === 'POST')!.body.outcome).toBe('Loss');
-    expect((await screen.findByRole('status')).textContent).toMatch(/Saved 1 battle/);
+    expect((await screen.findByRole('status')).textContent).toMatch(/Saved 1 record/);
     expect(within(screen.getByRole('group', { name: 'Winner' })).getByLabelText<HTMLInputElement>('Side A').checked).toBe(true);
     expect(screen.getByRole('tab', { name: /Side A \(1\/5\)/ })).toBeTruthy(); // still placed
 
@@ -308,12 +332,12 @@ describe('Arena page', () => {
   it('shows only the form while recording, with Save and Cancel in the same bar as the result', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     expect(screen.queryByRole('heading', { name: 'Arena' })).toBeNull();
     expect(screen.queryByRole('list', { name: 'Battles' })).toBeNull();
     const bar = document.querySelector('.workspace-bar') as HTMLElement;
     expect(within(bar).getByRole('group', { name: 'Winner' })).toBeTruthy();
-    expect(within(bar).getByRole('button', { name: 'Save battle' })).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: 'Save record' })).toBeTruthy();
     expect(within(bar).getByRole('button', { name: 'Cancel' })).toBeTruthy();
     expect(within(bar).getByLabelText('Note')).toBeTruthy();
   });
@@ -321,7 +345,7 @@ describe('Arena page', () => {
   it('shows each side’s artifact in an empty tile of the map, chosen from an overlay', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     const slots = () => document.querySelectorAll('.map-slot .hex-slot');
     expect(slots()).toHaveLength(2);
     expect([...slots()].every((s) => s.classList.contains('hex-slot-empty'))).toBe(true);
@@ -343,7 +367,7 @@ describe('Arena page', () => {
   it('edits the rank and equipment of a hero clicked on the map, on either side', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await user.click(screen.getByRole('tab', { name: /Side B/ }));
     await user.click(within(screen.getByRole('list', { name: 'Side B heroes' })).getByRole('button', { name: /^Zed/ }));
@@ -354,7 +378,7 @@ describe('Arena page', () => {
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Evie|Player deployment/ })[0]!);
     expect(screen.getByRole('tab', { name: /Side A/ }).getAttribute('aria-selected')).toBe('true');
     await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Elite' }));
-    await user.click(screen.getByRole('button', { name: 'Save battle' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'POST')).toBe(true));
     const sent = requests.find((r) => r.method === 'POST')!.body;
     expect(sent.opponent.heroes[0]).toMatchObject({ hero: 'Zed', rank: 'Mythic+', equipmentLevel: 10 });
@@ -364,7 +388,7 @@ describe('Arena page', () => {
   it('gives a side the profile’s rank and equipment, for heroes already placed and placed later', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/); // on None a recorded hero has no rank: any player's match
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '2');
     await waitFor(() => expect(requests.some((r) => r.url === '/api/heroes?profile=2')).toBe(true));
@@ -372,8 +396,8 @@ describe('Arena page', () => {
     await user.click(screen.getByRole('tab', { name: /Side B/ }));
     expect((screen.getByLabelText('Profile of Side B') as HTMLSelectElement).value).toBe(''); // each side on its own
     await user.click(within(screen.getByRole('list', { name: 'Side B heroes' })).getByRole('button', { name: /^Zed/ }));
-    await user.click(screen.getByRole('button', { name: 'Save battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/fights')).toBe(true));
     const sent = requests.find((r) => r.method === 'POST')!.body;
     expect(sent.formation.heroes).toEqual([
       { tile: 38, hero: 'Evie', rank: 'Elite', equipmentLevel: 0 },
@@ -385,7 +409,7 @@ describe('Arena page', () => {
   it('can give Side B a profile too, and keeps a rank set by hand', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.click(screen.getByRole('tab', { name: /Side B/ }));
     await user.selectOptions(screen.getByLabelText('Profile of Side B'), '3');
     await waitFor(() => expect(requests.some((r) => r.url === '/api/heroes?profile=3')).toBe(true));
@@ -396,9 +420,9 @@ describe('Arena page', () => {
     await waitFor(() => expect(requests.some((r) => r.url === '/api/heroes?profile=2')).toBe(true));
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Evie|Player deployment/ })[0]!);
     await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Mythic+' })); // set by hand afterwards
-    await user.click(screen.getByRole('button', { name: 'Save battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
-    const sent = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!.body;
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/fights')).toBe(true));
+    const sent = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/fights')!.body;
     expect(sent.opponent.heroes[0]).toMatchObject({ hero: 'Zed', rank: 'Mythic+', equipmentLevel: 10 });
     expect(sent.formation.heroes[0]).toMatchObject({ hero: 'Evie', rank: 'Mythic+' });
   });
@@ -406,7 +430,7 @@ describe('Arena page', () => {
   it('gives the profile’s Player ID to its side, and takes it off when the profile changes or is cleared', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '2');
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '3'); // Luna's Player ID goes, Kai's comes
@@ -414,9 +438,9 @@ describe('Arena page', () => {
     await user.click(within(screen.getByRole('list', { name: 'Side B heroes' })).getByRole('button', { name: /^Zed/ }));
     await user.selectOptions(screen.getByLabelText('Profile of Side B'), '2');
     await user.selectOptions(screen.getByLabelText('Profile of Side B'), ''); // None: the Player ID goes
-    await user.click(screen.getByRole('button', { name: 'Save battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
-    const sent = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!.body;
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/fights')).toBe(true));
+    const sent = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/fights')!.body;
     expect(sent.playerIdA).toBe('3333');
     expect(sent.playerIdB ?? null).toBeNull();
     expect(sent.tags ?? []).toEqual([]); // a Profile no longer adds a tag
@@ -425,7 +449,7 @@ describe('Arena page', () => {
   it('asks for the Player ID of a side’s profile that has none, and records it with the side', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     expect(screen.queryByRole('group', { name: 'Player ID of Side A' })).toBeNull(); // no profile yet
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '4');
@@ -435,9 +459,9 @@ describe('Arena page', () => {
     await user.click(within(prompt).getByRole('button', { name: 'Set Player ID' }));
     await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/profiles/4')?.body).toEqual({ playerId: '4444' }));
     await waitFor(() => expect(screen.queryByRole('group', { name: 'Player ID of Side A' })).toBeNull());
-    await user.click(screen.getByRole('button', { name: 'Save battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
-    expect(requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!.body.playerIdA).toBe('4444');
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/fights')).toBe(true));
+    expect(requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/fights')!.body.playerIdA).toBe('4444');
   });
 
   it('changes the reference through patchReference and never on the prop the page was given', async () => {
@@ -446,7 +470,7 @@ describe('Arena page', () => {
     const patchReference = vi.fn();
     const user = userEvent.setup();
     render(<Battles reference={reference} patchReference={patchReference} />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '4');
     const prompt = screen.getByRole('group', { name: 'Player ID of Side A' });
@@ -466,7 +490,7 @@ describe('Arena page', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/heroes?profile=2' ? (await held, base(url, init)) : base(url, init)))); // Luna's roster is Elite +0
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '2'); // slow
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '3'); // Kai's roster is Mythic+ +10, answered at once
@@ -475,9 +499,9 @@ describe('Arena page', () => {
       release();
       await held;
     });
-    await user.click(screen.getByRole('button', { name: 'Save battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
-    expect(requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!.body.formation.heroes).toEqual([{ tile: 38, hero: 'Evie', rank: 'Mythic+', equipmentLevel: 10 }]);
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/fights')).toBe(true));
+    expect(requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/fights')!.body.formation.heroes).toEqual([{ tile: 38, hero: 'Evie', rank: 'Mythic+', equipmentLevel: 10 }]);
   });
 
   it('keeps the count of waiting pictures from the newest read when an older one answers last', async () => {
@@ -497,7 +521,7 @@ describe('Arena page', () => {
     );
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' })); // no read while the form is open
+    await user.click(await screen.findByRole('button', { name: 'New record' })); // no read while the form is open
     await user.click(await screen.findByRole('button', { name: 'Cancel' })); // the list again: a newer read, 2 waiting
     expect(await screen.findByText(/2 waiting/)).toBeTruthy();
     await act(async () => {
@@ -510,13 +534,13 @@ describe('Arena page', () => {
   it('asks to update the profile’s roster after saving a new battle, and applies the ticked upgrades', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '2'); // roster: Evie Elite +0
     await waitFor(() => expect(requests.some((r) => r.url === '/api/heroes?profile=2')).toBe(true));
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Evie|Player deployment/ })[0]!);
     await user.click(within(screen.getByRole('group', { name: 'Rank of Evie' })).getByRole('button', { name: 'Mythic+' })); // an upgrade
-    await user.click(screen.getByRole('button', { name: 'Save battle' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     const dialog = await screen.findByRole('dialog', { name: /^Update the roster/ });
     expect((within(dialog).getByLabelText('Update Evie') as HTMLInputElement).checked).toBe(true);
     await user.click(within(dialog).getByRole('button', { name: 'Update roster' }));
@@ -530,32 +554,32 @@ describe('Arena page', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
-        const saved = requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles');
+        const saved = requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/fights');
         if (url === '/api/heroes?profile=2' && saved) return Response.json({ error: 'Network down' }, { status: 500 });
         return base(url, init);
       }),
     );
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '2');
     await waitFor(() => expect(requests.some((r) => r.url === '/api/heroes?profile=2')).toBe(true));
-    await user.click(screen.getByRole('button', { name: 'Save battle' }));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/^Saved\. The roster could not be updated: .*Network down/);
-    expect(screen.queryByRole('button', { name: 'Save battle' })).toBeNull(); // the form has closed
-    expect(requests.filter((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toHaveLength(1);
-    await user.click(screen.getByRole('button', { name: 'New battles' }));
+    expect(screen.queryByRole('button', { name: 'Save record' })).toBeNull(); // the form has closed
+    expect(requests.filter((r) => r.method === 'POST' && r.url === '/api/pvp/fights')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'New record' }));
     expect(screen.queryByRole('alert')).toBeNull(); // opening a form clears it
   });
 
   it('does not ask about the roster when the sides have no profile', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
-    await user.click(screen.getByRole('button', { name: 'Save battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
+    await user.click(screen.getByRole('button', { name: 'Save record' }));
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/fights')).toBe(true));
     expect(screen.queryByRole('dialog', { name: /^Update the roster/ })).toBeNull();
   });
 
@@ -574,14 +598,14 @@ describe('Arena page', () => {
 
   it('has no Rules tab: rules are managed in Admin', async () => {
     render(<ArenaPage />);
-    await screen.findByRole('button', { name: 'New battles' });
+    await screen.findByRole('button', { name: 'New record' });
     expect(screen.queryByRole('tab', { name: 'Rules' })).toBeNull();
   });
 
   it('names the winner by side', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     expect(screen.getByRole('group', { name: 'Winner' })).toBeTruthy();
     expect(screen.getByText('Side A', { selector: '.side-banner' })).toBeTruthy();
   });
@@ -589,7 +613,7 @@ describe('Arena page', () => {
   it('keeps a hero when its tile is clicked, and removes it only with its button', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Player deployment/ })[0]!);
     const placed = within(screen.getByRole('list', { name: 'Placed on Side A' }));
@@ -602,7 +626,7 @@ describe('Arena page', () => {
   it('shows one map for both sides, and a Side A / Side B switch for whose heroes the icons place', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     expect(screen.getAllByRole('group', { name: /map/i })).toHaveLength(1);
     await placeFirstHero(user, /^Evie/);
     await user.click(screen.getByRole('tab', { name: /Side B/ }));
@@ -616,7 +640,7 @@ describe('Arena page', () => {
   it('clears an artifact with None from the overlay', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     expect(screen.queryByRole('button', { name: 'Choose artifact' })).toBeNull(); // the artifact is no longer in the hero panel
     await user.click(screen.getByRole('button', { name: 'Choose Side B artifact' }));
     expect(screen.queryByRole('button', { name: 'Clear Side B artifact' })).toBeNull();
@@ -629,7 +653,7 @@ describe('Arena page', () => {
   it('opens the artifacts on the current season and the pre-season, and All lists every one', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     const artifacts = () => within(screen.getByRole('list', { name: 'Artifacts' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
     for (const side of ['A', 'B']) {
       await user.click(screen.getByRole('button', { name: `Choose Side ${side} artifact` }));
@@ -645,7 +669,7 @@ describe('Arena page', () => {
   it('switches to Side B when an enemy tile is clicked', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     expect(screen.getByRole('tab', { name: /Side A/ }).getAttribute('aria-selected')).toBe('true');
     await user.click(within(screen.getByRole('group', { name: 'Battle map' })).getAllByRole('button', { name: /Enemy deployment/ })[0]!);
     expect(screen.getByRole('tab', { name: /Side B/ }).getAttribute('aria-selected')).toBe('true');
@@ -654,7 +678,7 @@ describe('Arena page', () => {
   it('narrows the icons by faction and name', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.type(screen.getByLabelText('Search Side A heroes'), 'lucc');
     const list = within(screen.getByRole('list', { name: 'Side A heroes' }));
     expect(list.getAllByRole('button')).toHaveLength(1);
@@ -700,7 +724,7 @@ describe('Arena page', () => {
           ])
         : base(url, init)));
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/); // tile 38 on Duel
     await user.selectOptions(screen.getByLabelText('Map'), 'Shifted');
     const evie = (await screen.findAllByRole('tooltip')).filter((t) => t.textContent === 'Evie');
@@ -711,22 +735,22 @@ describe('Arena page', () => {
   it('asks for the Union Level of each side in Guild Duel only, and sends it with every team', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     expect(screen.queryByLabelText('Side A Union Level')).toBeNull();
     await user.selectOptions(screen.getByLabelText('Mode'), 'Guild Duel');
     await user.type(screen.getByLabelText('Side A Union Level'), '42');
     await user.type(screen.getByLabelText('Side B Union Level'), '38');
     await placeFirstHero(user, /^Evie/);
-    await user.click(screen.getByRole('button', { name: 'Save battles' }));
-    await waitFor(() => expect(requests.find((r) => r.url === '/api/pvp/battle-groups')).toBeTruthy());
-    const sent = requests.find((r) => r.url === '/api/pvp/battle-groups')!.body;
+    await user.click(screen.getByRole('button', { name: 'Save records' }));
+    await waitFor(() => expect(requests.find((r) => r.url === '/api/pvp/battles')).toBeTruthy());
+    const sent = requests.find((r) => r.url === '/api/pvp/battles')!.body;
     expect(sent.mode).toBe('Guild Duel');
     expect(sent.fights[0]).toMatchObject({ unionLevel: 42, opponentUnionLevel: 38, rule: null });
   });
 
   it('shows the Union Levels in the recap of a Guild Duel fight', async () => {
     const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/battles') && (init?.method ?? 'GET') === 'GET' ? Response.json([{ ...battle, mode: 'Guild Duel', rule: null, unionLevel: 42, opponentUnionLevel: null }]) : base(url, init))));
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/fights') && (init?.method ?? 'GET') === 'GET' ? Response.json([{ ...battle, mode: 'Guild Duel', rule: null, unionLevel: 42, opponentUnionLevel: null }]) : base(url, init))));
     render(<ArenaPage />);
     expect((await screen.findByText('Union A 42 · B ?')).title).toBe('Union Level of each side');
   });
@@ -735,12 +759,12 @@ describe('Arena page', () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
     await user.click(await screen.findByRole('button', { name: 'Clone' }));
-    expect(screen.getByRole('heading', { name: 'New battles' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'New record' })).toBeTruthy();
     expect(within(screen.getByRole('list', { name: 'Placed on Side A' })).getByText('Evie')).toBeTruthy();
     expect(within(screen.getByRole('list', { name: 'Placed on Side B' })).getByText('Zed')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Save battles' }));
-    await waitFor(() => expect(requests.find((r) => r.url === '/api/pvp/battle-groups')).toBeTruthy());
-    const sent = requests.find((r) => r.url === '/api/pvp/battle-groups')!.body;
+    await user.click(screen.getByRole('button', { name: 'Save records' }));
+    await waitFor(() => expect(requests.find((r) => r.url === '/api/pvp/battles')).toBeTruthy());
+    const sent = requests.find((r) => r.url === '/api/pvp/battles')!.body;
     expect(sent.mode).toBe('Supreme Arena');
     expect(sent.fights).toHaveLength(1); // only the cloned team has heroes
     expect(sent.fights[0]).toMatchObject({
@@ -756,7 +780,7 @@ describe('Arena page', () => {
 
     beforeEach(() => {
       const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
-      vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/battles') && (init?.method ?? 'GET') === 'GET' ? Response.json(fights) : base(url, init))));
+      vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/fights') && (init?.method ?? 'GET') === 'GET' ? Response.json(fights) : base(url, init))));
     });
 
     it('shows a battle as one collapsed row with its tally and a pip per team, and opens it on demand', async () => {
@@ -799,9 +823,9 @@ describe('Arena page', () => {
       render(<ArenaPage />);
       await user.click(within(await screen.findByRole('listitem', { name: 'Supreme Arena battle' })).getByRole('button', { name: 'Clone' }));
       expect(screen.getAllByRole('tab', { name: /^Team \d/ })).toHaveLength(3);
-      await user.click(screen.getByRole('button', { name: 'Save battles' }));
-      await waitFor(() => expect(requests.find((r) => r.url === '/api/pvp/battle-groups')).toBeTruthy());
-      const sent = requests.find((r) => r.url === '/api/pvp/battle-groups')!.body;
+      await user.click(screen.getByRole('button', { name: 'Save records' }));
+      await waitFor(() => expect(requests.find((r) => r.url === '/api/pvp/battles')).toBeTruthy());
+      const sent = requests.find((r) => r.url === '/api/pvp/battles')!.body;
       expect(sent.fights.map((f: any) => [f.position, f.outcome])).toEqual([[1, 'Win'], [2, 'Win'], [3, 'Win']]);
     });
 
@@ -809,29 +833,29 @@ describe('Arena page', () => {
       const user = userEvent.setup();
       render(<ArenaPage />);
       await user.click(within(await screen.findByRole('listitem', { name: 'Supreme Arena battle' })).getByRole('button', { name: 'Edit' }));
-      expect(screen.getByRole('heading', { name: 'Edit Supreme Arena battle' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Edit Supreme Arena record' })).toBeTruthy();
       expect(screen.getAllByRole('tab', { name: /^Team \d/ })).toHaveLength(3);
       expect(screen.queryByRole('button', { name: 'Save and record another' })).toBeNull();
       expect((screen.getByLabelText('Mode') as HTMLSelectElement).disabled).toBe(true); // a saved battle keeps its mode
       await user.click(screen.getByLabelText('Side B'));
       await user.click(screen.getByRole('button', { name: 'Save changes' }));
-      await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/pvp/battle-groups/4')).toBeTruthy());
-      const sent = requests.find((r) => r.url === '/api/pvp/battle-groups/4')!.body;
+      await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/pvp/battles/4')).toBeTruthy());
+      const sent = requests.find((r) => r.url === '/api/pvp/battles/4')!.body;
       expect(sent.fights.map((f: any) => [f.position, f.outcome])).toEqual([[1, 'Loss'], [2, 'Win'], [3, 'Loss']]); // only the team on show changed
     });
 
     it('moves a battle of a Tournament to another Round from the battle editor', async () => {
       const inRound = fights.map((f) => ({ ...f, tournamentId: 1, round: 'Top 48' }));
       const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
-      vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/battles') && (init?.method ?? 'GET') === 'GET' ? Response.json(inRound) : base(url, init))));
+      vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url.startsWith('/api/pvp/fights') && (init?.method ?? 'GET') === 'GET' ? Response.json(inRound) : base(url, init))));
       const user = userEvent.setup();
       render(<ArenaPage />);
       await user.click(within(await screen.findByRole('listitem', { name: 'Supreme Arena battle' })).getByRole('button', { name: 'Edit' }));
       expect((screen.getByLabelText('Round') as HTMLSelectElement).value).toBe('Top 48');
       await user.selectOptions(screen.getByLabelText('Round'), 'Top 16');
       await user.click(screen.getByRole('button', { name: 'Save changes' }));
-      await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/pvp/battle-groups/4')).toBeTruthy());
-      expect(requests.find((r) => r.url === '/api/pvp/battle-groups/4')!.body).toMatchObject({ tournamentId: 1, round: 'Top 16' });
+      await waitFor(() => expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/pvp/battles/4')).toBeTruthy());
+      expect(requests.find((r) => r.url === '/api/pvp/battles/4')!.body).toMatchObject({ tournamentId: 1, round: 'Top 16' });
     });
 
     it('confirms the Round Deployment of the Round chosen in the battle editor', async () => {
@@ -839,7 +863,7 @@ describe('Arena page', () => {
       const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
       vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
         const method = init?.method ?? 'GET';
-        if (url.startsWith('/api/pvp/battles') && method === 'GET') return Response.json(inRound);
+        if (url.startsWith('/api/pvp/fights') && method === 'GET') return Response.json(inRound);
         if (url === '/api/tournaments') return Response.json([{ id: 1, season: 8, number: 2, startDate: null, rounds: ['Top 48'] }]);
         if (url.startsWith('/api/tournaments/1/rounds/') && method === 'GET') return Response.json([]);
         return base(url, init);
@@ -868,7 +892,7 @@ describe('Arena page', () => {
   it('greys out heroes another team of the same session uses, yet lets them be moved', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     await placeFirstHero(user, /^Evie/);
     await user.click(screen.getByRole('tab', { name: /Team 2/ }));
@@ -883,7 +907,7 @@ describe('Arena page', () => {
   it('switches to the side whose hero is removed with the cross', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     await placeFirstHero(user, /^Evie/);
     expect(screen.getByRole('tab', { name: 'Side A (1/5)' }).getAttribute('aria-selected')).toBe('true');
@@ -898,7 +922,7 @@ describe('Arena page', () => {
   it('shows the two side profile selectors side by side', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     const profiles = screen.getByRole('group', { name: 'Profiles of the sides' });
     expect(within(profiles).getByLabelText('Profile of Side A')).toBeTruthy();
@@ -908,9 +932,9 @@ describe('Arena page', () => {
   it('keeps the profiles, side tabs and search outside the scrolling unit picker', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
-    expect(screen.getByRole('group', { name: 'Profiles of the sides' }).closest('.workspace-bar')).toBeTruthy(); // in the bar above the board, taking no height from the picker
+    expect(screen.getByRole('group', { name: 'Profiles of the sides' }).closest('.workspace-bar')).toBeTruthy(); // in the bar above the editor, taking no height from the picker
     expect(screen.getByRole('tab', { name: 'Side A (0/5)' }).closest('.picker-fixed')).toBeTruthy();
     const search = screen.getByRole('textbox', { name: 'Search Side A heroes' });
     expect(search.closest('.picker-scroll')).toBeTruthy();
@@ -924,7 +948,7 @@ describe('Arena page', () => {
   it('moves a hero from another team once the question is accepted', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     await placeFirstHero(user, /^Evie/);
     await user.click(screen.getByRole('tab', { name: /Team 2/ }));
@@ -943,7 +967,7 @@ describe('Arena page', () => {
   it('swaps your formation with another team’s, leaving the opponent where it is unless asked', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     await placeFirstHero(user, /^Evie/);
     expect(screen.getByRole('tab', { name: 'Team 1 (1)' })).toBeTruthy();
@@ -957,7 +981,7 @@ describe('Arena page', () => {
   it('takes Zanie from another team with her turrets, all at once', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     await placeFirstHero(user, /^Zanie/); // Zanie and both turrets in one gesture
     expect(screen.getByRole('tab', { name: 'Team 1 (3)' })).toBeTruthy();
@@ -974,7 +998,7 @@ describe('Arena page', () => {
   it.each([['Supreme Arena', true], ['Super League', true], ['Guild Duel', true]])('artifacts of %s teams: only used once is %s', async (mode, once) => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, mode);
     await user.click(screen.getByRole('button', { name: 'Choose Side A artifact' }));
     await user.click(within(screen.getByRole('list', { name: 'Artifacts' })).getByRole('button', { name: 'Bladestorm' }));
@@ -999,7 +1023,7 @@ describe('Arena page', () => {
   it('takes a pair from another team whole, in one gesture', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     await placeFirstHero(user, /^Elijah & Lailah/); // both parts in one click
     expect(screen.getByRole('tab', { name: 'Team 1 (2)' })).toBeTruthy();
@@ -1024,16 +1048,16 @@ describe('Arena page', () => {
   it('shares the tags between the teams of one battle and sends them with each', async () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
-    await user.click(await screen.findByRole('button', { name: 'New battles' }));
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
     await user.selectOptions(screen.getAllByLabelText('Mode').at(-1)!, 'Supreme Arena');
     await user.type(screen.getByLabelText('Add tag'), 'Season 8{Enter}');
     await placeFirstHero(user, /^Evie/);
     await user.click(screen.getByRole('tab', { name: /^Team 2/ }));
     expect(screen.getByText('Season 8', { selector: '.badge' })).toBeTruthy();
     await placeFirstHero(user, /^Fay/);
-    await user.click(screen.getByRole('button', { name: 'Save battles' }));
-    await waitFor(() => expect(requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')).toBeTruthy());
-    const sent = requests.find((r) => r.url === '/api/pvp/battle-groups')!.body;
+    await user.click(screen.getByRole('button', { name: 'Save records' }));
+    await waitFor(() => expect(requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBeTruthy());
+    const sent = requests.find((r) => r.url === '/api/pvp/battles')!.body;
     expect(sent.mode).toBe('Supreme Arena');
     expect(sent.fights.map((f: any) => f.position)).toEqual([1, 2]);
     for (const fight of sent.fights) expect(fight).toMatchObject({ tags: ['Season 8'] });
@@ -1043,12 +1067,12 @@ describe('Arena page', () => {
     const user = userEvent.setup();
     render(<ArenaPage />);
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
-    expect(await screen.findByText('Edit battle')).toBeTruthy();
+    expect(await screen.findByText('Edit record')).toBeTruthy();
     await user.click(within(screen.getByRole('group', { name: 'Winner' })).getByLabelText('Side B'));
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(requests.find((r) => r.method === 'PUT')).toBeTruthy());
     const sent = requests.find((r) => r.method === 'PUT')!;
-    expect(sent.url).toBe('/api/pvp/battles/5');
+    expect(sent.url).toBe('/api/pvp/fights/5');
     expect(sent.body).toMatchObject({ mode: 'Supreme Arena', outcome: 'Loss', rule: 'Berserk' });
     expect(sent.body.formation.heroes).toEqual([{ tile: 38, hero: 'Evie', rank: 'Mythic+', equipmentLevel: 10 }]);
   });
@@ -1061,11 +1085,11 @@ describe('a link to a record', () => {
     window.history.replaceState(null, '', '#arena?record=5');
     const user = userEvent.setup();
     render(<ArenaPage />);
-    expect(await screen.findByText('Edit battle')).toBeTruthy();
-    expect(requests.some((r) => r.url === '/api/pvp/battles/5')).toBe(true);
+    expect(await screen.findByText('Edit record')).toBeTruthy();
+    expect(requests.some((r) => r.url === '/api/pvp/fights/5')).toBe(true);
     expect(window.location.hash).toBe('#arena?record=5'); // still there while the form is open
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(await screen.findByRole('button', { name: 'New battles' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'New record' })).toBeTruthy();
     expect(window.location.hash).toBe('#arena');
   });
 
@@ -1073,7 +1097,7 @@ describe('a link to a record', () => {
     window.history.replaceState(null, '', '#arena?record=99');
     render(<ArenaPage />);
     expect((await screen.findByRole('alert')).textContent).toContain('Record 99 no longer exists');
-    expect(screen.queryByText('Edit battle')).toBeNull();
+    expect(screen.queryByText('Edit record')).toBeNull();
     await waitFor(() => expect(window.location.hash).toBe('#arena')); // the address is cleaned in an effect after the message shows
   });
 

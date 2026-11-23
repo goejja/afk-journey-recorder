@@ -24,7 +24,7 @@ const post = (url: string, body: unknown) =>
 const side = (names: string[]) => names.map((hero, i) => ({ tile: 38 + i, hero }));
 const enemySide = (names: string[]) => ({ heroes: names.map((hero, i) => ({ tile: i, hero })) });
 const battle = (a: string[], b: string[], outcome: 'Win' | 'Loss', extra: object = {}) =>
-  post('/api/pvp/battles', {
+  post('/api/pvp/fights', {
     mode: 'Arena', mapName: 'Open', outcome, formation: { heroes: side(a), phantimal: null, assistHero: null, artifact: null}, opponent: enemySide(b), ...extra,
   });
 

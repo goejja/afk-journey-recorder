@@ -4,7 +4,7 @@ import { api, type AgentJob, type ArenaMode, type Artifact, type BossRule, type 
 import { useAction } from '../hooks/action.js';
 import { useReference } from '../hooks/load.js';
 import { useJobFinished, useJobs } from '../jobs/JobsProvider.js';
-import { BattleEditor } from '../arena/BattleEditor.js';
+import { FightTeamsEditor } from '../arena/FightTeamsEditor.js';
 import { emptyFormation, type FormationState } from '../FormationEditor.js';
 import { keepOnMap } from '../relocate.js';
 import { CounterAdvisor, TeamGenerator } from '../advisor/index.js';
@@ -133,7 +133,7 @@ function ScenarioForm({ reference, editing, onSaved, onCancel }: { reference: Re
       {map && (
         <div key={`${current}-${slot.mapName}`}>
           <p className="muted">Place the enemy team on Side B. Optionally place your own heroes on Side A to keep them; leave it empty for the agent to propose from your roster.</p>
-          <BattleEditor
+          <FightTeamsEditor
             map={map}
             heroes={reference.heroes}
             artifacts={reference.artifacts}
@@ -373,7 +373,7 @@ function ScenarioPlanner() {
 const TOOLS = { generator: 'Team generator', advisor: 'Advisor', planner: 'Scenario planner' } as const;
 type Tool = keyof typeof TOOLS;
 
-/** The Scenarios page: the team generator (teams from your roster and records), the Advisor (teams against an enemy you place) and the scenario planner (boards the agent estimates). */
+/** The Scenarios page: the team generator (teams from your roster and records), the Advisor (teams against an enemy you place) and the scenario planner (editors the agent estimates). */
 export function ScenariosPage() {
   const [tool, setTool] = useState<Tool>('generator');
   return (

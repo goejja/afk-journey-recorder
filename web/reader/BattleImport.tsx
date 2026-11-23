@@ -90,7 +90,7 @@ export function BattleImport({ start: restore, onClose, onOpen, onReview, onSave
       const ids = withPictures.filter((g) => saved.includes(g.key)).flatMap((g) => g.pictures.map((p) => p.id));
       if (ids.length > 0) await api.dismissBattleImport(ids);
       await refresh();
-      toast(`Saved ${saved.length} ${saved.length === 1 ? 'battle' : 'battles'} in ${chosen.label}, ${chosen.round}.`);
+      toast(`Saved ${saved.length} ${saved.length === 1 ? 'record' : 'records'} in ${chosen.label}, ${chosen.round}.`);
       if (errors.length > 0) setError(errors.join(' | '));
     });
 

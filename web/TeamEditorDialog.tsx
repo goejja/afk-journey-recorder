@@ -90,7 +90,7 @@ export function TeamEditorDialog({ title, team, maps, heroes, artifacts, phantim
           mapLabel={`Team of ${title}`}
         />
       ) : (
-        <Notice kind="error">This Round has no Arena Map to place the team on. Add one in Admin → Maps first.</Notice>
+        <Notice kind="error">This Round has no map tagged Arena to place the team on. Add one in Admin → Maps first.</Notice>
       )}
     </Dialog>
   );

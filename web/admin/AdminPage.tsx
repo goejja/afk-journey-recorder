@@ -1,5 +1,6 @@
 import { FormationIdsAdmin } from './FormationIdsAdmin.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SEASON_PHASES } from '../../src/domain/titan-reaver.js';
 import { allowsRule, DEFAULT_MODES, DEFAULT_SLOTS, emptySlot } from '../../src/domain/defaults.js';
 import { MapPicker } from '../MapPicker.js';
 import { urlOf } from '../../src/shared/contract.js';
@@ -12,6 +13,7 @@ import { ImagesPage } from '../reader/ImagesPage.js';
 import { MapsPage } from './MapsPage.js';
 import { ArtifactsPage } from './ArtifactsPage.js';
 import { UnitsPage } from './UnitsPage.js';
+import { TitanReaverAdmin } from './TitanReaverAdmin.js';
 import { ReaderPage } from '../reader/ReaderPage.js';
 import { ReviewPage } from '../reader/ReviewPage.js';
 import { useAction } from '../hooks/action.js';
@@ -148,6 +150,8 @@ function GeneralAdmin() {
       <p className="muted">
         The current season is the one every new record is played in (a Battle of a Tournament takes the Tournament's), and where new stages start, and the artifacts offered first.
         A season that stages, phantimals, records or Tournaments already name cannot be removed.
+        The Season Phase is where the current season is: Stages and the Titan Reaver form open on it, and a stage you clear or a Titan Reaver record of a later Phase raises it.
+        Changing it, or the current season, empties the Titan Reaver setup of Admin &gt; Weekly default, as that was the previous event.
       </p>
       {error && (
         <Notice kind="error">
@@ -184,6 +188,16 @@ function GeneralAdmin() {
             >
               <strong>Season {s.number}</strong>
               {s.current && <span className="badge">current</span>}
+              {s.current && (
+                <label className="field">
+                  Season Phase
+                  <select value={s.phase} disabled={busy} onChange={(e) => void run(() => api.setSeasonPhase(Number(e.target.value)))}>
+                    {SEASON_PHASES.map((p) => (
+                      <option key={p}>{p}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <span className="muted">
                 {s.stages} stages · {s.phantimals} phantimals · {s.records} records
               </span>
@@ -529,10 +543,10 @@ function WeeklyMode({ mode, setup, reference }: { mode: DefaultMode; setup: Week
         ))}
       </ul>
       <div className="workspace-actions">
-        <button className="primary" disabled={busy} onClick={() => void run(() => api.saveDefaults(mode, slots), `Saved the ${mode} setup.`)}>
+        <button className="primary" disabled={busy} onClick={() => void run(() => api.saveDefaults(mode, slots), `Saved the ${mode} weekly default.`)}>
           Save
         </button>
-        <button disabled={busy} onClick={() => void run(() => api.clearDefaults(mode), `Cleared the ${mode} setup.`)}>Clear</button>
+        <button disabled={busy} onClick={() => void run(() => api.clearDefaults(mode), `Cleared the ${mode} weekly default.`)}>Clear</button>
         <span className="muted">{saved.updatedAt ? `Updated ${saved.updatedAt}` : 'Not set'}</span>
       </div>
     </section>
@@ -557,6 +571,7 @@ function WeeklyAdmin() {
         </Notice>
       )}
       {setups && reference && DEFAULT_MODES.map((mode) => <WeeklyMode key={mode} mode={mode} setup={setups[mode]} reference={reference} />)}
+      <TitanReaverAdmin />
     </section>
   );
 }
@@ -564,17 +579,17 @@ function WeeklyAdmin() {
 const SECTIONS = [
   { key: 'general', label: 'General', component: GeneralAdmin },
   { key: 'weekly', label: 'Weekly default', component: WeeklyAdmin },
-  { key: 'maps', label: 'Maps', component: MapsPage },
   { key: 'units', label: 'Units', component: UnitsPage },
   { key: 'artifacts', label: 'Artifacts', component: ArtifactsPage },
+  { key: 'maps', label: 'Maps', component: MapsPage },
   { key: 'images', label: 'Images', component: ImagesPage },
-  { key: 'reader', label: 'Reader', component: ReaderPage },
-  { key: 'review', label: 'Review', component: ReviewPage },
-  { key: 'database', label: 'Database', component: DatabaseAdmin },
   { key: 'tags', label: 'Tags', component: TagsAdmin },
   { key: 'formationIds', label: 'Formation IDs', component: FormationIdsAdmin },
   { key: 'rules', label: 'Rules', component: RulesAdmin },
+  { key: 'database', label: 'Database', component: DatabaseAdmin },
   { key: 'agent', label: 'Agent', component: AgentAdmin },
+  { key: 'reader', label: 'Reader', component: ReaderPage },
+  { key: 'review', label: 'Review', component: ReviewPage },
 ] as const;
 
 /** Upkeep that is not part of recording battles. */

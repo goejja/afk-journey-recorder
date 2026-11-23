@@ -477,7 +477,7 @@ function SectionReview(props: {
       {!section.profile && <p className="muted">A new profile has no Player ID: add it from the roster afterwards.</p>}
 
       {section.rows.length > 0 ? (
-        <table className="board" aria-label={`Changes for ${label}`}>
+        <table className="data-table" aria-label={`Changes for ${label}`}>
           <thead>
             <tr>
               <th>Apply</th>

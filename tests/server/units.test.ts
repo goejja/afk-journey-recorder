@@ -97,7 +97,7 @@ beforeEach(() => {
 const post = (url: string, body: unknown) =>
   app.request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 const battle = (a: object[], b: object[]) =>
-  post('/api/pvp/battles', {
+  post('/api/pvp/fights', {
     mode: 'Arena', mapName: 'Open', outcome: 'Win',
     formation: { heroes: a, phantimal: null, assistHero: null, artifact: null}, opponent: { heroes: b },
   });

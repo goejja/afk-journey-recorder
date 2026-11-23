@@ -25,7 +25,7 @@ export function MapFormations({ map, filters }: { map: string; filters: Filters 
   if (!data) return <Loading />;
   if (data.length === 0) return <p className="muted">No formation has 3 records on this map with these filters.</p>;
   return (
-    <table className="board" aria-label={`Best formations on ${map}`}>
+    <table className="data-table" aria-label={`Best formations on ${map}`}>
       <thead>
         <tr>
           <th>#</th>

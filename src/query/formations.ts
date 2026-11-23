@@ -218,7 +218,7 @@ interface CounterSide {
 }
 
 /** A battle with both its sides, as `groupCounters` reads it. */
-export type CounterBattle = [CounterSide, CounterSide];
+export type CounterFight = [CounterSide, CounterSide];
 
 /** The counter rule saved in Admin, or the defaults. */
 export function counterRule(db: Database.Database): CounterRule {
@@ -231,7 +231,7 @@ export function counterRule(db: Database.Database): CounterRule {
  * they do elsewhere; `player` keeps the battles that Player was in, on either side, so the opponent is never lost. `excludeDefault`
  * cannot apply to one side of a battle and is ignored. A battle with one side only is left out.
  */
-export function counterBattles(db: Database.Database, filters: StatFilters): CounterBattle[] {
+export function counterFights(db: Database.Database, filters: StatFilters): CounterFight[] {
   const params: unknown[] = [];
   const where = whereFor({ ...filters, player: undefined, excludeDefault: false }, params);
   const players = listOf(filters.player);
@@ -246,7 +246,7 @@ export function counterBattles(db: Database.Database, filters: StatFilters): Cou
     (sides[r.side] ??= { heroes: [], won: r.won }).heroes.push(r.hero);
     battles.set(r.attemptId, sides);
   }
-  return [...battles.values()].flatMap((s) => (s['A'] && s['B'] ? [[s['A'], s['B']] as CounterBattle] : []));
+  return [...battles.values()].flatMap((s) => (s['A'] && s['B'] ? [[s['A'], s['B']] as CounterFight] : []));
 }
 
 /**
@@ -255,7 +255,7 @@ export function counterBattles(db: Database.Database, filters: StatFilters): Cou
  * and a battle of a group against itself, are left out. A group counters another when it met it in at least `rule.minGames` games and
  * won at least `rule.winRate` of them; "loses to" is the same reading from the other side. The result is parallel to `groups`.
  */
-export function groupCounters(groups: FormationGroup[], battles: CounterBattle[], rule: CounterRule = DEFAULT_COUNTER_RULE): GroupCounters[] {
+export function groupCounters(groups: FormationGroup[], battles: CounterFight[], rule: CounterRule = DEFAULT_COUNTER_RULE): GroupCounters[] {
   const keyOf = (heroes: string[]) => JSON.stringify([...heroes].sort());
   const groupOf = new Map<string, number>();
   for (const [index, g] of groups.entries()) for (const v of g.variants) groupOf.set(keyOf(v.heroes), index);
@@ -291,12 +291,12 @@ export function groupCounters(groups: FormationGroup[], battles: CounterBattle[]
 }
 
 /**
- * The counters of the Formation groups found among the sides of the battles the filters select (see `counterBattles`), most played
+ * The counters of the Formation groups found among the sides of the battles the filters select (see `counterFights`), most played
  * first. `minGames` hides groups played less than that, as it does for the groups table; the counter rule is the one saved in Admin
  * unless one is given. Groups come from both sides of every battle, so a Player filter still names the opponent's group.
  */
 export function groupCounterReport(db: Database.Database, filters: StatFilters & { minGames?: number }, rule: CounterRule = counterRule(db)): GroupCounterReport {
-  const battles = counterBattles(db, filters);
+  const battles = counterFights(db, filters);
   const sides = battles.flatMap((pair) => pair.map((s) => ({ heroes: s.heroes, won: s.won, playerId: null })));
   const groups = groupSides(sides, { minGames: filters.minGames }).slice(0, MAX_ROWS);
   const counters = groupCounters(groups, battles, rule);

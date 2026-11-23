@@ -31,7 +31,7 @@ const fight = (hero: string, extra: Record<string, unknown> = {}) => ({
   opponent: { heroes: [{ tile: 0, hero: 'X' }] },
   ...extra,
 });
-const group = (fights: unknown[], mode = 'Guild Duel') => send('POST', '/api/pvp/battle-groups', { mode, fights });
+const group = (fights: unknown[], mode = 'Guild Duel') => send('POST', '/api/pvp/battles', { mode, fights });
 
 describe('Guild Duel battles', () => {
   it('saves three teams as one battle and keeps the Union Level of each side on every fight', async () => {
@@ -52,7 +52,7 @@ describe('Guild Duel battles', () => {
     expect((await group([fight('A', { opponentUnionLevel: 101 })])).status).toBe(400);
     expect((await group([fight('A', { unionLevel: 0, opponentUnionLevel: 100 })])).status).toBe(201);
     expect((await group([fight('A', { unionLevel: 5 })], 'Supreme Arena')).status).toBe(400);
-    expect((await send('POST', '/api/pvp/battles', { ...fight('A', { unionLevel: 5 }), mode: 'Arena' })).status).toBe(400);
+    expect((await send('POST', '/api/pvp/fights', { ...fight('A', { unionLevel: 5 }), mode: 'Arena' })).status).toBe(400);
   });
 
   it('allows no rule, and a hero on one team only', async () => {
@@ -63,13 +63,13 @@ describe('Guild Duel battles', () => {
 
   it('can be edited, changing the Union Level', async () => {
     const created = await json(group([fight('A', { unionLevel: 10 }), fight('B', { unionLevel: 10 })]));
-    const edited = await json(send('PUT', `/api/pvp/battle-groups/${created.id}`, { fights: [fight('A', { unionLevel: 11, opponentUnionLevel: 9 }), fight('B', { unionLevel: 11, opponentUnionLevel: 9 })] }));
+    const edited = await json(send('PUT', `/api/pvp/battles/${created.id}`, { fights: [fight('A', { unionLevel: 11, opponentUnionLevel: 9 }), fight('B', { unionLevel: 11, opponentUnionLevel: 9 })] }));
     expect(edited.fights.map((f: any) => [f.unionLevel, f.opponentUnionLevel])).toEqual([[11, 9], [11, 9]]);
   });
 
   it('appears in the list filter, the query statistics and a scenario', async () => {
     await group([fight('A')]);
-    expect(await json(send('GET', '/api/pvp/battles?mode=Guild Duel'))).toHaveLength(1);
+    expect(await json(send('GET', '/api/pvp/fights?mode=Guild Duel'))).toHaveLength(1);
     expect(db.prepare("SELECT count(*) FROM v_side WHERE mode = 'Guild Duel'").pluck().get()).toBe(2);
     const scenario = await send('POST', '/api/scenarios', {
       name: 'Duel', mode: 'Guild Duel', note: '',

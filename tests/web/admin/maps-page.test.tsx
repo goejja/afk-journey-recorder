@@ -8,8 +8,9 @@ import { MapsPage } from '../../../web/admin/MapsPage.js';
 const rowLengths = [2, 5, 6, 6, 7, 6, 6, 5, 2];
 const cells = Array(TILE_COUNT).fill(TILE.OPEN);
 const maps = [
-  { name: 'Arena I', tags: ['Arena'], rowLengths, cells, boostTiles: [], source: 'import', canRestore: false },
-  { name: 'Open', tags: ['Stage'], rowLengths, cells, boostTiles: [], source: 'manual', canRestore: false },
+  { name: 'Arena I', tags: ['Arena'], rowLengths, cells, boostTiles: [], source: 'import', handMade: false, canRestore: false },
+  { name: 'Open', tags: ['Stage'], rowLengths, cells, boostTiles: [], source: 'manual', handMade: false, canRestore: false },
+  { name: 'Supreme Arena XV', tags: ['Arena'], rowLengths, cells, boostTiles: [], source: 'manual', handMade: true, canRestore: false },
 ];
 
 let requests: { method: string; url: string; body?: any }[];
@@ -40,6 +41,15 @@ describe('MapsPage', () => {
     const list = within(screen.getByRole('list', { name: 'Maps' }));
     expect(list.queryByRole('button', { name: /Arena I/ })).toBeNull();
     expect(list.getByRole('button', { name: /Open/ })).toBeTruthy();
+  });
+
+  it('says on a map made by hand that the next import takes over its tiles', async () => {
+    const user = userEvent.setup();
+    render(<MapsPage />);
+    await user.click(await screen.findByRole('button', { name: /Supreme Arena XV/ }));
+    expect(screen.getByText('Not on Yaphalla yet: the next import takes over its tiles.')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /Arena I/ }));
+    expect(screen.queryByText(/Not on Yaphalla yet/)).toBeNull();
   });
 
   it('changes a tile in a popover and saves the edited map', async () => {

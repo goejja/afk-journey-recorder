@@ -76,7 +76,7 @@ describe('artifacts API', () => {
     record('Bladestorm');
     const used = await send('DELETE', '/api/artifacts/Bladestorm');
     expect(used.status).toBe(409);
-    expect(((await used.json()) as any).error).toBe('1 record uses Bladestorm');
+    expect(((await used.json()) as any).error).toBe('Bladestorm is used by 1 record, so it cannot be deleted');
     expect((await send('DELETE', '/api/artifacts/Awakening')).status).toBe(204);
     expect((await send('DELETE', '/api/artifacts/Awakening')).status).toBe(404);
     expect((await list()).map((a) => a.name)).toEqual(['Bladestorm']);

@@ -83,13 +83,13 @@ interface Props {
   onCancel: () => void;
   /** The cancel button's text; "Cancel" by default. */
   cancelLabel?: string;
-  /** The board, which fills the rest of the window. */
+  /** The editor, which fills the rest of the window. */
   children: ReactNode;
 }
 
 /**
  * The window below the top of the page that the recording screen fills: its height follows the window, so the page itself never
- * scrolls (the picker inside scrolls instead). Below `min-height` the page scrolls rather than squash the board.
+ * scrolls (the picker inside scrolls instead). Below `min-height` the page scrolls rather than squash the editor.
  */
 function useFillWindow() {
   const ref = useRef<HTMLElement>(null);
@@ -108,7 +108,7 @@ function useFillWindow() {
 /**
  * The same recording screen for every mode, filling the window: what the record is about with the Save and Cancel buttons on the same
  * line, then the result, note, tags and Formation IDs (the same line in every mode, all in view), then a line for what only the mode
- * has, then the team tabs, and the board in the rest of the window (ADR 0034).
+ * has, then the team tabs, and the editor in the rest of the window (ADR 0034).
  */
 export function RecordShell({ title, identity, result, note, onNote, tags, onTags, lockedTags, fields, deployment, formationIds, teams, onSetDefault, error, status, saveLabel, onSave, onSaveAnother, saveDisabled, saving, onCancel, cancelLabel, children }: Props) {
   const teamsId = useId();

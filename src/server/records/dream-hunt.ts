@@ -12,7 +12,7 @@ import { anyOf, limitParam, listParam } from '../params.js';
 import { hasAnyTag, loadTags, saveTags } from './tags.js';
 import { fightFormationIdProblem, formationContext, formationHeroNames, insertFormation, loadFormation, loadRoster, replaceFormation, validateSnapshots } from './formations.js';
 import { hasName, mapCells, seasonOfNewRecord } from '../db-helpers.js';
-import { dreamHuntContract, type Boss, type BossRule } from '../../shared/contracts/dream-hunt.js';
+import { dreamHuntContract, type BossRule } from '../../shared/contracts/dream-hunt.js';
 import { fail, serve } from '../contract.js';
 
 const DEFAULT_LIMIT = 200;
@@ -64,16 +64,6 @@ export function dreamHuntRoutes(db: Database.Database, loadRules: () => HeroStat
   const cellsOf = (name: string) => mapCells(db, name);
 
   // ---- bosses and boss rules ----------------------------------------------------------------
-
-  serve(app, dreamHuntContract.bosses, () =>
-    db
-      .prepare(
-        `SELECT b.name, b.class, b.damage_type AS damageType,
-                (SELECT count(*) FROM dream_hunt_attempt d WHERE d.boss_name = b.name) AS attempts
-         FROM boss b ORDER BY b.name`,
-      )
-      .all() as Boss[],
-  );
 
   serve(app, dreamHuntContract.rules, () => db.prepare('SELECT name, description FROM boss_rule ORDER BY name').all() as BossRule[]);
 

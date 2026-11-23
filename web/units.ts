@@ -28,7 +28,7 @@ export function selectorHeroes(heroes: Hero[]): Hero[] {
   return heroes;
 }
 
-/** The Units a hero puts on the board: the domain rule, so every layer places the same ones. */
+/** The Units a hero puts on the map: the domain rule, so every layer places the same ones. */
 const unitParts = unitsOf;
 
 /** Selector icons that cannot be placed now, mapped to why: already placed (any of its Units), or held elsewhere. */

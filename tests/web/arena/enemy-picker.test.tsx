@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Enemy } from '../../../web/backend.js';
 import { EnemyPicker } from '../../../web/arena/EnemyPicker.js';
 
-const enemy = (name: string, category: Enemy['category'], uses = 0): Enemy => ({ name, category, class: null, damageType: null, imagePath: null, uses });
+const enemy = (name: string, kind: Enemy['kind'], uses = 0): Enemy => ({ name, kind, class: null, damageType: null, imagePath: null, uses });
 afterEach(cleanup);
 
 const enemies = [enemy('Grunt', 'Common', 2), enemy('Beetle', 'Common'), enemy('Captain', 'Elite', 5), enemy('Croaker', 'Boss')];

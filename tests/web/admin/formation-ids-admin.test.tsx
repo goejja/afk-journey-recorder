@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FormationIdsAdmin } from '../../../web/admin/FormationIdsAdmin.js';
 
 const hero = (name: string) => ({ name, tier: 'S', class: 'Mage', faction: 'Wilder', damageType: 'Magic', imagePath: null, owned: false, rank: null, equipmentLevel: null });
-const board = { name: 'Arena I', tags: ['Arena'], rowLengths: [2, 5, 6, 6, 7, 6, 6, 5, 2], cells: Array.from({ length: 45 }, (_, i) => (i >= 38 ? 1 : 0)), source: 'import', canRestore: false };
+const arenaMap = { name: 'Arena I', tags: ['Arena'], rowLengths: [2, 5, 6, 6, 7, 6, 6, 5, 2], cells: Array.from({ length: 45 }, (_, i) => (i >= 38 ? 1 : 0)), source: 'import', canRestore: false };
 let requests: { method: string; url: string; body?: any }[];
 
 beforeEach(() => {
@@ -17,7 +17,7 @@ beforeEach(() => {
       requests.push({ method, url, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
       if (url === '/api/formation-ids' && method === 'GET') return Response.json([]);
       if (url === '/api/formation-ids' && method === 'POST') return Response.json({}, { status: 201 });
-      if (url === '/api/maps') return Response.json([board]);
+      if (url === '/api/maps') return Response.json([arenaMap]);
       if (url === '/api/heroes') return Response.json([hero('Alna'), hero('Phraesto')]);
       if (url === '/api/phantimals') return Response.json([]);
       if (url === '/api/artifacts') return Response.json([]);

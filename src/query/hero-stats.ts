@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { gameRowOf } from '../domain/board.js';
+import { gameRowOf } from '../domain/map-geometry.js';
 import { type StatFilters, MAX_ROWS, APPEARANCES, whereFor } from './filters.js';
 
 /**
@@ -122,7 +122,7 @@ export function mapStats(db: Database.Database, filters: StatFilters & { minGame
 
 /**
  * Win rate of a hero by the game row it stood in (the diagonal rows of ADR 0036, 1 to 15), counted from the back edge of its own side:
- * Side B reads the board turned over, so both sides read the same way. A hero on several tiles (a Pair Hero) counts once per tile.
+ * Side B reads the map turned over, so both sides read the same way. A hero on several tiles (a Pair Hero) counts once per tile.
  */
 export function heroRowStats(db: Database.Database, hero: string, filters: StatFilters = {}) {
   const params: unknown[] = [hero];

@@ -86,3 +86,83 @@ export interface AdvisorPlan {
   /** Pinned teams that have no clear to count, so the total leaves them out. */
   unknownFights: number;
 }
+
+// ---- Titan Reaver Advisor (#281) ----
+
+/** Which recorded fights a Titan Reaver plan draws on: those at the chosen team level only, or those at that level and below. */
+export type TitanScope = 'level' | 'all';
+
+/** A recorded fight against a boss, as the Titan Reaver Advisor reads it. */
+export interface TitanRun {
+  battleId: number;
+  /** The team level of the Battle the fight was in. */
+  level: number;
+  damage: number;
+  heroes: string[];
+  artifact: string | null;
+  /** A hero stood at a higher rank in that fight than in the roster now. */
+  weaker: boolean;
+}
+
+/** One boss of a Titan Reaver Phase (null when the setup names none) and every recorded fight against it. */
+export interface TitanSlot {
+  boss: string | null;
+  runs: TitanRun[];
+}
+
+/** A team proposed against one boss: the Composition with the best damage in scope, and how it did at the level of that best fight. */
+export interface TitanChoice {
+  boss: string;
+  heroes: string[];
+  artifact: string | null;
+  /** The best damage of the Composition in scope, and the team level it was dealt at. */
+  best: number;
+  level: number;
+  /** The mean damage and the number of fights of the Composition at that level. */
+  mean: number;
+  attempts: number;
+  /** The best fight was at a level below the chosen one. */
+  lowerLevel: boolean;
+  /** Fewer than `ANECDOTE_BELOW` fights at that level. */
+  anecdote: boolean;
+  weaker: boolean;
+  battleId: number;
+}
+
+export interface TitanFight {
+  boss: string | null;
+  choice: TitanChoice | null;
+  /** Why there is no choice. */
+  gap: string | null;
+}
+
+export interface TitanPlan {
+  fights: TitanFight[];
+  /** The best damages of the choices added up. */
+  total: number;
+}
+
+/** The best recorded Battle of the same two bosses at the chosen level (and below, for All levels). */
+export interface TitanBestBattle {
+  id: number;
+  level: number;
+  total: number;
+  createdAt: string;
+}
+
+export interface TitanProposal {
+  titanPhase: 'Charge' | 'Clash' | 'Conquer';
+  bosses: (string | null)[];
+  plan: TitanPlan;
+  best: TitanBestBattle | null;
+  /** Fights against these bosses left out because they use a hero that is not in the roster. */
+  leftOut: number;
+}
+
+export interface TitanReaverAdvice {
+  seasonPhase: number;
+  level: number;
+  maxLevel: number;
+  scope: TitanScope;
+  proposals: TitanProposal[];
+}

@@ -34,7 +34,7 @@ export function unitNameProblem(taken: TakenNames, name: string): string | null 
 }
 
 /**
- * How many saved rows put a name on the board: `"hero":"<name>"` (`field` is `hero`, a hero, a phantimal or a summon) or `"part":"<name>"`
+ * How many saved rows put a name on the map: `"hero":"<name>"` (`field` is `hero`, a hero, a phantimal or a summon) or `"part":"<name>"`
  * (`field` is `part`, the second part of a unit) in the JSON of Formation IDs and Round Deployments.
  */
 export function deploymentsNaming(db: Database.Database, field: 'hero' | 'part', name: string): number {

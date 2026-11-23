@@ -58,8 +58,8 @@ export function layoutKey(layout: Layout): string {
 const turn = (tile: number) => TILE_COUNT - 1 - tile;
 
 /**
- * The same deployment seen from the other half of the board. The rows of a map are as long forwards as backwards, so
- * turning the board by half a turn sends tile i to tile 44 - i.
+ * The same deployment seen from the other half of the map. The rows of a map are as long forwards as backwards, so
+ * turning the map by half a turn sends tile i to tile 44 - i.
  */
 export function rotateLayout(layout: Layout): Layout {
   return { units: layout.units.map((u) => ({ ...u, tile: turn(u.tile) })) };
@@ -108,7 +108,7 @@ export function phantimalOf(team: Layout): { name: string; tiles: number[] } | n
   return { name: units.find((u) => u.part === '')?.hero ?? units[0]!.hero, tiles: units.map((u) => u.tile) };
 }
 
-/** The Deployment seen from the other half of the board: every team turned. */
+/** The Deployment seen from the other half of the map: every team turned. */
 export const rotateDeployment = (d: Deployment): Deployment => ({ teams: d.teams.map((t) => (t ? { ...rotateLayout(t), artifact: t.artifact } : null)) });
 
 const hasUnits = (t: Layout) => t.units.length > 0;
@@ -184,12 +184,12 @@ export const normalizeFormationId = (value: string): string => value.trim().toUp
 
 /**
  * Returns an error message when a Layout typed in by hand cannot be a deployment, else null: the Units follow the rules
- * of units (pairs whole, every summon placed), every tile is on the board, and no two Units share a tile.
+ * of units (pairs whole, every summon placed), every tile is on the map, and no two Units share a tile.
  */
 function layoutProblem(layout: Layout): string | null {
   const used = new Set<number>();
   const take = (tile: unknown, label: string): string | null => {
-    if (!Number.isInteger(tile) || (tile as number) < 0 || (tile as number) >= TILE_COUNT) return `${label} is not on the board`;
+    if (!Number.isInteger(tile) || (tile as number) < 0 || (tile as number) >= TILE_COUNT) return `${label} is not on the map`;
     if (used.has(tile as number)) return `Two units stand on tile ${tile}`;
     used.add(tile as number);
     return null;

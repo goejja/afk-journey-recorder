@@ -5,7 +5,8 @@ interface PlacedUnit {
   key: string;
   name: string;
   kind: ImageKind;
-  onRemove: () => void;
+  /** Left out for a unit the heroes bring by themselves (the Phantimal of Titan Reaver). */
+  onRemove?: () => void;
 }
 
 interface Props {
@@ -24,7 +25,7 @@ export function PlacedUnits({ label, units }: Props) {
           <li key={u.key}>
             <Portrait kind={u.kind} name={u.name} size={22} />
             {u.name}
-            <IconButton icon="close" label={`Remove ${u.name}`} onClick={u.onRemove} />
+            {u.onRemove && <IconButton icon="close" label={`Remove ${u.name}`} onClick={u.onRemove} />}
           </li>
         ))}
       </ul>

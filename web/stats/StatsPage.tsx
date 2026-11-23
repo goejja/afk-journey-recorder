@@ -50,7 +50,7 @@ function HeroDistributionGrid({ hero, mode, tag, player, playedIn }: { hero: str
         {isSmallSample(distribution.players) && ' · few players, too few to trust'}. One count per player, from their latest record.
       </p>
       {ranks.length > 0 && (
-        <table className="board" aria-label={`Rank and equipment of ${hero}`}>
+        <table className="data-table" aria-label={`Rank and equipment of ${hero}`}>
           <thead>
             <tr>
               <th>Rank</th>
@@ -75,7 +75,7 @@ function HeroDistributionGrid({ hero, mode, tag, player, playedIn }: { hero: str
   );
 }
 
-/** A hero's win rate by row of the board. Asked for when a hero is opened. */
+/** A hero's win rate by row of the map. Asked for when a hero is opened. */
 function HeroRows({ hero, mode, tag, player, playedIn }: { hero: string; mode: string[]; tag: string[]; player: string[]; playedIn: string[] }) {
   const { data: rows, error } = useLoad(() => api.statsHeroRows(hero, { mode, tag, player, playedIn }), [hero, mode, tag, player, playedIn]);
 
@@ -83,7 +83,7 @@ function HeroRows({ hero, mode, tag, player, playedIn }: { hero: string; mode: s
   if (!rows) return null;
   return (
     <>
-      <p className="muted">Win rate by game row: the diagonal rows of the board, counted from the back edge of the hero’s own side (row 1 is the back row, 15 the front one). A Side B tile is turned over, so both sides read the same way.</p>
+      <p className="muted">Win rate by game row: the diagonal rows of the map, counted from the back edge of the hero’s own side (row 1 is the back row, 15 the front one). A Side B tile is turned over, so both sides read the same way.</p>
       <StatsTable
         label={`Rows of ${hero}`}
         rows={rows}
@@ -116,7 +116,7 @@ function FactionMismatchList() {
         A Phantimal stands only where the mode allows one, and only when three heroes of its faction are on the field. These records name one that could not have stood there, which usually
         means the reader misread the Phantimal or a hero of a Battle import. Nothing is changed here: check the record and its picture.
       </p>
-      <table className="board" aria-label="Phantimal check">
+      <table className="data-table" aria-label="Phantimal check">
         <thead>
           <tr>
             <th>Battle</th>
@@ -290,7 +290,7 @@ export function StatsPage() {
         {view === 'overview' && summary && (
           <>
             {summary.records.length === 0 && <p className="muted">No records yet.</p>}
-            <table className="board">
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>Mode</th>

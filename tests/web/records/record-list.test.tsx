@@ -71,8 +71,8 @@ function View({ fights, answered = true, ...rest }: { fights: Fight[]; answered?
       onOlder={rest.onOlder ?? (() => {})}
       empty={fights.length === 0}
       filtered={false}
-      none="No boss fights recorded yet."
-      noMatch="No boss fights match these filters."
+      none="No records yet."
+      noMatch="No records match these filters."
     />
   );
 }
@@ -83,12 +83,12 @@ describe('RecordListView', () => {
   it('draws the cards under the label, and nothing about an empty list', () => {
     render(<View fights={[fight(1), fight(2)]} />);
     expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Fight 1', 'Fight 2']);
-    expect(screen.queryByText('No boss fights recorded yet.')).toBeNull();
+    expect(screen.queryByText('No records yet.')).toBeNull();
   });
 
   it('says what an empty list says, and Loading… before the first answer', () => {
     const { rerender } = render(<View fights={[]} />);
-    expect(screen.getByText('No boss fights recorded yet.')).toBeTruthy();
+    expect(screen.getByText('No records yet.')).toBeTruthy();
     rerender(<View fights={[]} answered={false} />);
     expect(screen.getByText('Loading…')).toBeTruthy();
   });

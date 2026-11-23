@@ -1,48 +1,48 @@
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../../src/db/open.js';
-import { extractBoards, seedStageMaps, storeArenaMaps } from '../../src/import/boards.js';
+import { extractMaps, seedStageMaps, storeArenaMaps } from '../../src/import/maps.js';
 
 const rows = [2, 3, 2];
 const layout = rows.map((length) => `{length:${length},offset:"",reverse:"",preview:""}`).join(',');
 
-function chunk(boards: Record<string, string>, boardCount = 22): string {
-  const entries = Object.entries(boards).map(([name, cells]) => `"${name}":[${cells}]`);
-  for (let i = entries.length; i < boardCount; i++) entries.push(`"Filler ${i}":[0,0,0,0,0,0,1]`);
+function chunk(maps: Record<string, string>, mapCount = 22): string {
+  const entries = Object.entries(maps).map(([name, cells]) => `"${name}":[${cells}]`);
+  for (let i = entries.length; i < mapCount; i++) entries.push(`"Filler ${i}":[0,0,0,0,0,0,1]`);
   return `(self.webpackChunk_N_E=[]).push([[1],{9:(e,t,r)=>{let l=[${layout}],n={Custom:Array(7).fill(0),${entries.join(',')}};}}]);`;
 }
 
-describe('extractBoards', () => {
-  it('reads boards and row lengths, skipping the blank Custom board', () => {
-    const boards = extractBoards([chunk({ 'Arena I': '-1,-1,0,-3,1,1,-2' })]);
-    expect(boards).toHaveLength(22);
-    expect(boards.find((b) => b.name === 'Arena I')).toEqual({
+describe('extractMaps', () => {
+  it('reads maps and row lengths, skipping the blank Custom map', () => {
+    const maps = extractMaps([chunk({ 'Arena I': '-1,-1,0,-3,1,1,-2' })]);
+    expect(maps).toHaveLength(22);
+    expect(maps.find((b) => b.name === 'Arena I')).toEqual({
       name: 'Arena I',
       rowLengths: [2, 3, 2],
       cells: [-1, -1, 0, -3, 1, 1, -2],
     });
-    expect(boards.some((b) => b.name === 'Custom')).toBe(false);
+    expect(maps.some((b) => b.name === 'Custom')).toBe(false);
   });
 
-  it('rejects a board with the wrong cell count', () => {
-    expect(() => extractBoards([chunk({ 'Arena I': '0,0,0' })])).toThrow(/expected 7/);
+  it('rejects a map with the wrong cell count', () => {
+    expect(() => extractMaps([chunk({ 'Arena I': '0,0,0' })])).toThrow(/expected 7/);
   });
 
   it('rejects unknown cell values', () => {
-    expect(() => extractBoards([chunk({ 'Arena I': '0,0,0,0,0,0,9' })])).toThrow(/unknown cell value 9/);
+    expect(() => extractMaps([chunk({ 'Arena I': '0,0,0,0,0,0,9' })])).toThrow(/unknown cell value 9/);
   });
 
-  it('fails when too few boards are found', () => {
-    expect(() => extractBoards([chunk({ 'Arena I': '0,0,0,0,0,0,1' }, 3)])).toThrow(/at least 20/);
+  it('fails when too few maps are found', () => {
+    expect(() => extractMaps([chunk({ 'Arena I': '0,0,0,0,0,0,1' }, 3)])).toThrow(/at least 20/);
   });
 });
 
 describe('storeArenaMaps', () => {
-  const boards = () => extractBoards([chunk({ 'Arena I': '-1,-1,0,-3,1,1,-2' })]);
+  const maps = () => extractMaps([chunk({ 'Arena I': '-1,-1,0,-3,1,1,-2' })]);
 
   it('stores maps tagged Arena with their original tiles, idempotently', () => {
     const db = openDb(':memory:');
-    storeArenaMaps(db, boards());
-    storeArenaMaps(db, boards());
+    storeArenaMaps(db, maps());
+    storeArenaMaps(db, maps());
     expect(db.prepare('SELECT count(*) FROM map').pluck().get()).toBe(22);
     expect(db.prepare("SELECT tags, cells = original_cells AS same, source FROM map WHERE name = 'Arena I'").get()).toEqual({
       tags: '["Arena"]',
@@ -53,9 +53,9 @@ describe('storeArenaMaps', () => {
 
   it('keeps a manually edited map but refreshes its original', () => {
     const db = openDb(':memory:');
-    storeArenaMaps(db, boards());
+    storeArenaMaps(db, maps());
     db.prepare("UPDATE map SET cells = '[]', source = 'manual' WHERE name = 'Arena I'").run();
-    storeArenaMaps(db, boards());
+    storeArenaMaps(db, maps());
     const row = db.prepare("SELECT cells, original_cells FROM map WHERE name = 'Arena I'").get() as any;
     expect(row.cells).toBe('[]');
     expect(row.original_cells).toBe('[-1,-1,0,-3,1,1,-2]');
@@ -63,36 +63,36 @@ describe('storeArenaMaps', () => {
 });
 
 describe('storeArenaMaps with a corrected map', () => {
-  const boards = () => extractBoards([chunk({ 'Arena I': '-1,-1,0,-3,1,1,-2' })]);
+  const maps = () => extractMaps([chunk({ 'Arena I': '-1,-1,0,-3,1,1,-2' })]);
   const corrections = { 'Arena I': [-1, -1, -2, -2, 1, 1, 0] };
   const row = (db: ReturnType<typeof openDb>) => db.prepare("SELECT cells, original_cells AS original, source FROM map WHERE name = 'Arena I'").get() as any;
 
   it('uses the corrected tiles instead of the imported ones, as the map and as what Restore returns', () => {
     const db = openDb(':memory:');
-    storeArenaMaps(db, boards(), corrections);
+    storeArenaMaps(db, maps(), corrections);
     expect(row(db)).toEqual({ cells: '[-1,-1,-2,-2,1,1,0]', original: '[-1,-1,-2,-2,1,1,0]', source: 'import' });
   });
 
   it('puts the correction in place for a map still as first imported', () => {
     const db = openDb(':memory:');
-    storeArenaMaps(db, boards());
-    storeArenaMaps(db, boards(), corrections);
+    storeArenaMaps(db, maps());
+    storeArenaMaps(db, maps(), corrections);
     expect(row(db)).toMatchObject({ cells: '[-1,-1,-2,-2,1,1,0]', original: '[-1,-1,-2,-2,1,1,0]' });
   });
 
   it('keeps a map the player edited, but makes the correction what Restore returns, also when the player already made the same edit', () => {
     const db = openDb(':memory:');
-    storeArenaMaps(db, boards());
+    storeArenaMaps(db, maps());
     db.prepare("UPDATE map SET cells = '[-1,-1,-2,-2,1,1,0]', source = 'manual' WHERE name = 'Arena I'").run();
-    storeArenaMaps(db, boards(), corrections);
-    storeArenaMaps(db, boards(), corrections); // and again on every later import
+    storeArenaMaps(db, maps(), corrections);
+    storeArenaMaps(db, maps(), corrections); // and again on every later import
     expect(row(db)).toEqual({ cells: '[-1,-1,-2,-2,1,1,0]', original: '[-1,-1,-2,-2,1,1,0]', source: 'manual' });
   });
 
   it('refuses a correction with the wrong number of tiles, and ignores one for a map that is not imported', () => {
-    expect(() => storeArenaMaps(openDb(':memory:'), boards(), { 'Arena I': [0, 0] })).toThrow(/Arena I.*expected 7/);
+    expect(() => storeArenaMaps(openDb(':memory:'), maps(), { 'Arena I': [0, 0] })).toThrow(/Arena I.*expected 7/);
     const db = openDb(':memory:');
-    storeArenaMaps(db, boards(), { 'No such map': [0, 0] });
+    storeArenaMaps(db, maps(), { 'No such map': [0, 0] });
     expect(db.prepare('SELECT count(*) FROM map').pluck().get()).toBe(22);
   });
 });

@@ -7,6 +7,7 @@ import type { TierCheck } from '../../shared/api.js';
 import { heroesContract, type HeroAdmin, type PlacementRule } from '../../shared/contracts/heroes.js';
 import { fail, serve } from '../contract.js';
 import { deploymentsNaming, takenNames, unitNameProblem } from './unit-names.js';
+import { describeUsage, refuseUsed, type Usage } from './usage.js';
 
 interface HeroRow {
   name: string;
@@ -15,6 +16,7 @@ interface HeroRow {
   faction: HeroAdmin['faction'];
   damage_type: 'Physical' | 'Magic' | null;
   source: 'import' | 'manual';
+  hand_made: 0 | 1;
   pvp_tier: 'S+' | 'S' | 'A+' | 'A' | 'B' | 'C' | 'D' | null;
   pvp_role: 'Damage dealer' | 'Specialist' | 'Support' | 'Tank' | null;
   pvp_set_on: string | null;
@@ -28,7 +30,7 @@ interface HeroRow {
   back_mark: 1 | 0 | null;
 }
 
-const SELECT_HERO = `SELECT h.name, h.tier, h.class, h.faction, h.damage_type, h.source, p.pvp_tier, p.pvp_role, p.set_on AS pvp_set_on, p.source AS pvp_source,
+const SELECT_HERO = `SELECT h.name, h.tier, h.class, h.faction, h.damage_type, h.source, h.hand_made, p.pvp_tier, p.pvp_role, p.set_on AS pvp_set_on, p.source AS pvp_source,
                              a.range AS attr_range, a.energy AS attr_energy, a.mechanics AS attr_mechanics, a.released_season AS attr_season, a.set_on AS attr_set_on, a.source AS attr_source,
                              m.stands_back AS back_mark
                       FROM hero h LEFT JOIN hero_pvp_hint p ON p.hero = h.name LEFT JOIN hero_attribute a ON a.hero = h.name LEFT JOIN hero_back_mark m ON m.hero = h.name`;
@@ -49,6 +51,7 @@ export function heroAdminRoutes(db: Database.Database): Hono {
     faction: row.faction,
     damageType: row.damage_type,
     source: row.source,
+    handMade: row.hand_made === 1,
     pvpTier: row.pvp_tier,
     pvpRole: row.pvp_role,
     pvpSetOn: row.pvp_set_on,
@@ -69,7 +72,7 @@ export function heroAdminRoutes(db: Database.Database): Hono {
     summon: summonOf(row.name),
   });
 
-  /** What uses a hero: what puts it on a board (and so fixes how it stands), and what only refers to it. */
+  /** What uses a hero: what puts it on a team (and so fixes how it stands), and what only refers to it. */
   function usage(name: string) {
     // every `?` is the hero's name
     const count = (sql: string) => db.prepare(sql).pluck().get(...Array.from({ length: sql.split('?').length - 1 }, () => name)) as number;
@@ -89,20 +92,17 @@ export function heroAdminRoutes(db: Database.Database): Hono {
       pictures: count('SELECT (SELECT count(*) FROM hero_look WHERE hero_name = ?) + (SELECT count(*) FROM hero_example WHERE hero_name = ?)'),
     };
   }
-  const onBoard = (u: ReturnType<typeof usage>) => u.records + u.scenarios + u.deployments;
-  const describe = (u: ReturnType<typeof usage>) =>
-    [
-      [u.roster, 'roster entries'],
-      [u.records, 'records'],
-      [u.assists, 'records as assist hero'],
-      [u.scenarios, 'scenarios'],
-      [u.deployments, 'Formation IDs and Round Deployments'],
-      [u.stageEnemies, 'stages'],
-      [u.pictures, 'reader pictures'],
-    ]
-      .filter(([n]) => (n as number) > 0)
-      .map(([n, what]) => `${n} ${what}`)
-      .join(', ');
+  const placements = (u: ReturnType<typeof usage>) => u.records + u.scenarios + u.deployments;
+  const usageOf = (u: ReturnType<typeof usage>): Usage[] => [
+    { label: 'roster entries', one: 'roster entry', count: u.roster },
+    { label: 'records', count: u.records },
+    { label: 'records as assist hero', one: 'record as assist hero', count: u.assists },
+    { label: 'scenarios', count: u.scenarios },
+    { label: 'Formation IDs and Round Deployments', one: 'Formation ID or Round Deployment', count: u.deployments },
+    { label: 'stages', count: u.stageEnemies },
+    { label: 'reader pictures', one: 'reader picture', count: u.pictures },
+  ];
+  const describe = (u: ReturnType<typeof usage>) => describeUsage(usageOf(u));
 
   /** The problem with the units a hero declares, or null. `except` is the hero whose own declaration is being replaced. */
   function declarationProblem(hero: HeroBody): string | null {
@@ -127,7 +127,7 @@ export function heroAdminRoutes(db: Database.Database): Hono {
   serve(app, heroesContract.usage, ({ params }) => {
     if (!find(params.name)) return fail(404, 'Unknown hero');
     const u = usage(params.name);
-    return { ...u, onBoard: onBoard(u) };
+    return { ...u, placements: placements(u) };
   });
 
   serve(app, heroesContract.create, ({ body: hero }) => {
@@ -140,7 +140,7 @@ export function heroAdminRoutes(db: Database.Database): Hono {
     const problem = declarationProblem(hero);
     if (problem) return fail(409, problem);
     db.transaction(() => {
-      db.prepare("INSERT INTO hero (name, tier, class, faction, damage_type, image_path, source) VALUES (?, ?, ?, ?, ?, NULL, 'manual')").run(hero.name, hero.tier, hero.class, hero.faction, hero.damageType);
+      db.prepare("INSERT INTO hero (name, tier, class, faction, damage_type, image_path, source, hand_made) VALUES (?, ?, ?, ?, ?, NULL, 'manual', 1)").run(hero.name, hero.tier, hero.class, hero.faction, hero.damageType);
       writeDeclaration(hero);
     })();
     loadUnitRules(db);
@@ -164,8 +164,8 @@ export function heroAdminRoutes(db: Database.Database): Hono {
     const declarationChanged = declaration(pairOf(current.name), summonOf(current.name)) !== declaration(hero.pair, hero.summon);
     if (declarationChanged) {
       const u = usage(current.name);
-      if (onBoard(u) > 0) {
-        return fail(409, `${current.name} is on a board in ${describe({ ...u, roster: 0, assists: 0, stageEnemies: 0, pictures: 0 })}, so the units it brings cannot change`);
+      if (placements(u) > 0) {
+        return fail(409, `${current.name} is placed in ${describe({ ...u, roster: 0, assists: 0, stageEnemies: 0, pictures: 0 })}, so the units it brings cannot change`);
       }
       const problem = declarationProblem(hero);
       if (problem) return fail(409, problem);
@@ -275,8 +275,8 @@ export function heroAdminRoutes(db: Database.Database): Hono {
   serve(app, heroesContract.remove, ({ params }) => {
     const name = params.name;
     if (!find(name)) return fail(404, 'Unknown hero');
-    const used = describe(usage(name));
-    if (used) return fail(409, `${name} is used by ${used}, so it cannot be deleted`);
+    const refused = refuseUsed(name, usageOf(usage(name)));
+    if (refused) return refused;
     db.transaction(() => {
       db.prepare('DELETE FROM hero_pair WHERE hero = ?').run(name);
       db.prepare('DELETE FROM hero_summon WHERE hero = ?').run(name);

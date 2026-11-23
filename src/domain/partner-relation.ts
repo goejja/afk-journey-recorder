@@ -1,4 +1,4 @@
-import { backToFront, gameRowOf, neighbourTiles, relatedTile, stepsBetween, type TileRelation } from './board.js';
+import { backToFront, gameRowOf, neighbourTiles, relatedTile, stepsBetween, type TileRelation } from './map-geometry.js';
 
 /** The tiles Daimon's protection tries, in order: behind, beside it on the left, behind on the right. */
 export const DAIMON_TILES: TileRelation[] = ['behind', 'left', 'behindRight'];

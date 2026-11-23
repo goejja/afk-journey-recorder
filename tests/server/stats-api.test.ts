@@ -24,7 +24,7 @@ const team = (names: string[]) => ({ heroes: names.map((hero, i) => ({ tile: 38 
 
 describe('stats', () => {
   it('gives hero and pair win rates from both Arena sides, and the summary', async () => {
-    await send('POST', '/api/pvp/battles', { mode: 'Arena', mapName: 'Open', outcome: 'Win', formation: team(['A', 'B']), opponent: { heroes: [{ tile: 0, hero: 'H' }] } });
+    await send('POST', '/api/pvp/fights', { mode: 'Arena', mapName: 'Open', outcome: 'Win', formation: team(['A', 'B']), opponent: { heroes: [{ tile: 0, hero: 'H' }] } });
     const heroes = await json(send('GET', '/api/stats/heroes?mode=Arena'));
     expect(Object.fromEntries(heroes.map((h: any) => [h.hero, [h.games, h.wins]]))).toEqual({ A: [1, 1], B: [1, 1], H: [1, 0] });
     expect((await json(send('GET', '/api/stats/heroes?min=2'))).length).toBe(0);
@@ -33,8 +33,8 @@ describe('stats', () => {
   });
 
   it('gives win rates of heroes fielded three together on one side, never across the two sides', async () => {
-    await send('POST', '/api/pvp/battles', { mode: 'Arena', mapName: 'Open', outcome: 'Win', formation: team(['A', 'B', 'H']), opponent: { heroes: [{ tile: 0, hero: 'H' }, { tile: 1, hero: 'A' }] } });
-    await send('POST', '/api/pvp/battles', { mode: 'Supreme Arena', mapName: 'Open', outcome: 'Loss', formation: team(['A', 'B', 'H']), opponent: { heroes: [{ tile: 0, hero: 'A' }] } });
+    await send('POST', '/api/pvp/fights', { mode: 'Arena', mapName: 'Open', outcome: 'Win', formation: team(['A', 'B', 'H']), opponent: { heroes: [{ tile: 0, hero: 'H' }, { tile: 1, hero: 'A' }] } });
+    await send('POST', '/api/pvp/fights', { mode: 'Supreme Arena', mapName: 'Open', outcome: 'Loss', formation: team(['A', 'B', 'H']), opponent: { heroes: [{ tile: 0, hero: 'A' }] } });
     expect(await json(send('GET', '/api/stats/trios'))).toEqual([{ heroA: 'A', heroB: 'B', heroC: 'H', games: 2, wins: 1, winRate: 0.5 }]);
     expect(await json(send('GET', '/api/stats/trios?mode=Arena'))).toEqual([{ heroA: 'A', heroB: 'B', heroC: 'H', games: 1, wins: 1, winRate: 1 }]);
     expect(await json(send('GET', '/api/stats/trios?min=3'))).toEqual([]);

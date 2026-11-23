@@ -1,6 +1,6 @@
 import { DEFAULT_MODES } from '../../src/domain/defaults.js';
 import { FIXED_MAP, TEAMS_PER_MODE } from '../../src/domain/arena.js';
-import { api, type ArenaBattle, type ArenaMode, type BattleDraftSide, type Artifact, type DefaultMode, type BossRule, type GameMap, type Hero, type Phantimal, type Profile, type RoundDeploymentEntry, type Rules, type WeeklySetups } from '../backend.js';
+import { api, type ArenaFight, type ArenaMode, type FightDraftSide, type Artifact, type DefaultMode, type BossRule, type GameMap, type Hero, type Phantimal, type Profile, type RoundDeploymentEntry, type Rules, type WeeklySetups } from '../backend.js';
 import { emptyFormation, formationFromRecord, toPayload, type FormationState } from '../FormationEditor.js';
 import { keepOnMap } from '../relocate.js';
 import { emptyOpponent, opponentFromRecord, toOpponentPayload, type OpponentState } from './OpponentEditor.js';
@@ -89,7 +89,7 @@ export function withDefault(reference: Reference, mode: ArenaMode, draft: Draft,
   return { ...draft, mapName, rule };
 }
 
-export const draftFromBattle = (b: ArenaBattle): Draft => ({
+export const draftFromFight = (b: ArenaFight): Draft => ({
   mapName: b.mapName,
   rule: b.rule ?? '',
   outcome: b.outcome,
@@ -150,9 +150,9 @@ export interface Clone {
  * Saved fights as the form's teams, each in its own team slot, with the same units, ranks, equipment, artifacts and tags.
  * A clone starts without the result and note; `keepResult` keeps them, to edit the battle as it is.
  */
-export function cloneOf(reference: Reference, fights: ArenaBattle[], keepResult = false, side?: Side): Clone {
+export function cloneOf(reference: Reference, fights: ArenaFight[], keepResult = false, side?: Side): Clone {
   const mode = fights[0]!.mode;
-  const tags = sharedTags(draftFromBattle(fights[0]!));
+  const tags = sharedTags(draftFromFight(fights[0]!));
   const blank = newDraft(reference);
   // Only one side: the other starts empty, without its Player and Union Level.
   const onlySide = (d: Draft): Draft =>
@@ -163,7 +163,7 @@ export function cloneOf(reference: Reference, fights: ArenaBattle[], keepResult 
     drafts: Array.from({ length: TEAMS_PER_MODE[mode] }, (_, i) => {
       const fight = fights.find((f) => (f.battlePosition ?? 1) - 1 === i);
       if (!fight) return onlySide({ ...blank, ...tags });
-      return onlySide(keepResult ? { ...draftFromBattle(fight), ...tags } : { ...draftFromBattle(fight), ...tags, outcome: 'Win' as const, note: '' });
+      return onlySide(keepResult ? { ...draftFromFight(fight), ...tags } : { ...draftFromFight(fight), ...tags, outcome: 'Win' as const, note: '' });
     }),
   };
 }
@@ -178,7 +178,7 @@ async function reading<T>(what: string, read: Promise<T>): Promise<T> {
 }
 
 /** The saved fights of a mode (Super League, whose Round is picked where it matters): a Player with none in the Round falls back to these (ADR 0021). */
-export const savedOfMode = (mode: ArenaMode = 'Super League'): Promise<ArenaBattle[]> => reading(`The saved ${mode} battles`, api.arenaBattles({ mode: [mode], limit: '1000' }));
+export const savedOfMode = (mode: ArenaMode = 'Super League'): Promise<ArenaFight[]> => reading(`The saved ${mode} battles`, api.arenaFights({ mode: [mode], limit: '1000' }));
 
 /** The rosters of the Profiles the pictures name, by Profile id: the ranks and equipment a picture could not read come from them (ADR 0021). */
 export async function rostersOf(groups: ImportGroup[]): Promise<Map<number, Hero[]>> {
@@ -202,10 +202,10 @@ export function pairOf(group: ImportGroup): string | null {
  * The Round Deployments of a Round: the ones the player confirmed, with the teams the saved Battles of the same Tournament and Round
  * already show for the rest (a Player seen on Side A there and on Side B now has the same Deployment, turned over; ADR 0020).
  */
-export async function loadRoundDeployments(round: ImportRound, profiles: Profile[], fights?: ArenaBattle[]): Promise<RoundDeploymentEntry[]> {
+export async function loadRoundDeployments(round: ImportRound, profiles: Profile[], fights?: ArenaFight[]): Promise<RoundDeploymentEntry[]> {
   const [confirmed, saved] = await Promise.all([
     reading('The Round Deployments', api.roundDeployments(round.tournamentId, round.round)),
-    fights ?? reading('The saved Battles of this Round', api.arenaBattles({ mode: ['Super League'], tournament: String(round.tournamentId), round: round.round, limit: '1000' })),
+    fights ?? reading('The saved Battles of this Round', api.arenaFights({ mode: ['Super League'], tournament: String(round.tournamentId), round: round.round, limit: '1000' })),
   ]);
   return mergeDeployments(confirmed, deploymentsFromRecords(reusableIn(saved, round), profiles));
 }
@@ -243,7 +243,7 @@ export async function fillSavedDeploymentTiles(round: ImportRound, drafts: Draft
  * The teams of one battle read from pictures of its fights (a Battle import): each in the slot of its fight number, on the week's map of
  * that slot, with the heroes on the first free tiles. The result, the players and the Union Levels come from the pictures when they gave them.
  */
-export function cloneFromImport(reference: Reference, group: ImportGroup, everySaved: ArenaBattle[] = [], reuse = true, others: ImportGroup[] = [], round: ImportRound | null = null, deployments: RoundDeploymentEntry[] = [], rosters: Map<number, Hero[]> = new Map()): Clone {
+export function cloneFromImport(reference: Reference, group: ImportGroup, everySaved: ArenaFight[] = [], reuse = true, others: ImportGroup[] = [], round: ImportRound | null = null, deployments: RoundDeploymentEntry[] = [], rosters: Map<number, Hero[]> = new Map()): Clone {
   const mode = group.mode;
   // Super League Players update their Deployment between Rounds and Tournaments: only the saved Battles of this Round are a source (ADR 0020).
   const saved = mode === 'Super League' ? reusableIn(everySaved, round) : everySaved;
@@ -257,8 +257,8 @@ export function cloneFromImport(reference: Reference, group: ImportGroup, everyS
   const teamChanges: NonNullable<Clone['teamChanges']> = [];
   const shared: Pick<Draft, 'playerIdA' | 'playerIdB' | 'unionLevel' | 'opponentUnionLevel'> = { playerIdA: null, playerIdB: null, unionLevel: '', opponentUnionLevel: '' };
   // The teams the other pictures of this import show for a Player: a hero read the same in two of them outvotes a misreading.
-  const sameWho = (a: BattleDraftSide, b: BattleDraftSide) => (a.profile?.playerId && b.profile?.playerId ? a.profile.playerId.toLowerCase() === b.profile.playerId.toLowerCase() : !!a.name && a.name.trim().toLowerCase() === b.name?.trim().toLowerCase());
-  const seenInPictures = (mine: BattleDraftSide, number: number | null): KnownTeam[] =>
+  const sameWho = (a: FightDraftSide, b: FightDraftSide) => (a.profile?.playerId && b.profile?.playerId ? a.profile.playerId.toLowerCase() === b.profile.playerId.toLowerCase() : !!a.name && a.name.trim().toLowerCase() === b.name?.trim().toLowerCase());
+  const seenInPictures = (mine: FightDraftSide, number: number | null): KnownTeam[] =>
     others
       .filter((g) => g !== group && g.mode === mode)
       .flatMap((g) => g.pictures)
@@ -273,7 +273,7 @@ export function cloneFromImport(reference: Reference, group: ImportGroup, everyS
     if (slot < 0) continue;
     taken.add(slot);
     const cells = reference.maps.find((m) => m.name === drafts[slot]!.mapName)?.cells ?? [];
-    const sides = { A: draft.sideA, B: draft.sideB } as Record<Side, BattleDraftSide>;
+    const sides = { A: draft.sideA, B: draft.sideB } as Record<Side, FightDraftSide>;
     const asRead = { ...sides };
     // what the picture could not read of a hero's rank or equipment comes from the Player's Profile (ADR 0021)
     for (const side of ['A', 'B'] as const) {
@@ -321,7 +321,7 @@ export function cloneFromImport(reference: Reference, group: ImportGroup, everyS
     let formation = placeOwn(cells, sides.A.heroes, sides.A, reuseA);
     let opponent = placeOpponent(cells, sides.B.heroes, sides.B, reuseB);
     // The Phantimal of an imported side follows the same rule as one placed by hand: it stands only while the heroes of its faction are there
-    // and both of its tiles fit (ADR 0029). A misread Phantimal is therefore dropped whole instead of being left half on the board. This runs
+    // and both of its tiles fit (ADR 0029). A misread Phantimal is therefore dropped whole instead of being left half on the map. This runs
     // after the Round Deployment below, because that too can bring a Phantimal the team cannot field.
     const phantimalOptions = reference.phantimals.map((p) => ({ name: p.name, faction: p.faction }));
     const heroFactions = new Map(reference.heroes.map((h) => [h.name, h.faction]));

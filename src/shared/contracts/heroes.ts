@@ -12,6 +12,8 @@ export const HeroAdmin = z.object({
   faction: z.enum(HERO_FACTIONS).nullable(),
   damageType: z.enum(DAMAGE_TYPES).nullable(),
   source: z.enum(['import', 'manual']),
+  /** Made here while the import's source lacked it: the next import takes it over when the source lists it (#297). */
+  handMade: z.boolean(),
   /** Set when the hero stands on two tiles. */
   pair: z.object({ part1: z.string(), part2: z.string() }).nullable(),
   /** Set when the hero brings units that are not heroes. */
@@ -53,7 +55,7 @@ export const PlacementRule = z.object({
 });
 export type PlacementRule = z.infer<typeof PlacementRule>;
 
-/** What uses a hero. `onBoard` (records, scenarios and Formation IDs that place it) fixes the units it brings. */
+/** What uses a hero. `placements` (records, scenarios and Formation IDs that place it) fixes the units it brings. */
 export const HeroUsage = z.object({
   roster: z.number(),
   records: z.number(),
@@ -62,7 +64,7 @@ export const HeroUsage = z.object({
   deployments: z.number(),
   stageEnemies: z.number(),
   pictures: z.number(),
-  onBoard: z.number(),
+  placements: z.number(),
 });
 export type HeroUsage = z.infer<typeof HeroUsage>;
 

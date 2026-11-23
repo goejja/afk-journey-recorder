@@ -107,7 +107,7 @@ export function checkPhantimalPartner(phantimal: { name: string; partnerTile?: n
   return place(tile, partner);
 }
 
-/** The Units a hero puts on the board, in placement order: a Pair Hero's parts, else the hero itself and its Summons. */
+/** The Units a hero puts on the map, in placement order: a Pair Hero's parts, else the hero itself and its Summons. */
 export function unitsOf(hero: string): string[] {
   const pair = PAIR_HEROES[hero];
   if (pair) return [...pair];

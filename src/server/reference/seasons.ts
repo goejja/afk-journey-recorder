@@ -2,6 +2,8 @@ import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
 import { seasonsContract } from '../../shared/contracts/seasons.js';
 import { fail, serve } from '../contract.js';
+import { currentSeason } from '../db-helpers.js';
+import { emptyTitanReaverSetup, ensureSeason, setSeasonPhase } from '../season-phase.js';
 
 /**
  * Routes for the list of seasons and the current one, edited in Admin > General. A season that stages,
@@ -14,7 +16,7 @@ export function seasonRoutes(db: Database.Database): Hono {
     (
       db
         .prepare(
-          `SELECT n.number, COALESCE(s.is_current, 0) AS current,
+          `SELECT n.number, COALESCE(s.is_current, 0) AS current, COALESCE(s.phase, 1) AS phase,
                   (SELECT count(*) FROM stage WHERE season = n.number) AS stages,
                   (SELECT count(*) FROM phantimal_season WHERE season = n.number) AS phantimals,
                   (SELECT count(*) FROM attempt WHERE season = n.number) AS records,
@@ -22,24 +24,30 @@ export function seasonRoutes(db: Database.Database): Hono {
            FROM (SELECT number FROM season UNION SELECT season FROM stage UNION SELECT season FROM phantimal_season UNION SELECT season FROM attempt UNION SELECT season FROM tournament) n
            LEFT JOIN season s ON s.number = n.number ORDER BY n.number DESC`,
         )
-        .all() as { number: number; current: number; stages: number; phantimals: number; records: number; tournaments: number }[]
-    ).map((s) => ({ number: s.number, current: s.current === 1, stages: s.stages, phantimals: s.phantimals, records: s.records, tournaments: s.tournaments }));
+        .all() as { number: number; current: number; phase: number; stages: number; phantimals: number; records: number; tournaments: number }[]
+    ).map((s) => ({ number: s.number, current: s.current === 1, phase: s.phase, stages: s.stages, phantimals: s.phantimals, records: s.records, tournaments: s.tournaments }));
 
   serve(app, seasonsContract.list, () => list());
 
   serve(app, seasonsContract.add, ({ body }) => {
     if (list().some((s) => s.number === body.number)) return fail(409, `Season ${body.number} is already in the list`);
-    db.prepare('INSERT INTO season (number) VALUES (?)').run(body.number);
+    ensureSeason(db, body.number);
     return list();
   });
 
   serve(app, seasonsContract.setCurrent, ({ body }) => {
     if (!list().some((s) => s.number === body.number)) return fail(404, 'Unknown season');
     db.transaction(() => {
-      db.prepare('INSERT OR IGNORE INTO season (number) VALUES (?)').run(body.number);
+      if (body.number !== currentSeason(db)) emptyTitanReaverSetup(db); // the new Season has events of its own
+      ensureSeason(db, body.number);
       db.prepare('UPDATE season SET is_current = 0 WHERE is_current = 1').run();
       db.prepare('UPDATE season SET is_current = 1 WHERE number = ?').run(body.number);
     })();
+    return list();
+  });
+
+  serve(app, seasonsContract.setPhase, ({ body }) => {
+    db.transaction(() => setSeasonPhase(db, body.phase))();
     return list();
   });
 

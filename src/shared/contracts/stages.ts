@@ -22,7 +22,7 @@ export type Stage = z.infer<typeof Stage>;
 
 export const Enemy = z.object({
   name: z.string(),
-  category: z.enum(['Common', 'Elite', 'Boss']),
+  kind: z.enum(['Common', 'Elite', 'Boss']),
   class: z.string().nullable(),
   damageType: z.string().nullable(),
   imagePath: z.string().nullable(),
@@ -68,7 +68,7 @@ export const stagesContract = {
   /** The stages with this identity (any filter left out matches all). */
   list: endpoint({ method: 'GET', path: '/api/stages', query: z.object({ season: text, phase: text, kind: text, number: text }), response: z.array(StageSummary) }),
   /** Every stage with at least one attempt, once per kind, phase and number across seasons, and the current season. */
-  grid: endpoint({ method: 'GET', path: '/api/stage-grid', response: z.object({ season: z.number(), boxes: z.array(StageGridBox) }) }),
+  grid: endpoint({ method: 'GET', path: '/api/stage-grid', response: z.object({ season: z.number(), phase: z.number(), boxes: z.array(StageGridBox) }) }),
   get: endpoint({ method: 'GET', path: '/api/stages/:id', response: Stage }),
   /** Finds the stage with this identity, or creates it on the given map. */
   findOrCreate: endpoint({ method: 'POST', path: '/api/stages', body: StageBody, response: Stage }),

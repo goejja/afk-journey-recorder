@@ -65,7 +65,7 @@ export function StageEnemiesField({ enemies, heroes, value, onChange }: Props) {
         />
         <datalist id={listId}>
           {enemies.map((e) => (
-            <option key={`enemy:${e.name}`} value={e.name} label={e.category} />
+            <option key={`enemy:${e.name}`} value={e.name} label={e.kind} />
           ))}
           {heroes.map((h) => (
             <option key={`hero:${h.name}`} value={h.name} label="Hero" />

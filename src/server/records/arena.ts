@@ -1,4 +1,4 @@
-import type { ArenaBattle } from '../../shared/api.js';
+import type { ArenaFight } from '../../shared/api.js';
 import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
 import { ARENA_MODES, checkFixedMap, modeAllowsPhantimal, sharedHero, TEAMS_PER_MODE, validateOpponent, validateUnionLevel, type ArenaMode } from '../../domain/arena.js';
@@ -30,7 +30,7 @@ const DEFAULT_LIMIT = 200;
 export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRules): Hono {
   const app = new Hono();
 
-  function loadBattles(filters: { id?: number; mode?: string[]; tag?: string[]; player?: string; tournament?: number; round?: string; limit?: number }): ArenaBattle[] {
+  function loadFights(filters: { id?: number; mode?: string[]; tag?: string[]; player?: string; tournament?: number; round?: string; limit?: number }): ArenaFight[] {
     const where: string[] = [];
     const params: unknown[] = [];
     if (filters.id !== undefined) (where.push('a.id = ?'), params.push(filters.id));
@@ -86,7 +86,7 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
       opponent: {
         heroes: db
           .prepare('SELECT tile, hero_name AS name, part, rank, equipment_level AS equipmentLevel FROM arena_opponent_hero WHERE attempt_id = ? ORDER BY tile')
-          .all(r.id) as ArenaBattle['opponent']['heroes'],
+          .all(r.id) as ArenaFight['opponent']['heroes'],
         assist: r.opp_assist_hero ? { name: r.opp_assist_hero, rank: r.opp_assist_rank, equipmentLevel: r.opp_assist_equipment } : null,
         phantimal: r.opp_phantimal ? { name: r.opp_phantimal, tile: r.opp_phantimal_tile, ...(r.opp_phantimal_partner_tile != null ? { partnerTile: r.opp_phantimal_partner_tile } : {}) } : null,
         artifact: r.opp_artifact,
@@ -190,13 +190,13 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
   }
 
   serve(app, arenaContract.list, (_, c) => {
-    const listed = loadBattles({ mode: listParam(c, 'mode'), tag: listParam(c, 'tag'), player: c.req.query('player')?.trim() || undefined, tournament: c.req.query('tournament') ? Number(c.req.query('tournament')) : undefined, round: c.req.query('round') || undefined, limit: limitParam(c) });
-    return withWholeBattles(db, listed, (id) => loadBattles({ id })[0]);
+    const listed = loadFights({ mode: listParam(c, 'mode'), tag: listParam(c, 'tag'), player: c.req.query('player')?.trim() || undefined, tournament: c.req.query('tournament') ? Number(c.req.query('tournament')) : undefined, round: c.req.query('round') || undefined, limit: limitParam(c) });
+    return withWholeBattles(db, listed, (id) => loadFights({ id })[0]);
   });
 
   serve(app, arenaContract.get, ({ params }) => {
     const id = Number(params.id);
-    return (Number.isInteger(id) ? loadBattles({ id })[0] : undefined) ?? fail(404, `Record ${params.id} no longer exists`);
+    return (Number.isInteger(id) ? loadFights({ id })[0] : undefined) ?? fail(404, `Record ${params.id} no longer exists`);
   });
 
   /** Checks the teams of a battle body: their numbers, each fight, that no hero is on two teams, the Formation IDs, and the Tournament and Round. */
@@ -242,11 +242,11 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
     const checked = check(body);
     if ('error' in checked) return fail(checked.status, checked.error);
     const id = db.transaction(() => insertFight(body, checked))();
-    return loadBattles({ id })[0]!;
+    return loadFights({ id })[0]!;
   });
 
   // A Battle: the teams of a Supreme Arena, Super League or Guild Duel battle, saved together or not at all.
-  serve(app, arenaContract.createGroup, ({ body: given }) => {
+  serve(app, arenaContract.createBattle, ({ body: given }) => {
     const body = given as any;
     const mode = body?.mode as ArenaMode;
     if (!ARENA_MODES.includes(mode) || TEAMS_PER_MODE[mode] < 2) return fail(400, 'Only Supreme Arena, Super League and Guild Duel battles have several teams');
@@ -261,7 +261,7 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
       saveBattleFormationIds(db, battleId, body, fights, positions, true);
       return { battleId, ids };
     })();
-    return { id: ids.battleId, fights: ids.ids.map((id) => loadBattles({ id })[0]!) };
+    return { id: ids.battleId, fights: ids.ids.map((id) => loadFights({ id })[0]!) };
   });
 
   /** Rewrites one saved fight from a checked body. Call inside a transaction. */
@@ -277,7 +277,7 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
 
   // Edits a whole battle: the teams given are the battle's teams now. A number already in the battle is updated in
   // place, a new number is added, and a number left out is removed. All or nothing.
-  serve(app, arenaContract.updateGroup, ({ params, body: given }) => {
+  serve(app, arenaContract.updateBattle, ({ params, body: given }) => {
     const id = Number(params.id);
     const mode = db.prepare('SELECT mode FROM battle WHERE id = ?').pluck().get(id) as ArenaMode | undefined;
     if (!mode || !ARENA_MODES.includes(mode)) return fail(404, 'Unknown battle');
@@ -303,12 +303,12 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
       saveBattleFormationIds(db, id, body, fights, positions, true);
       return ids;
     })();
-    return { id, fights: saved.map((attemptId) => loadBattles({ id: attemptId })[0]!) };
+    return { id, fights: saved.map((attemptId) => loadFights({ id: attemptId })[0]!) };
   });
 
   serve(app, arenaContract.update, ({ params, body: given }) => {
     const id = Number(params.id);
-    if (loadBattles({ id }).length === 0) return fail(404, 'Unknown battle');
+    if (loadFights({ id }).length === 0) return fail(404, 'Unknown battle');
     const body = given as any;
     const checked = check(body, db.prepare('SELECT battle_id IS NOT NULL FROM attempt WHERE id = ?').pluck().get(id) === 1);
     if ('error' in checked) return fail(checked.status, checked.error);
@@ -316,7 +316,7 @@ export function arenaRoutes(db: Database.Database, loadRules: () => HeroStateRul
     const conflict = sharedHeroInBattle(db, id, body);
     if (conflict) return fail(400, conflict);
     db.transaction(() => updateFight(id, body, checked))();
-    return loadBattles({ id })[0]!;
+    return loadFights({ id })[0]!;
   });
 
   return app;

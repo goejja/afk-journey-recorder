@@ -46,7 +46,7 @@ export function StatsTable<Row extends { games: number; wins: number }>({ rows, 
 
   if (rows.length === 0) return <p className="muted">Nothing to show with these filters.</p>;
   return (
-    <table className="board" aria-label={label}>
+    <table className="data-table" aria-label={label}>
       <thead>
         <tr>
           {columns.map((c) => (

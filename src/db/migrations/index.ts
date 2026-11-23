@@ -30,6 +30,12 @@ import { migration as m29 } from './029-parked-readings.js';
 import { migration as m30 } from './030-clear-stage-hero-state.js';
 import { migration as m31 } from './031-hero-back-mark.js';
 import { migration as m32 } from './032-map-boost-tiles.js';
+import { migration as m33 } from './033-titan-reaver-setup.js';
+import { migration as m34 } from './034-titan-reaver-battles.js';
+import { migration as m35 } from './035-season-phase.js';
+import { migration as m36 } from './036-hand-made-units.js';
+import { migration as m37 } from './037-titan-reaver-default-updated-at.js';
+import { migration as m38 } from './038-enemy-kind.js';
 
 /**
  * A change to the tables of an existing database, run once in a transaction. `schema.sql` is the baseline (version 1) and is
@@ -39,4 +45,4 @@ import { migration as m32 } from './032-map-boost-tiles.js';
  */
 export type Migration = (db: Database.Database) => void;
 
-export const migrations: Migration[] = [m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28, m29, m30, m31, m32];
+export const migrations: Migration[] = [m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38];

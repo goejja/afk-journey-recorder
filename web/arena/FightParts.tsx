@@ -1,6 +1,6 @@
 import { ARENA_MODES, FIXED_MAP, modeAllowsPhantimal, TEAMS_PER_MODE, UNION_LEVEL_MAX } from '../../src/domain/arena.js';
-import { type ArenaBattle, type ArenaMode, type Hero, type Profile } from '../backend.js';
-import { BattleEditor } from './BattleEditor.js';
+import { type ArenaFight, type ArenaMode, type Hero, type Profile } from '../backend.js';
+import { FightTeamsEditor } from './FightTeamsEditor.js';
 import { type Borrow } from './borrow.js';
 import { FormationIdField } from '../FormationIdField.js';
 import { type Reference, type Draft, onMap, playerName, type Side } from './draft.js';
@@ -57,11 +57,11 @@ export function WinnerField({ draft, onChange }: { draft: Draft; onChange: (draf
   );
 }
 
-export function Board({ draft, mode, reference, unavailable, borrow, sideRosters, onChange }: { draft: Draft; mode: string; reference: Reference; unavailable?: Map<string, string>; borrow?: Borrow; sideRosters?: Record<Side, Hero[] | null>; onChange: (draft: Draft) => void }) {
+export function FightEditor({ draft, mode, reference, unavailable, borrow, sideRosters, onChange }: { draft: Draft; mode: string; reference: Reference; unavailable?: Map<string, string>; borrow?: Borrow; sideRosters?: Record<Side, Hero[] | null>; onChange: (draft: Draft) => void }) {
   const map = reference.maps.find((m) => m.name === draft.mapName);
   if (!map) return <p className="muted">Pick a map.</p>;
   return (
-    <BattleEditor
+    <FightTeamsEditor
       map={map}
       heroes={reference.heroes}
       artifacts={reference.artifacts}
@@ -120,7 +120,7 @@ export function ModeChip({ mode }: { mode: ArenaMode }) {
 }
 
 /** "Alice vs Bob" for the players of a fight. With neither side a Player it is nothing, or an empty cell where `keepCell` (a grid column). */
-export function Players({ fight, profiles, keepCell = false }: { fight: ArenaBattle; profiles: Profile[]; keepCell?: boolean }) {
+export function Players({ fight, profiles, keepCell = false }: { fight: ArenaFight; profiles: Profile[]; keepCell?: boolean }) {
   const a = playerName(profiles, fight.playerIdA);
   const b = playerName(profiles, fight.playerIdB);
   if (!a && !b) return keepCell ? <span /> : null;

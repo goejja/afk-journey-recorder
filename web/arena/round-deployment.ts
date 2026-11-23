@@ -3,7 +3,7 @@ import type { ReadSide, RoundHero, RoundTeam } from '../../src/domain/round-depl
 import { heroNamesOf } from '../../src/domain/round-deployment.js';
 import { isSummon } from '../../src/domain/units.js';
 import { TEAMS_IN_ROUND, turnTeam, withSeenAs, type RoundDeployment } from '../../src/domain/round-deployment.js';
-import type { ArenaBattle, BattleDraftSide, Profile, RoundDeploymentEntry } from '../backend.js';
+import type { ArenaFight, FightDraftSide, Profile, RoundDeploymentEntry } from '../backend.js';
 import { OPPONENT_SIDE, OWN_SIDE, placeOpponent, placeOwn, type PlacedSide } from '../reader/battle-import.js';
 import type { PlacedPhantimal } from '../units.js';
 import { emptyFormation, withHeroState, type FormationState } from '../FormationEditor.js';
@@ -39,7 +39,7 @@ export const teamOfOwn = (formation: FormationState): RoundTeam | null => teamOf
 export const teamOfOpponent = (opponent: OpponentState): RoundTeam | null => teamOf(OPPONENT_SIDE, opponent);
 
 /** What a side of a picture says, for `matchTeam`: its heroes (a hero once), the artifact and phantimal named, and the tiles nobody could name. */
-export function readSideOf(side: BattleDraftSide): ReadSide {
+export function readSideOf(side: FightDraftSide): ReadSide {
   const heroes = new Map<string, ReadSide['heroes'][number]>();
   for (const h of side.heroes) heroes.set(h.hero, { hero: h.hero, rank: h.rank, equipmentLevel: h.equipmentLevel });
   return { heroes: [...heroes.values()], artifact: side.artifact?.name ?? null, phantimal: side.phantimal ?? null, unread: side.unread?.length ?? 0 };
@@ -128,13 +128,13 @@ export function withoutGuess(team: RoundTeam, guess: GuessTiles, mapName: string
 }
 
 /** The heroes of a team as a picture would give them: each hero once, with its state. */
-const readHeroes = (team: RoundTeam): BattleDraftSide['heroes'] =>
+const readHeroes = (team: RoundTeam): FightDraftSide['heroes'] =>
   heroNamesOf(team).map((hero) => {
     const h = team.heroes.find((x) => x.hero === hero)!;
     return { tile: '', hero, rank: h.rank, equipmentLevel: h.equipmentLevel };
   });
 
-const extrasOf = (team: RoundTeam): Pick<BattleDraftSide, 'artifact' | 'phantimal'> => ({ artifact: team.artifact ? { name: team.artifact, level: null } : null, phantimal: team.phantimal?.name ?? null });
+const extrasOf = (team: RoundTeam): Pick<FightDraftSide, 'artifact' | 'phantimal'> => ({ artifact: team.artifact ? { name: team.artifact, level: null } : null, phantimal: team.phantimal?.name ?? null });
 
 /** Whether a placement holds exactly the team's units, pair parts and summons: only then are its tiles worth keeping. */
 const sameUnits = (placed: { hero: string; part?: string }[], team: RoundTeam): boolean => {
@@ -225,8 +225,8 @@ function withKnownTiles<S extends { placed: { tile: number; hero: string; part?:
   return state;
 }
 
-/** The team a Player fielded in a saved fight, with Side A's tiles: a Player who stood on Side B has the board turned back. */
-function teamOfRecord(fight: ArenaBattle, side: 'A' | 'B'): RoundTeam {
+/** The team a Player fielded in a saved fight, with Side A's tiles: a Player who stood on Side B has the map turned back. */
+function teamOfRecord(fight: ArenaFight, side: 'A' | 'B'): RoundTeam {
   const recorded = side === 'A' ? fight.formation : fight.opponent;
   const team: RoundTeam = {
     heroes: recorded.heroes.map((h) => {
@@ -245,7 +245,7 @@ function teamOfRecord(fight: ArenaBattle, side: 'A' | 'B'): RoundTeam {
  * seen on Side A in one Battle and on Side B in the next has one Deployment: the Side B team is turned back.
  * `fights` must be those of one Tournament and Round.
  */
-export function deploymentsFromRecords(fights: ArenaBattle[], profiles: Profile[]): RoundDeploymentEntry[] {
+export function deploymentsFromRecords(fights: ArenaFight[], profiles: Profile[]): RoundDeploymentEntry[] {
   const entries = new Map<number, RoundDeploymentEntry>();
   for (const fight of [...fights].sort((a, b) => a.id - b.id)) {
     if (fight.battlePosition === null) continue;

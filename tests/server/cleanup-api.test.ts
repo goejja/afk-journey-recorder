@@ -23,7 +23,7 @@ const send = (method: string, url: string, body?: unknown) =>
 const json = async (response: Response | Promise<Response>) => (await response).json() as Promise<any>;
 const team = { heroes: [{ tile: 38, hero: 'A' }], phantimal: null, assistHero: null, artifact: null};
 const battle = (mode: string, tags: string[] = []) =>
-  json(send('POST', '/api/pvp/battles', { mode, mapName: 'Open', outcome: 'Win', formation: team, opponent: { heroes: [{ tile: 0, hero: 'H' }] }, tags }));
+  json(send('POST', '/api/pvp/fights', { mode, mapName: 'Open', outcome: 'Win', formation: team, opponent: { heroes: [{ tile: 0, hero: 'H' }] }, tags }));
 const age = (id: number, days: number) => db.prepare("UPDATE attempt SET created_at = datetime('now', ?) WHERE id = ?").run(`-${days} days`, id);
 
 describe('cleanup', () => {
@@ -56,7 +56,7 @@ describe('cleanup', () => {
 
     const removed = await json(send('POST', '/api/cleanup/delete', { mode: 'Arena', olderThanDays: 30, expectedCount: 1 }));
     expect(removed).toEqual({ deleted: 1 });
-    expect((await json(send('GET', '/api/pvp/battles'))).map((b: any) => b.id).sort()).toEqual([oldSupreme.id, recent.id].sort());
+    expect((await json(send('GET', '/api/pvp/fights'))).map((b: any) => b.id).sort()).toEqual([oldSupreme.id, recent.id].sort());
     expect(db.prepare('SELECT count(*) FROM formation').pluck().get()).toBe(2); // the removed record's rows went with it
     expect(db.prepare('SELECT count(*) FROM arena_opponent_hero').pluck().get()).toBe(2);
   });
@@ -67,7 +67,7 @@ describe('cleanup', () => {
     age(mine.id, 60);
     age(theirs.id, 60);
     await send('POST', '/api/cleanup/delete', { olderThanDays: 30, tag: 'luna', expectedCount: 1 });
-    expect((await json(send('GET', '/api/pvp/battles'))).map((b: any) => b.id)).toEqual([mine.id]);
+    expect((await json(send('GET', '/api/pvp/fights'))).map((b: any) => b.id)).toEqual([mine.id]);
   });
 
   it('removes nothing unless the confirmed count still matches', async () => {
@@ -75,7 +75,7 @@ describe('cleanup', () => {
     age(old.id, 60);
     expect((await send('POST', '/api/cleanup/delete', { olderThanDays: 30, expectedCount: 5 })).status).toBe(409);
     expect((await send('POST', '/api/cleanup/delete', { olderThanDays: 30 })).status).toBe(400);
-    expect(await json(send('GET', '/api/pvp/battles'))).toHaveLength(1);
+    expect(await json(send('GET', '/api/pvp/fights'))).toHaveLength(1);
   });
 
   it('refuses a request without an age or with an unknown mode', async () => {

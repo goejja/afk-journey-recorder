@@ -11,12 +11,14 @@ interface Props {
   detail: ReactNode;
   sidebarLabel: string;
   detailLabel: string;
+  /** A wider list, for rows that hold a portrait, a name and icons. */
+  wide?: boolean;
   /** Changing the selection resets the detail pane to its start. */
   detailKey?: string | number | null;
 }
 
 /** A master/detail workspace with an optional pinned header and independent list and detail scrolling on wide screens. */
-export function MasterDetail({ header, sidebarHeader, sidebar, detailHeader, detail, sidebarLabel, detailLabel, detailKey }: Props) {
+export function MasterDetail({ header, sidebarHeader, sidebar, detailHeader, detail, sidebarLabel, detailLabel, detailKey, wide }: Props) {
   const detailScroll = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -24,7 +26,7 @@ export function MasterDetail({ header, sidebarHeader, sidebar, detailHeader, det
   }, [detailKey]);
 
   return (
-    <section className={header === undefined ? 'master-detail master-detail-bare' : 'master-detail'}>
+    <section className={['master-detail', header === undefined && 'master-detail-bare', wide && 'master-detail-wide'].filter(Boolean).join(' ')}>
       {header !== undefined && <div className="master-detail-header">{header}</div>}
       <div className="master-detail-columns">
         <aside className="master-detail-sidebar" aria-label={sidebarLabel}>

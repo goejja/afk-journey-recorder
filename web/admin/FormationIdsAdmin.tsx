@@ -12,14 +12,14 @@ import { Notice } from '../ui/Notice.js';
 
 const EMPTY_CELLS = Array<number>(TILE_COUNT).fill(TILE.OPEN);
 
-/** The units of one stored team drawn on the board, where they stand. */
+/** The units of one stored team drawn on the map, where they stand. */
 function LayoutMap({ code, team }: { code: string; team: NonNullable<Deployment['teams'][number]> }) {
   const { units } = team;
   return (
     <HexMap
       rowLengths={ROW_LENGTHS}
       cells={EMPTY_CELLS}
-      label={`Positions of ${code}`}
+      label={`Layout of ${code}`}
       renderTile={(index) => {
         const unit = units.find((u) => u.tile === index);
         return unit ? <Portrait kind={unit.kind} name={unit.part || unit.hero} size={30} /> : undefined;
@@ -32,7 +32,7 @@ function LayoutMap({ code, team }: { code: string; team: NonNullable<Deployment[
   );
 }
 
-interface Board {
+interface FormationIdLibrary {
   maps: GameMap[];
   heroes: Hero[];
   phantimals: Phantimal[];
@@ -42,7 +42,7 @@ interface Board {
 /** The most teams a Formation ID covers (Super League). */
 const MOST_TEAMS = 5;
 
-/** Types a code and places the units and artifact of each of its teams on a board, for a code that no record has named yet. */
+/** Types a code and places the units and artifact of each of its teams on a map, for a code that no record has named yet. */
 function AddByHand({ onAdded, onCancel }: { onAdded: (code: string) => void; onCancel: () => void }) {
   // the map the player picked; until then the first Arena map that has deployment tiles
   const [pickedMap, setMapName] = useState('');
@@ -50,12 +50,12 @@ function AddByHand({ onAdded, onCancel }: { onAdded: (code: string) => void; onC
   const [teams, setTeams] = useState<FormationState[]>(() => [emptyFormation()]);
   const [current, setCurrent] = useState(0);
   const { error: actionError, busy, run } = useAction();
-  const loaded = useLoad<Board>(async () => {
+  const loaded = useLoad<FormationIdLibrary>(async () => {
     const [maps, heroes, phantimals, artifacts] = await Promise.all([api.maps(), api.heroes(), api.phantimals(), api.artifacts().catch(() => [] as Artifact[])]);
     return { maps: maps.filter((m) => m.cells.includes(TILE.PLAYER)), heroes, phantimals, artifacts };
   }, []);
-  const board = loaded.data ?? null;
-  const mapName = pickedMap || (board?.maps.find((m) => m.tags.includes('Arena'))?.name ?? board?.maps[0]?.name ?? '');
+  const library = loaded.data ?? null;
+  const mapName = pickedMap || (library?.maps.find((m) => m.tags.includes('Arena'))?.name ?? library?.maps[0]?.name ?? '');
   const error = loaded.error ?? actionError;
 
   // A team without a unit is not part of the code, but the teams after it keep their numbers.
@@ -66,20 +66,20 @@ function AddByHand({ onAdded, onCancel }: { onAdded: (code: string) => void; onC
 
   const save = () => run(() => api.addFormationId(normalized, deployment), () => onAdded(normalized));
 
-  const map = board?.maps.find((m) => m.name === mapName);
+  const map = library?.maps.find((m) => m.name === mapName);
   return (
     <div className="panel">
       <h3>Add a Formation ID</h3>
-      <p className="muted">Type the code, then place the units and choose the artifact of each team the code covers (up to {MOST_TEAMS}). The board only shows where units can stand; the map is not kept with the code.</p>
+      <p className="muted">Type the code, then place the units and choose the artifact of each team the code covers (up to {MOST_TEAMS}). The map only shows where units can stand; it is not kept with the code.</p>
       <div className="filters">
         <label className="field">
           Code
           <input value={code} maxLength={8} aria-label="Formation ID" onChange={(e) => setCode(e.target.value.toUpperCase())} />
         </label>
         <label className="field">
-          Board
-          <select value={mapName} aria-label="Board map" onChange={(e) => setMapName(e.target.value)}>
-            {board?.maps.map((m) => (
+          Map
+          <select value={mapName} aria-label="Map" onChange={(e) => setMapName(e.target.value)}>
+            {library?.maps.map((m) => (
               <option key={m.name}>{m.name}</option>
             ))}
           </select>
@@ -113,19 +113,19 @@ function AddByHand({ onAdded, onCancel }: { onAdded: (code: string) => void; onC
           </button>
         )}
       </div>
-      {board && !map && <Notice kind="error">No map has player deployment tiles. Paint some in Admin → Maps first.</Notice>}
-      {map && board && (
+      {library && !map && <Notice kind="error">No map has player deployment tiles. Paint some in Admin → Maps first.</Notice>}
+      {map && library && (
         <FormationEditor
           key={current}
           map={map}
-          heroes={board.heroes}
-          artifacts={board.artifacts}
-          phantimals={board.phantimals}
+          heroes={library.heroes}
+          artifacts={library.artifacts}
+          phantimals={library.phantimals}
           value={teams[current]!}
           onChange={(next) => setTeams((old) => old.map((t, i) => (i === current ? next : t)))}
           heroSource="all"
           withAssist={false}
-          mapLabel="Formation ID board"
+          mapLabel="Formation ID Layout"
         />
       )}
       {error && (
@@ -193,7 +193,7 @@ export function FormationIdsAdmin() {
       )}
       {entries?.length === 0 && <p className="muted">No Formation ID yet. Type one under a formation when you record a fight, or add one by hand.</p>}
       {entries && entries.length > 0 && (
-        <table className="board" aria-label="Formation IDs">
+        <table className="data-table" aria-label="Formation IDs">
           <thead>
             <tr>
               <th>Code</th>

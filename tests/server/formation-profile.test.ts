@@ -34,7 +34,7 @@ interface Side {
 const fight = (outcome: 'Win' | 'Loss', mine: Side | string[], foe: Side | string[], extra: Record<string, unknown> = {}, artifact: string | null = null) => {
   const a = Array.isArray(mine) ? { heroes: mine } : mine;
   const b = Array.isArray(foe) ? { heroes: foe } : foe;
-  return app.request('/api/pvp/battles', {
+  return app.request('/api/pvp/fights', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -69,7 +69,7 @@ describe('the profile of a formation group', () => {
     ]);
   });
 
-  it('lists the variations seen at least 3 times and the other exact lineups apart', async () => {
+  it('lists the variations seen at least 3 times and the other exact formations apart', async () => {
     await record(4, 'Win', MINE);
     await record(3, 'Loss', ['A', 'B', 'C', 'D', 'F']);
     await record(1, 'Win', ['A', 'B', 'C', 'D', 'G']);
@@ -79,7 +79,7 @@ describe('the profile of a formation group', () => {
       { flex: ['E'], games: 4, wins: 4, winRate: 1 },
       { flex: ['F'], games: 3, wins: 0, winRate: 0 },
     ]);
-    expect(p.otherLineups).toEqual([{ heroes: ['A', 'B', 'C', 'D', 'G'], games: 1, wins: 1, winRate: 1 }]);
+    expect(p.otherFormations).toEqual([{ heroes: ['A', 'B', 'C', 'D', 'G'], games: 1, wins: 1, winRate: 1 }]);
   });
 
   it('gives the record with and without each flex hero', async () => {

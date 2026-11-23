@@ -48,7 +48,7 @@ export function LearnedSummary({ view, onChanged }: { view: LearnedView; onChang
           {view.accuracy.length === 0 ? (
             <p className="muted">No reading has been kept next to what the player chose yet.</p>
           ) : (
-            <table className="board">
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>Source</th>

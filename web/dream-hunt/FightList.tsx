@@ -121,7 +121,7 @@ function BossFightRow({ fight: f, onEdit, onDelete, onClone, shares, inBattle = 
           )}
         </>
       }
-      cloneTitle="Start new fights from this one"
+      cloneTitle="Start a new record from this one"
       onEdit={() => onEdit(f)}
       onClone={() => onClone([f])}
       onDelete={() => onDelete(f)}
@@ -160,7 +160,7 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
   };
 
   const remove = (fight: DreamHuntAttempt) => confirmRun({ title: `Delete this fight against ${fight.boss}?`, confirmLabel: 'Delete' }, () => api.deleteAttempt(fight.id), changed);
-  const removeDay = (id: number, count: number) => confirmRun({ title: `Delete this day and its ${count} fights?`, confirmLabel: 'Delete' }, () => api.deleteBattleGroup(id, true), changed);
+  const removeDay = (id: number) => confirmRun({ title: 'Delete this record?', confirmLabel: 'Delete' }, () => api.deleteBattleGroup(id, true), changed);
 
   // A plan the Advisor proposed: open the form with its teams filled in, each in the fight of its boss.
   useEffect(() => {
@@ -223,9 +223,9 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
         onToggle={() => list.toggle(item.id)}
         editTitle="Edit all the fights of this day"
         onEdit={() => (setAdding(false), setEditingDay({ id: item.id, fights: item.fights }))}
-        cloneTitle="Start a new day from this one"
+        cloneTitle="Start a new record from this one"
         onClone={() => rowProps.onClone(item.fights)}
-        onDelete={() => void removeDay(item.id, item.fights.length)}
+        onDelete={() => void removeDay(item.id)}
         renderFight={(fight) => <BossFightRow fight={fight} inBattle {...rowProps} />}
       />
     );
@@ -289,7 +289,7 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
 
   return (
     <div>
-      <RecordToolbar list={list} group="day" newLabel="New fights" onNew={() => (setEditing(null), setCloning(null), setAdding(true))}>
+      <RecordToolbar list={list} group="day" newLabel="New record" onNew={() => (setEditing(null), setCloning(null), setAdding(true))}>
         <MultiSelect label="Boss" options={reference.bosses.map((b) => b.name)} value={boss} onChange={setBoss} />
         <TagFilter value={tag} onChange={setTag} />
       </RecordToolbar>
@@ -307,8 +307,8 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
         onOlder={showMore}
         empty={fights.length === 0}
         filtered={boss.length > 0 || tag.length > 0}
-        none="No boss fights recorded yet."
-        noMatch="No boss fights match these filters."
+        none="No records yet."
+        noMatch="No records match these filters."
       />
       {dialog}
     </div>

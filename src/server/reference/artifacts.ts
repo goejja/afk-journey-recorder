@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { artifactsContract, type Artifact } from '../../shared/contracts/artifacts.js';
 import { renameArtifactInFormationIds } from '../../db/formation-ids.js';
 import { fail, serve } from '../contract.js';
+import { refuseUsed } from './usage.js';
 
 interface ArtifactRow {
   name: string;
@@ -53,8 +54,8 @@ export function artifactRoutes(db: Database.Database): Hono {
 
   serve(app, artifactsContract.remove, ({ params }) => {
     if (!find(params.name)) return fail(404, 'Unknown artifact');
-    const count = uses(params.name);
-    if (count > 0) return fail(409, `${count} record${count === 1 ? ' uses' : 's use'} ${params.name}`);
+    const refused = refuseUsed(params.name, [{ label: 'records', count: uses(params.name) }]);
+    if (refused) return refused;
     db.prepare('DELETE FROM artifact WHERE name = ?').run(params.name);
   });
 

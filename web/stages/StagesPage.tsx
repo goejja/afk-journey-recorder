@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { buildLane, defaultPhase, GRID_PHASES, laneId, laneKey, openByDefault, standardPhase, type Lane } from '../../src/domain/stage-grid.js';
+import { buildLane, GRID_PHASES, laneId, laneKey, openByDefault, standardPhase, type Lane } from '../../src/domain/stage-grid.js';
 import { isApex, STAGE_KINDS, type StageKind } from '../../src/domain/stage.js';
 import { api, type Attempt } from '../backend.js';
 import { useConfirm } from '../ui/Dialog.js';
@@ -49,7 +49,7 @@ export function StagesPage() {
 
   const boxes = useMemo(() => grid.data?.boxes ?? [], [grid.data]);
   const season = grid.data?.season ?? 0;
-  const phase = state.phase ?? defaultPhase(boxes);
+  const phase = state.phase ?? grid.data?.phase ?? 1;
   const lanes = useMemo(() => STAGE_KINDS.map((kind) => buildLane(kind, phase, boxes)), [boxes, phase]);
   const standard = { normal: lanes[0]!, phantisomal: lanes[1]! };
   const isOpen = (lane: Lane) => {
@@ -94,7 +94,7 @@ export function StagesPage() {
   }
 
   async function remove(attempt: Attempt) {
-    if (!(await confirm({ title: `Delete this attempt on ${stageLabel(attempt.stage)}?`, confirmLabel: 'Delete', danger: true }))) return;
+    if (!(await confirm({ title: `Delete this record on ${stageLabel(attempt.stage)}?`, confirmLabel: 'Delete', danger: true }))) return;
     try {
       await api.deleteAttempt(attempt.id);
       refresh();
@@ -163,7 +163,7 @@ export function StagesPage() {
           </span>
         </div>
         <button className="primary" onClick={() => setForm({})} disabled={!reference.data}>
-          New attempt
+          New record
         </button>
         <button onClick={() => setFixingKind(!fixingKind)} aria-expanded={fixingKind} title="Fix stages recorded as the wrong kind, such as Normal instead of Phantisomal">
           Change stage kind

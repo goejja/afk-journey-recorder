@@ -159,6 +159,13 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 .name { font-weight: 600; text-align: center; }
 .meta { color: var(--muted); font-size: var(--font-sm); text-align: center; }
 .hero-icons { grid-column: 1; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding-top: var(--sp-1); }
+.hero-icons-row { grid-column: auto; flex-direction: row; padding-top: 0; gap: var(--sp-1); }
+.hero-icons-row .tier-letter, .icon-slot { width: var(--icon-size); text-align: center; line-height: 1; }
+.icon-slot { height: var(--icon-size); }
+/* A row of an Admin catalog list: the portrait, the name (cut short with its full text in the hover) and the icons, which keep one column. */
+.catalog-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); width: 100%; }
+.catalog-name { display: flex; align-items: center; gap: var(--sp-1); min-width: 0; }
+.catalog-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .game-icon { width: var(--icon-size); height: var(--icon-size); border-radius: 50%; object-fit: cover; }
 .game-icon-letter { display: grid; place-items: center; background: var(--panel-hi); border: 1px solid var(--border); color: var(--muted); font-size: var(--font-xs); font-weight: 700; }
 .tier-letter { font-weight: 800; font-size: var(--font-base); line-height: var(--icon-size); }
@@ -169,7 +176,7 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 /* A rank or an equipment on a Card: a button that opens a Popover of the values it can take. */
 .state-value { display: inline-flex; gap: var(--sp-1); align-items: baseline; min-height: 0; padding: var(--sp-1) var(--sp-2); border: 1px solid transparent; border-radius: var(--r-control); background: transparent; }
 .state-values { flex-direction: column; align-items: center; }
-.board .state-values { align-items: flex-start; }
+.data-table .state-values { align-items: flex-start; }
 .state-value:hover, .state-value[aria-expanded="true"] { background: var(--panel-hi); border-color: var(--border); }
 /* A short list under the control that opened it; its place is set in code. A list taller than the room left scrolls. */
 .popover { position: fixed; z-index: var(--z-overlay-popover); display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); background: var(--panel); border: 1px solid var(--accent); border-radius: var(--r-control); }
@@ -205,11 +212,13 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .master-detail-header { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
 .master-detail-header > .toolbar, .master-detail-header > .panel { margin-bottom: 0; }
 .master-detail-columns { display: grid; grid-template-columns: minmax(12rem, 220px) minmax(0, 1fr); gap: var(--sp-4); min-width: 0; min-height: 0; }
+.master-detail-wide .master-detail-columns { grid-template-columns: minmax(12rem, 300px) minmax(0, 1fr); }
 .master-detail-sidebar, .master-detail-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .master-detail-sidebar { overflow: visible; }
 .master-detail-sidebar-head, .master-detail-main-head { flex: none; padding-bottom: var(--sp-2); }
 .master-detail-sidebar-head .filters { margin-bottom: 0; }
 .master-detail-main-head { border-bottom: 1px solid var(--border); }
+.catalog-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .master-detail-main-head h2, .master-detail-main-head h3 { margin: 0; }
 .master-detail-sidebar-scroll, .master-detail-main-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .master-detail-main-scroll { padding-bottom: var(--sp-4); }
@@ -375,9 +384,9 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .ranked { font-weight: 600; color: color-mix(in hsl, var(--danger) calc(var(--worst) * 100%), var(--win)); }
 .week-team { display: flex; flex-direction: column; gap: var(--sp-1); }
 .week-team-units { display: flex; flex-wrap: wrap; gap: var(--gap-hair); align-items: center; }
-.board { width: 100%; border-collapse: collapse; }
-.board th, .board td { text-align: left; padding: var(--sp-2) var(--sp-2); border-bottom: 1px solid var(--border); vertical-align: middle; }
-.board tr.low { opacity: 0.75; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th, .data-table td { text-align: left; padding: var(--sp-2) var(--sp-2); border-bottom: 1px solid var(--border); vertical-align: middle; }
+.data-table tr.low { opacity: 0.75; }
 .team-cell { display: flex; align-items: center; gap: var(--sp-3); cursor: pointer; }
 .layouts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
 .layout-card { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--r-card); }
@@ -551,6 +560,18 @@ a.button:hover { background: var(--panel-hi); }
 /* In a day's card the fight's number leads, and the date, season and tags belong to the day. */
 .fight-line.in-battle { grid-template-columns: var(--col-position) var(--col-icon) var(--col-boss) var(--col-result) var(--col-time) var(--col-rule); }
 .fight-line > .badge { justify-self: start; white-space: nowrap; }
+/* The two fights of a Titan Reaver record side by side, each in its own box so their artifact outlines (a 2px shadow) never touch each other or the row above; they wrap under each other when the page is narrow. */
+.titan-fights { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-2); }
+.titan-fight { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: var(--col-icon) 5.5rem auto; column-gap: var(--sp-3); align-items: start; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-control); padding: var(--sp-2); overflow-x: auto; }
+/* The boss icon and the damage line up with the hero icons, which sit at the top of their slots. */
+.titan-fight > strong { white-space: nowrap; line-height: 32px; }
+.titan-fight .team { flex-wrap: nowrap; align-items: flex-start; margin-top: 0; }
+/* The Titan Reaver Advisor: a summary on the left, the two fights as boxes beside it (wrapping when narrow). */
+.titan-plan { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: flex-start; margin-bottom: var(--sp-3); }
+.titan-plan-summary { flex: 0 0 15rem; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); }
+.titan-plan-summary h3 { margin: 0; }
+.titan-plan > .titan-fights { flex: 1 1 28rem; margin-top: 0; }
+.titan-advice { flex: 1 1 14rem; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-control); padding: var(--sp-2); }
 .fight-boss { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .battle-info { grid-template-columns: var(--col-chip) 16rem 3.5rem 11rem minmax(0, 1fr); }
 .mode-chip { flex: none; justify-self: start; width: var(--col-chip); padding: 1px 0; text-align: center; border-radius: var(--r-pill); font-size: var(--font-sm); font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--mode) 22%, var(--panel)); border: 1px solid color-mix(in srgb, var(--mode) 60%, var(--border)); }

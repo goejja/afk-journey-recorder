@@ -1,4 +1,4 @@
-import type { ArenaBattle, Hero, OpponentInput } from '../backend.js';
+import type { ArenaFight, Hero, OpponentInput } from '../backend.js';
 import { isSummon } from '../../src/domain/units.js';
 import { addHeroUnits, type PlacedRow } from '../units.js';
 
@@ -22,7 +22,7 @@ export const emptyOpponent = (): OpponentState => ({
 });
 
 /** The editor state for an opponent already saved, so a record can be edited. */
-export const opponentFromRecord = (o: ArenaBattle['opponent']): OpponentState => ({
+export const opponentFromRecord = (o: ArenaFight['opponent']): OpponentState => ({
   placed: o.heroes.map((h) => ({ tile: h.tile, hero: h.name, ...(h.part ? { part: h.part } : {}), rank: h.rank ?? '', equipment: h.equipmentLevel === null ? '' : String(h.equipmentLevel) })),
   assist: o.assist
     ? { hero: o.assist.name, rank: o.assist.rank ?? '', equipment: o.assist.equipmentLevel === null ? '' : String(o.assist.equipmentLevel) }

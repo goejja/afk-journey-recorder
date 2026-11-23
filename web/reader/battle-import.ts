@@ -5,7 +5,7 @@ import { TILE, TILE_COUNT } from '../../src/domain/map.js';
 import { PAIR_HEROES, PAIR_PHANTIMALS, SUMMONS } from '../../src/domain/units.js';
 import { layoutFrom } from '../../src/domain/layout.js';
 import { knewHomelessPlacement, resolveSavedPlacement, type PlacementTarget, type SavedPlacement } from '../../src/domain/placement-reuse.js';
-import type { ArenaBattle, ArenaMode, BattleDraft, BattleDraftSide, BattleImportPicture, Hero, ImportFeedbackSide, ImportReading } from '../backend.js';
+import type { ArenaFight, ArenaMode, FightDraft, FightDraftSide, FightImportPicture, Hero, ImportFeedbackSide, ImportReading } from '../backend.js';
 import { emptyFormation, formationFromRecord, placeHero, withHeroState, type FormationState } from '../FormationEditor.js';
 import { emptyOpponent, opponentFromRecord, type OpponentState } from '../arena/OpponentEditor.js';
 import { isSummon } from '../../src/domain/units.js';
@@ -15,7 +15,7 @@ import { addUnit, firstFreeTile, missingPart, missingPhantimalPart, phantimalPar
 export interface ImportGroup {
   key: string;
   mode: ArenaMode;
-  pictures: (BattleImportPicture & { draft: BattleDraft })[];
+  pictures: (FightImportPicture & { draft: FightDraft })[];
 }
 
 /** What identifies a picture across restarts (a hash of it), to keep the player's edits with it; the id only when the server sent no key. */
@@ -24,18 +24,18 @@ export const pictureKey = (picture: { id: number; key?: string }): string => pic
 const folded = (name: string | null) => (name ?? '').trim().toLowerCase();
 
 /** The key a picture goes under when the player has not moved it: the mode and the two names, and for a mode of one fight a battle (Arena, Treasure Rush) the picture itself. */
-function autoKey(picture: BattleImportPicture & { draft: BattleDraft }): string {
+function autoKey(picture: FightImportPicture & { draft: FightDraft }): string {
   const { draft } = picture;
   if (TEAMS_PER_MODE[draft.mode] === 1 || !draft.sideA.name || !draft.sideB.name) return `picture-${pictureKey(picture)}`;
   return `${draft.mode}|${folded(draft.sideA.name)}|${folded(draft.sideB.name)}`;
 }
 
 /** Groups the pictures that were read, in the order given; `moved` maps a picture's key to the key of the group the player put it in. */
-export function groupPictures(pictures: BattleImportPicture[], moved: Record<string, string> = {}): ImportGroup[] {
+export function groupPictures(pictures: FightImportPicture[], moved: Record<string, string> = {}): ImportGroup[] {
   const groups = new Map<string, ImportGroup>();
   for (const picture of pictures) {
     if (picture.state !== 'done' || !picture.draft) continue;
-    const readyPicture = picture as BattleImportPicture & { draft: BattleDraft };
+    const readyPicture = picture as FightImportPicture & { draft: FightDraft };
     const key = moved[pictureKey(picture)] ?? autoKey(readyPicture);
     const group = groups.get(key) ?? { key, mode: readyPicture.draft.mode, pictures: [] };
     group.pictures.push(readyPicture);
@@ -91,12 +91,12 @@ function placePhantimal(cells: number[], zone: number, taken: Set<number>, name:
 }
 
 /** The artifact fields of the form: its name, and its level when the report gave one. */
-const artifactFields = (artifact: BattleDraftSide['artifact']) => (artifact?.name ? { artifact: artifact.name } : null);
+const artifactFields = (artifact: FightDraftSide['artifact']) => (artifact?.name ? { artifact: artifact.name } : null);
 
 /** One side of a saved fight, as the record keeps it (the formation of Side A or the opponent of Side B). */
-export type SavedSide = Omit<ArenaBattle['opponent'], 'formationId' | 'phantimal'> & { phantimal?: ArenaBattle['opponent']['phantimal'] };
+export type SavedSide = Omit<ArenaFight['opponent'], 'formationId' | 'phantimal'> & { phantimal?: ArenaFight['opponent']['phantimal'] };
 
-/** A saved side with the whole board turned upside down (tile `i` becomes `TILE_COUNT - 1 - i`), as it would stand on the other side of the map. */
+/** A saved side with the whole map turned upside down (tile `i` becomes `TILE_COUNT - 1 - i`), as it would stand on the other side of the map. */
 function turnedOver(saved: SavedSide): SavedSide {
   const turn = (tile: number) => TILE_COUNT - 1 - tile;
   return {
@@ -111,12 +111,12 @@ function turnedOver(saved: SavedSide): SavedSide {
  * Player (by Player ID) stood on this side, as saved, or on the other side, turned upside down. It tells which teams the Player is known
  * to field, for `correctHeroes`; where a team stood is the resolver's question (`reusedSide`).
  */
-export function savedSides(fights: ArenaBattle[], mode: ArenaMode, position: number, side: 'A' | 'B', playerId: string | null | undefined, mapName?: string | null): SavedSide[] {
+export function savedSides(fights: ArenaFight[], mode: ArenaMode, position: number, side: 'A' | 'B', playerId: string | null | undefined, mapName?: string | null): SavedSide[] {
   if (!playerId) return [];
   const who = playerId.toLowerCase();
-  const stoodOn = (f: ArenaBattle, s: 'A' | 'B') => (s === 'A' ? f.playerIdA : f.playerIdB)?.toLowerCase() === who;
+  const stoodOn = (f: ArenaFight, s: 'A' | 'B') => (s === 'A' ? f.playerIdA : f.playerIdB)?.toLowerCase() === who;
   const other = side === 'A' ? 'B' : 'A';
-  const sideOf = (f: ArenaBattle, s: 'A' | 'B'): SavedSide => (s === 'A' ? f.formation : f.opponent);
+  const sideOf = (f: ArenaFight, s: 'A' | 'B'): SavedSide => (s === 'A' ? f.formation : f.opponent);
   return fights
     .filter((f) => f.mode === mode && (TEAMS_PER_MODE[mode] === 1 || f.battlePosition === position) && sameMap(f, mapName))
     .sort((a, b) => b.id - a.id)
@@ -124,7 +124,7 @@ export function savedSides(fights: ArenaBattle[], mode: ArenaMode, position: num
 }
 
 /** A record is about the same Map as the one being placed on; without a Map to compare, any record counts. */
-const sameMap = (fight: ArenaBattle, mapName: string | null | undefined): boolean => mapName === undefined || mapName === null || fight.mapName === mapName;
+const sameMap = (fight: ArenaFight, mapName: string | null | undefined): boolean => mapName === undefined || mapName === null || fight.mapName === mapName;
 
 /** The most heroes of a team a Battle import replaces (ADR 0013). */
 const MAX_CORRECTED_HEROES = 2;
@@ -146,7 +146,7 @@ export const knownTeams = (sides: SavedSide[], from: string): KnownTeam[] => sid
  * but differs is replaced only when two known teams agree on the same heroes, so that a formation the Player really changed is kept.
  * At most `MAX_CORRECTED_HEROES` change, the closest team must be alone at its distance, and a team that is exactly the picture's needs no correction.
  */
-export function correctHeroes(side: BattleDraftSide, known: KnownTeam[]): { heroes: BattleDraftSide['heroes']; unread: string[]; corrected: { from: string | null; to: string }[]; because: string } | null {
+export function correctHeroes(side: FightDraftSide, known: KnownTeam[]): { heroes: FightDraftSide['heroes']; unread: string[]; corrected: { from: string | null; to: string }[]; because: string } | null {
   const read = [...new Set(side.heroes.map((h) => h.hero))].sort();
   const unread = side.unread ?? [];
   if (read.length === 0 || known.length === 0) return null;
@@ -181,10 +181,10 @@ export function correctHeroes(side: BattleDraftSide, known: KnownTeam[]): { hero
  * a side of the fight that stood there as saved, the other turned upside down. Every Player's sides are listed, with the Player behind
  * each; the resolver prefers the Player's own and then the newest.
  */
-export function savedPlacements(fights: ArenaBattle[], mode: ArenaMode, position: number, side: 'A' | 'B'): SavedPlacement<SavedSide>[] {
+export function savedPlacements(fights: ArenaFight[], mode: ArenaMode, position: number, side: 'A' | 'B'): SavedPlacement<SavedSide>[] {
   const other = side === 'A' ? 'B' : 'A';
-  const sideOf = (f: ArenaBattle, s: 'A' | 'B'): SavedSide => (s === 'A' ? f.formation : f.opponent);
-  const placement = (f: ArenaBattle, s: 'A' | 'B', saved: SavedSide): SavedPlacement<SavedSide> => ({
+  const sideOf = (f: ArenaFight, s: 'A' | 'B'): SavedSide => (s === 'A' ? f.formation : f.opponent);
+  const placement = (f: ArenaFight, s: 'A' | 'B', saved: SavedSide): SavedPlacement<SavedSide> => ({
     attemptId: f.id,
     mapName: f.mapName ?? null,
     playerId: s === 'A' ? f.playerIdA : f.playerIdB,
@@ -198,24 +198,24 @@ export function savedPlacements(fights: ArenaBattle[], mode: ArenaMode, position
 }
 
 /** What the resolver is asked for a picture's side: its heroes, the map and zone, and the Player behind it. A phantimal the picture shows must be the saved one too. */
-function targetOf(heroes: BattleDraftSide['heroes'], cells: number[], zone: number, mapName: string | null | undefined, playerId: string | null | undefined): PlacementTarget {
+function targetOf(heroes: FightDraftSide['heroes'], cells: number[], zone: number, mapName: string | null | undefined, playerId: string | null | undefined): PlacementTarget {
   return { mapName: mapName ?? null, cells, zone, heroes: [...new Set(heroes.map((h) => h.hero))], playerId: playerId ?? null };
 }
 
 /** The placements that show the phantimal the picture shows (a pair is the same whichever part it names); a picture with none accepts any. */
-const withPhantimal = (placements: SavedPlacement<SavedSide>[], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>) =>
+const withPhantimal = (placements: SavedPlacement<SavedSide>[], extras: Pick<FightDraftSide, 'artifact' | 'phantimal'>) =>
   extras.phantimal ? placements.filter((p) => p.source?.phantimal != null && phantimalKey(extras.phantimal!) === phantimalKey(p.source.phantimal.name)) : placements;
 
 /**
  * The saved side that says where the picture's team stood (the resolver's tiers `profile`, then `any`, ADR 0030), or null when the team
  * was never placed on this map by a record that fits, or when no Player ID says whose team it is.
  */
-export function reusedSide(placements: SavedPlacement<SavedSide>[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>, cells: number[], zone: number, mapName: string | null | undefined, playerId: string | null | undefined): SavedSide | null {
+export function reusedSide(placements: SavedPlacement<SavedSide>[], heroes: FightDraftSide['heroes'], extras: Pick<FightDraftSide, 'artifact' | 'phantimal'>, cells: number[], zone: number, mapName: string | null | undefined, playerId: string | null | undefined): SavedSide | null {
   return resolveSavedPlacement(targetOf(heroes, cells, zone, mapName, playerId), withPhantimal(placements, extras)).source;
 }
 
 /** True when the picture's team was placed on this map before, by a Player whose team it could be, but no saved placement of it fits the map. */
-export const misfitsMap = (placements: SavedPlacement<SavedSide>[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>, cells: number[], zone: number, mapName: string | null | undefined, playerId: string | null | undefined): boolean =>
+export const misfitsMap = (placements: SavedPlacement<SavedSide>[], heroes: FightDraftSide['heroes'], extras: Pick<FightDraftSide, 'artifact' | 'phantimal'>, cells: number[], zone: number, mapName: string | null | undefined, playerId: string | null | undefined): boolean =>
   !!playerId && reusedSide(placements, heroes, extras, cells, zone, mapName, playerId) === null && knewHomelessPlacement(targetOf(heroes, cells, zone, mapName, playerId), withPhantimal(placements, extras));
 
 const unitsKey = (placed: { tile: number; hero: string; part?: string }[], phantimal: PlacedPhantimal | null, artifact: string) =>
@@ -225,8 +225,8 @@ const unitsKey = (placed: { tile: number; hero: string; part?: string }[], phant
 export interface PlacedSide<S extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: PlacedPhantimal | null; artifact: string }> {
   letter: 'A' | 'B';
   zone: number;
-  heroesOf: (current: S, hero: string) => Omit<BattleDraftSide['heroes'][number], 'tile'>;
-  place: (cells: number[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>, saved: SavedSide) => S;
+  heroesOf: (current: S, hero: string) => Omit<FightDraftSide['heroes'][number], 'tile'>;
+  place: (cells: number[], heroes: FightDraftSide['heroes'], extras: Pick<FightDraftSide, 'artifact' | 'phantimal'>, saved: SavedSide) => S;
 }
 
 /**
@@ -235,7 +235,7 @@ export interface PlacedSide<S extends { placed: { tile: number; hero: string; pa
  */
 function knownPlacement<S extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: PlacedPhantimal | null; artifact: string }>(
   kind: PlacedSide<S>,
-  fights: ArenaBattle[],
+  fights: ArenaFight[],
   mode: ArenaMode,
   position: number,
   playerId: string | null | undefined,
@@ -270,20 +270,20 @@ export const OPPONENT_SIDE: PlacedSide<OpponentState> = {
 };
 
 /** Your side with the placement of a saved side that has exactly its heroes (see `knownPlacement`). */
-export const knownPlacementOwn = (fights: ArenaBattle[], mode: ArenaMode, position: number, playerId: string | null | undefined, current: FormationState, cells: number[], mapName?: string | null): FormationState | null =>
+export const knownPlacementOwn = (fights: ArenaFight[], mode: ArenaMode, position: number, playerId: string | null | undefined, current: FormationState, cells: number[], mapName?: string | null): FormationState | null =>
   knownPlacement(OWN_SIDE, fights, mode, position, playerId, current, cells, mapName);
 
 /** The other side likewise. */
-export const knownPlacementOpponent = (fights: ArenaBattle[], mode: ArenaMode, position: number, playerId: string | null | undefined, current: OpponentState, cells: number[], mapName?: string | null): OpponentState | null =>
+export const knownPlacementOpponent = (fights: ArenaFight[], mode: ArenaMode, position: number, playerId: string | null | undefined, current: OpponentState, cells: number[], mapName?: string | null): OpponentState | null =>
   knownPlacement(OPPONENT_SIDE, fights, mode, position, playerId, current, cells, mapName);
 
 /** The artifact the picture showed over the saved one. */
-const artifactOver = (saved: SavedSide, artifact: BattleDraftSide['artifact']) =>
+const artifactOver = (saved: SavedSide, artifact: FightDraftSide['artifact']) =>
   artifact?.name ? { artifact: artifact.name } : { artifact: saved.artifact ?? '' };
 
 /** Your side as it stood in the saved fight, with the ranks and equipment the picture was sure of over the saved ones. Only a Phantimal the
  * picture showed is kept: a report with none means the team brought none (ADR 0029). */
-function reusedOwn(saved: SavedSide, heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>): FormationState {
+function reusedOwn(saved: SavedSide, heroes: FightDraftSide['heroes'], extras: Pick<FightDraftSide, 'artifact' | 'phantimal'>): FormationState {
   const phantimal = extras.phantimal ? (saved.phantimal ?? null) : null;
   let formation: FormationState = { ...formationFromRecord({ ...saved, phantimal, formationId: null }), formationId: '', ...artifactOver(saved, extras.artifact) };
   for (const { hero, rank, equipmentLevel } of heroes) if (rank !== null) formation = withHeroState(formation, hero, rank, equipmentLevel === null ? '' : String(equipmentLevel));
@@ -291,7 +291,7 @@ function reusedOwn(saved: SavedSide, heroes: BattleDraftSide['heroes'], extras: 
 }
 
 /** The other side as it stood in the saved fight, likewise. */
-function reusedOpponent(saved: SavedSide, heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'>): OpponentState {
+function reusedOpponent(saved: SavedSide, heroes: FightDraftSide['heroes'], extras: Pick<FightDraftSide, 'artifact' | 'phantimal'>): OpponentState {
   const phantimal = extras.phantimal ? (saved.phantimal ?? null) : null;
   const opponent = opponentFromRecord({ ...saved, phantimal, formationId: null });
   const states = new Map(heroes.filter((h) => h.rank !== null).map((h) => [h.hero, h]));
@@ -314,8 +314,8 @@ function reusedOpponent(saved: SavedSide, heroes: BattleDraftSide['heroes'], ext
 function layOut(
   cells: number[],
   zone: number,
-  heroes: BattleDraftSide['heroes'],
-  put: (unit: string, tile: number, hero: BattleDraftSide['heroes'][number] | null) => boolean,
+  heroes: FightDraftSide['heroes'],
+  put: (unit: string, tile: number, hero: FightDraftSide['heroes'][number] | null) => boolean,
   phantimalAt: (taken: Set<number>) => PlacedPhantimal | null,
 ): PlacedPhantimal | null {
   const taken = new Set<number>();
@@ -339,7 +339,7 @@ function layOut(
 }
 
 /** Your side's heroes on the first free tiles of the player's zone, in the order of the picture, with the states the picture was sure of; then its phantimal and artifact when the report showed them. */
-export function placeOwn(cells: number[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'> = { artifact: null, phantimal: null }, saved: SavedSide | null = null): FormationState {
+export function placeOwn(cells: number[], heroes: FightDraftSide['heroes'], extras: Pick<FightDraftSide, 'artifact' | 'phantimal'> = { artifact: null, phantimal: null }, saved: SavedSide | null = null): FormationState {
   if (saved) return reusedOwn(saved, heroes, extras);
   let formation = emptyFormation();
   const phantimal = layOut(
@@ -359,7 +359,7 @@ export function placeOwn(cells: number[], heroes: BattleDraftSide['heroes'], ext
 }
 
 /** The other side's heroes on the first free tiles of the enemy zone, likewise. */
-export function placeOpponent(cells: number[], heroes: BattleDraftSide['heroes'], extras: Pick<BattleDraftSide, 'artifact' | 'phantimal'> = { artifact: null, phantimal: null }, saved: SavedSide | null = null): OpponentState {
+export function placeOpponent(cells: number[], heroes: FightDraftSide['heroes'], extras: Pick<FightDraftSide, 'artifact' | 'phantimal'> = { artifact: null, phantimal: null }, saved: SavedSide | null = null): OpponentState {
   if (saved) return reusedOpponent(saved, heroes, extras);
   let placed = emptyOpponent().placed;
   const phantimal = layOut(
@@ -388,7 +388,7 @@ const asDataUrl = (blob: Blob) =>
   });
 
 /** The crops of the artifact and phantimal of each side of a picture, while the server still has the picture. A crop that cannot be fetched is left out. */
-export async function fetchCrops(picture: BattleImportPicture & { draft: BattleDraft }): Promise<NonNullable<BattleImportPicture['cropData']>> {
+export async function fetchCrops(picture: FightImportPicture & { draft: FightDraft }): Promise<NonNullable<FightImportPicture['cropData']>> {
   const one = async (key: string | undefined, frame = false) => {
     if (!key) return null;
     try {
@@ -398,7 +398,7 @@ export async function fetchCrops(picture: BattleImportPicture & { draft: BattleD
       return null;
     }
   };
-  const side = async (s: BattleDraftSide) => {
+  const side = async (s: FightDraftSide) => {
     // the tile of each hero as the readers learn it, to teach them if the player corrects the reading
     // and, for a hero the Agent was not sure of or a tile it only guessed at, what else it might be: the readings left unpaired wait for the player to confirm
     const tiles: NonNullable<ImportFeedbackSide['crops']['tiles']> = [];
@@ -414,7 +414,7 @@ export async function fetchCrops(picture: BattleImportPicture & { draft: BattleD
 }
 
 /** The picture as the player gave it, as a data URL, while the server still has it; null when it cannot be fetched. */
-export async function fetchOriginal(picture: BattleImportPicture): Promise<string | null> {
+export async function fetchOriginal(picture: FightImportPicture): Promise<string | null> {
   try {
     const response = await fetch(urlOf(rosterImportContract.picture, { params: { id: String(picture.id) } }));
     return response.ok ? await asDataUrl(await response.blob()) : null;
@@ -424,7 +424,7 @@ export async function fetchOriginal(picture: BattleImportPicture): Promise<strin
 }
 
 /** What a picture's reading said of a side, in the form the feedback takes. */
-export const readingOf = (side: BattleDraftSide): ImportReading => ({
+export const readingOf = (side: FightDraftSide): ImportReading => ({
   heroes: side.heroes.map((h) => ({ hero: h.hero, rank: h.rank, equipmentLevel: h.equipmentLevel })),
   artifact: side.artifact?.name ? { name: side.artifact.name, level: null } : null,
   phantimal: side.phantimal ?? null,

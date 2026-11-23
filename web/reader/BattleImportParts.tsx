@@ -1,6 +1,6 @@
 import { ARENA_MODES, TEAMS_PER_MODE } from '../../src/domain/arena.js';
 import { ROUNDS, type Round } from '../../src/domain/tournament.js';
-import type { ArenaMode, BattleImportPicture, BattleImportState, Profile } from '../backend.js';
+import type { ArenaMode, FightImportPicture, BattleImportState, Profile } from '../backend.js';
 import type { ImportGroup } from './battle-import.js';
 import { coverageNotice, namesOf, nameOf, warningText, type ImportRound } from './battle-import-edits.js';
 import type { useRoundChoice } from '../arena/useRoundChoice.js';
@@ -121,8 +121,8 @@ export function ReadForm({ state, mode, setMode, files, setFiles, reuse, chooseR
 
 /** The pictures being read, and the ones that failed. */
 export function QueueStatus({ waiting, failed, busy, onCancel, onRetry, onDiscard }: {
-  waiting: BattleImportPicture[];
-  failed: BattleImportPicture[];
+  waiting: FightImportPicture[];
+  failed: FightImportPicture[];
   busy: boolean;
   onCancel: () => void;
   onRetry: (id: number) => void;

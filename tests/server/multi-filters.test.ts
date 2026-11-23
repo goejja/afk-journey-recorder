@@ -21,7 +21,7 @@ const send = (method: string, url: string, body?: unknown) =>
   app.request(url, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
 const json = async (response: Response | Promise<Response>) => (await response).json() as Promise<any>;
 const record = (mode: string, hero: string, tags: string[] = [], outcome = 'Win') =>
-  send('POST', '/api/pvp/battles', {
+  send('POST', '/api/pvp/fights', {
     mode, mapName: 'Open', outcome, tags,
     formation: { heroes: [{ tile: 38, hero }], phantimal: null, assistHero: null, artifact: null},
     opponent: { heroes: [{ tile: 0, hero: 'X' }] },
@@ -35,7 +35,7 @@ describe('filters that take several values', () => {
   });
 
   it('lists the PvP records of any of the modes asked, and of all when none is', async () => {
-    const modes = async (query: string) => (await json(send('GET', `/api/pvp/battles?${query}`))).map((b: any) => b.mode).sort();
+    const modes = async (query: string) => (await json(send('GET', `/api/pvp/fights?${query}`))).map((b: any) => b.mode).sort();
     expect(await modes('mode=Arena&mode=Guild+Duel')).toEqual(['Arena', 'Guild Duel']);
     expect(await modes('mode=Supreme+Arena')).toEqual(['Supreme Arena']);
     expect(await modes('mode=')).toEqual(['Arena', 'Guild Duel', 'Supreme Arena']);
@@ -43,7 +43,7 @@ describe('filters that take several values', () => {
   });
 
   it('lists the records carrying any of the tags asked, ignoring case', async () => {
-    const ids = async (query: string) => (await json(send('GET', `/api/pvp/battles?${query}`))).map((b: any) => b.mode).sort();
+    const ids = async (query: string) => (await json(send('GET', `/api/pvp/fights?${query}`))).map((b: any) => b.mode).sort();
     expect(await ids('tag=luna')).toEqual(['Arena', 'Guild Duel']);
     expect(await ids('tag=Luna&tag=Mia')).toEqual(['Arena', 'Guild Duel', 'Supreme Arena']);
     expect(await ids('tag=Luna&mode=Supreme+Arena')).toEqual([]); // between filters, all must match

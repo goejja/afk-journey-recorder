@@ -2,7 +2,10 @@ import type { PartnerRelation } from '../src/domain/partner-relation.js';
 import type { z } from 'zod';
 import { pathOf, queryStringOf, Upload, urlOf, type ClientInput, type Endpoint } from '../src/shared/contract.js';
 import { artifactsContract } from '../src/shared/contracts/artifacts.js';
-import { defaultsContract } from '../src/shared/contracts/defaults.js';
+import type { BossInput } from '../src/domain/boss.js';
+import { bossesContract } from '../src/shared/contracts/bosses.js';
+import { defaultsContract, titanReaverContract } from '../src/shared/contracts/defaults.js';
+import { titanReaverBattlesContract } from '../src/shared/contracts/titan-reaver.js';
 import { mapsContract } from '../src/shared/contracts/maps.js';
 import { heroesContract, type BackMarkBody, type HeroAttributesBody } from '../src/shared/contracts/heroes.js';
 import { unitRulesContract } from '../src/shared/contracts/unit-rules.js';
@@ -30,10 +33,11 @@ import { dreamHuntContract } from '../src/shared/contracts/dream-hunt.js';
 import { stagesContract } from '../src/shared/contracts/stages.js';
 import { tagsContract } from '../src/shared/contracts/tags.js';
 import type { DefaultMode, DefaultSlot } from '../src/domain/defaults.js';
+import type { TitanReaverSetup } from '../src/domain/titan-reaver.js';
 import type { Deployment } from '../src/domain/layout.js';
 import type { RoundDeployment } from '../src/domain/round-deployment.js';
 import type { Round } from '../src/domain/tournament.js';
-import type { GameMap, Phantimal, StageKind, StageKey, Stage, BossRule, StageAttemptInput, StageRangeInput, DreamHuntInput, BattleImportState, ImportApplySection, ImportFeedbackSide, ImportScreen, RosterImportState, ReaderExample, CleanupRequest, ScenarioInput, AgentSettings, ArenaMode, BattleFormationIds, BattleRound, ArenaBattleInput, HeroAdminBody, PlacementRuleBody, PvpHintBody, } from '../src/shared/api.js';
+import type { GameMap, Phantimal, StageKind, StageKey, Stage, BossRule, StageAttemptInput, StageRangeInput, DreamHuntInput, BattleImportState, ImportApplySection, ImportFeedbackSide, ImportScreen, RosterImportState, ReaderExample, CleanupRequest, ScenarioInput, AgentSettings, ArenaMode, BattleFormationIds, BattleRound, ArenaFightInput, HeroAdminBody, PlacementRuleBody, PvpHintBody, TitanReaverBattleInput } from '../src/shared/api.js';
 
 export type * from '../src/shared/api.js';
 
@@ -180,7 +184,10 @@ export const api = {
   updateAttempt: (id: number, attempt: StageAttemptInput) => call(stagesContract.updateAttempt, { params: { id: String(id) }, body: attempt }),
   deleteAttempt: (id: number) => call(stagesContract.removeAttempt, { params: { id: String(id) } }),
 
-  bosses: () => call(dreamHuntContract.bosses),
+  bosses: () => call(bossesContract.list),
+  createBoss: (b: BossInput) => call(bossesContract.create, { body: b }),
+  saveBoss: (name: string, b: BossInput) => call(bossesContract.save, { params: { name }, body: b }),
+  deleteBoss: (name: string) => call(bossesContract.remove, { params: { name } }),
   bossRules: () => call(dreamHuntContract.rules),
   createBossRule: (rule: BossRule) => call(dreamHuntContract.createRule, { body: rule }),
   saveBossRule: (originalName: string, rule: BossRule) =>
@@ -267,9 +274,18 @@ export const api = {
   defaults: () => call(defaultsContract.list),
   saveDefaults: (mode: DefaultMode, slots: DefaultSlot[]) => call(defaultsContract.save, { params: { mode }, body: { slots } }),
   clearDefaults: (mode: DefaultMode) => call(defaultsContract.clear, { params: { mode } }),
+  titanReaverSetup: () => call(titanReaverContract.get),
+  saveTitanReaverSetup: (body: TitanReaverSetup) => call(titanReaverContract.save, { body }),
+  clearTitanReaverSetup: () => call(titanReaverContract.clear),
+  titanReaverBattles: (query: Query = {}) => call(titanReaverBattlesContract.list, { query }),
+  titanReaverBattle: (id: number) => call(titanReaverBattlesContract.get, { params: { id: String(id) } }),
+  createTitanReaverBattle: (battle: TitanReaverBattleInput) => call(titanReaverBattlesContract.create, { body: battle }),
+  updateTitanReaverBattle: (id: number, battle: TitanReaverBattleInput) => call(titanReaverBattlesContract.update, { params: { id: String(id) }, body: battle }),
+  deleteTitanReaverBattle: (id: number) => call(titanReaverBattlesContract.remove, { params: { id: String(id) } }),
   seasons: () => call(seasonsContract.list),
   addSeason: (number: number) => call(seasonsContract.add, { body: { number } }),
   setCurrentSeason: (number: number) => call(seasonsContract.setCurrent, { body: { number } }),
+  setSeasonPhase: (phase: number) => call(seasonsContract.setPhase, { body: { phase } }),
   deleteSeason: (number: number) => call(seasonsContract.remove, { params: { number: String(number) } }),
   tags: () => call(tagsContract.list),
   renameTag: (tag: string, name: string) => call(tagsContract.rename, { params: { tag }, body: { name } }),
@@ -277,13 +293,13 @@ export const api = {
   restoreBackup: (file: File) =>
     call(adminContract.restore, { body: new Blob([file], { type: 'application/octet-stream' }) }),
 
-  arenaBattles: (query: Query = {}) => call(arenaContract.list, { query }),
-  createArenaBattleGroup: (mode: ArenaMode, fights: ArenaBattleInput[], codes: BattleFormationIds, where?: BattleRound) =>
-    call(arenaContract.createGroup, { body: { mode, fights, ...codes, ...where } }),
+  arenaFights: (query: Query = {}) => call(arenaContract.list, { query }),
+  createArenaBattle: (mode: ArenaMode, fights: ArenaFightInput[], codes: BattleFormationIds, where?: BattleRound) =>
+    call(arenaContract.createBattle, { body: { mode, fights, ...codes, ...where } }),
   deleteBattleGroup: (id: number, withFights: boolean) =>
     call(battlesContract.remove, { params: { id: String(id) }, query: withFights ? { fights: 'delete' } : {} }),
-  updateArenaBattleGroup: (id: number, fights: ArenaBattleInput[], codes: BattleFormationIds, where?: BattleRound) =>
-    call(arenaContract.updateGroup, { params: { id: String(id) }, body: { fights, ...codes, ...where } }),
+  updateArenaBattle: (id: number, fights: ArenaFightInput[], codes: BattleFormationIds, where?: BattleRound) =>
+    call(arenaContract.updateBattle, { params: { id: String(id) }, body: { fights, ...codes, ...where } }),
   tournaments: () => call(tournamentsContract.list),
   addTournament: (tournament: { number: number; startDate?: string | null }) => call(tournamentsContract.create, { body: tournament }),
   roundDeployments: (tournamentId: number, round: Round) => call(roundDeploymentsContract.list, { params: { tournament: String(tournamentId), round } }),
@@ -297,10 +313,10 @@ export const api = {
   /** Confirms the Deployments of both Players of a Battle together: one request, one transaction (ADR 0021). */
   saveRoundDeployments: (tournamentId: number, round: Round, entries: { profileId: number; teams: RoundDeployment }[]) =>
     call(roundDeploymentsContract.saveAll, { params: { tournament: String(tournamentId), round }, body: { entries } }),
-  createArenaBattle: (battle: ArenaBattleInput) => call(arenaContract.create, { body: battle }),
+  createArenaFight: (battle: ArenaFightInput) => call(arenaContract.create, { body: battle }),
   arenaBattle: (id: number) => call(arenaContract.get, { params: { id: String(id) } }),
-  updateArenaBattle: (id: number, battle: ArenaBattleInput) => call(arenaContract.update, { params: { id: String(id) }, body: battle }),
-  deleteArenaBattle: (id: number) => call(stagesContract.removeAttempt, { params: { id: String(id) } }),
+  updateArenaFight: (id: number, battle: ArenaFightInput) => call(arenaContract.update, { params: { id: String(id) }, body: battle }),
+  deleteArenaFight: (id: number) => call(stagesContract.removeAttempt, { params: { id: String(id) } }),
 
   maps: () => call(mapsContract.list),
   createMap: (map: Pick<GameMap, 'name' | 'tags' | 'cells'>) => call(mapsContract.create, { body: map }),

@@ -3,7 +3,7 @@ import { evidenceLabels, type EvidenceLabel } from '../domain/formation-labels.j
 import { TILE_COUNT } from '../domain/map.js';
 import { formationArchetypes, formationGroups, round, whereFor, type Archetype, type FormationGroup, type GroupHero, type StatFilters } from './index.js';
 
-/** A variation needs this many appearances; rarer exact lineups are listed apart. */
+/** A variation needs this many appearances; rarer exact formations are listed apart. */
 const VARIATION_MIN_GAMES = 3;
 /** An enemy group counts as a matchup from this many games; strong from this win rate, weak up to its complement. */
 const MATCHUP_MIN_GAMES = 5;
@@ -35,7 +35,7 @@ interface ReportArchetype extends Omit<Archetype, 'groups'> {
 /** A hero of a group on one map: the tile it stood on most often (as if on the half of Side A) and how often that was. */
 interface PlacedHero {
   hero: string;
-  /** The tile the example board puts the hero on; null when every tile it stood on is taken by a hero used more. */
+  /** The tile the example layout puts the hero on; null when every tile it stood on is taken by a hero used more. */
   tile: number | null;
   /** The share of the hero's games on this map in which it stood on that tile. */
   share: number;
@@ -54,8 +54,8 @@ export interface FormationProfile extends GroupRow {
   artifacts: (RateRecord & { artifact: string; share: number })[];
   /** Exact lineups seen at least 3 times, with the heroes outside the core. */
   variations: (RateRecord & { flex: string[] })[];
-  /** The other exact lineups. */
-  otherLineups: (RateRecord & { heroes: string[] })[];
+  /** The other exact formations. */
+  otherFormations: (RateRecord & { heroes: string[] })[];
   /** The record with and without each flex hero, over all the group's appearances. */
   heroImpact: { hero: string; with: RateRecord; without: RateRecord }[];
   strongAgainst: (RateRecord & { enemy: string[] })[];
@@ -135,7 +135,7 @@ function allFormations(db: Database.Database): Map<string, string[]> {
   return map;
 }
 
-/** The tiles a group's heroes stood on, per map, with an example board on which no two heroes share a tile. */
+/** The tiles a group's heroes stood on, per map, with an example layout on which no two heroes share a tile. */
 function placementOf(sides: SideRow[], heroes: string[]): PlacementMap[] {
   const byMap = new Map<string, SideRow[]>();
   for (const s of sides) if (s.map !== null) byMap.set(s.map, [...(byMap.get(s.map) ?? []), s]);
@@ -154,14 +154,14 @@ function placementOf(sides: SideRow[], heroes: string[]): PlacementMap[] {
         return { hero, games, tiles };
       });
       const taken = new Set<number>();
-      const board = new Map<string, PlacedHero>();
+      const layout = new Map<string, PlacedHero>();
       for (const { hero, games, tiles } of [...placed].sort((a, b) => b.games - a.games || a.hero.localeCompare(b.hero))) {
         const free = tiles.find(([tile]) => !taken.has(tile));
         if (free) taken.add(free[0]);
-        board.set(hero, { hero, tile: free ? free[0] : null, share: free ? round(free[1] / games) : 0, games, secondChoice: free !== undefined && free[0] !== tiles[0]![0] });
+        layout.set(hero, { hero, tile: free ? free[0] : null, share: free ? round(free[1] / games) : 0, games, secondChoice: free !== undefined && free[0] !== tiles[0]![0] });
       }
       const record: Tally = { games: onMap.length, wins: onMap.reduce((sum, s) => sum + s.won, 0) };
-      return { map, ...rate(record), heroes: heroes.map((h) => board.get(h)!).filter((h) => h.games > 0) };
+      return { map, ...rate(record), heroes: heroes.map((h) => layout.get(h)!).filter((h) => h.games > 0) };
     })
     .sort((a, b) => b.games - a.games || a.map.localeCompare(b.map));
 }
@@ -269,7 +269,7 @@ function analyse(db: Database.Database, filters: StatFilters): Analysis {
       placement: placementOf(own, [...g.core, ...g.flex].map((h) => h.hero)),
       artifacts: artifactRows,
       variations: g.variants.filter((v) => v.games >= VARIATION_MIN_GAMES).map((v) => ({ flex: v.flex, ...rate({ games: v.games, wins: v.wins }) })),
-      otherLineups: g.variants.filter((v) => v.games < VARIATION_MIN_GAMES).map((v) => ({ heroes: v.heroes, ...rate({ games: v.games, wins: v.wins }) })),
+      otherFormations: g.variants.filter((v) => v.games < VARIATION_MIN_GAMES).map((v) => ({ heroes: v.heroes, ...rate({ games: v.games, wins: v.wins }) })),
       heroImpact: g.flex.map(({ hero }) => {
         const withHero: Tally = { games: 0, wins: 0 };
         const without: Tally = { games: 0, wins: 0 };

@@ -48,7 +48,7 @@ const profile = {
   ...report.rows[0]!.groups[0]!,
   artifacts: [{ artifact: 'Bladesummon', games: 8, wins: 6, winRate: 0.75, share: 0.4 }],
   variations: [{ flex: ['Contess'], games: 8, wins: 6, winRate: 0.75 }],
-  otherLineups: [{ heroes: ['Gunnar', 'Gwyneth', 'Kulu', 'Mira', 'Zed'], games: 1, wins: 0, winRate: 0 }],
+  otherFormations: [{ heroes: ['Gunnar', 'Gwyneth', 'Kulu', 'Mira', 'Zed'], games: 1, wins: 0, winRate: 0 }],
   heroImpact: [{ hero: 'Contess', with: { games: 8, wins: 6, winRate: 0.75 }, without: { games: 12, wins: 8, winRate: 0.667 } }],
   strongAgainst: [],
   weakAgainst: [],
@@ -173,14 +173,14 @@ describe('the Formations view', () => {
     expect(region.getByText(/Unknown gap/).textContent).toContain('6–2');
   });
 
-  it('draws the example board of the map played most, with the record there, and offers the other maps', async () => {
+  it('draws the example layout of the map played most, with the record there, and offers the other maps', async () => {
     const user = await open();
     await user.click(table().getByRole('button', { name: 'Gunnar + Gwyneth + Kulu' }));
     const region = within(await screen.findByRole('region', { name: 'Profile of Gunnar + Gwyneth + Kulu' }));
     expect(await region.findByText('Placement')).toBeTruthy();
     expect(region.getByLabelText('Map')).toHaveProperty('value', 'Arena I');
     expect(region.getByText(/9–3 on Arena I/)).toBeTruthy();
-    expect(within(region.getByLabelText('Example board on Arena I')).getByTitle('Gunnar')).toBeTruthy(); // on the board
+    expect(within(region.getByLabelText('Example Layout on Arena I')).getByTitle('Gunnar')).toBeTruthy(); // on the layout
     expect(region.getByText(/Gunnar — placed here 78% of 12 games/)).toBeTruthy();
     expect(region.getByText(/Kulu — placed here 40% of 10 games/).textContent).toContain('second choice');
     await user.selectOptions(region.getByLabelText('Map'), 'Arena II');

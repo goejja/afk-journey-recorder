@@ -10,7 +10,7 @@ import { RecordShell } from '../RecordShell.js';
 import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { FormationIdField } from '../FormationIdField.js';
 import { type Reference, type Draft, onMap, sharedTags, newDraft, draftFromFight, toFight } from './draft.js';
-import { FightIdentity, FightResult, FightBoard } from './FightParts.js';
+import { FightIdentity, FightResult, FightEditor } from './FightParts.js';
 import { useToast } from '../ui/Toast.js';
 
 /** The five fights of a Dream Hunt day, one tab each, saved together as one battle of separate records. */
@@ -69,7 +69,7 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
       const slots = drafts.map((d, i) => ({ boss: d.boss || null, mapName: d.mapName || null, rule: i === DREAM_HUNT_FIGHTS - 1 ? d.rule || null : null }));
       onDefaults(await api.saveDefaults('Dream Hunt', slots));
       setError(null);
-      toast('Saved as this week’s Dream Hunt setup: new days start with these bosses, maps and rule.');
+      toast('Saved as this week’s Dream Hunt default: new days start with these bosses, maps and rule.');
     } catch (e) {
       setStatus(null);
       setError((e as Error).message);
@@ -102,7 +102,7 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
     // The formations stay, so the same teams can be tried again with only the time changed.
     setDrafts((old) => old.map((d) => ({ ...d, outcome: 'Win' as const, time: '' })));
     setError(null);
-    setStatus(`Saved ${fights.length} ${fights.length === 1 ? 'fight' : 'fights'} as one battle. The teams are still here: enter the new time and save again.${notice ? ` ${notice}` : ''}`);
+    setStatus(`Saved as one record. The teams are still here: enter the new time and save again.${notice ? ` ${notice}` : ''}`);
     onRecorded();
   }
 
@@ -110,7 +110,7 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
     <>
     {sync.dialog}
     <RecordShell
-      title={editing ? 'Edit Dream Hunt day' : 'New boss fights'}
+      title={editing ? 'Edit Dream Hunt record' : 'New record'}
       onSetDefault={editing ? undefined : () => void setDefault()}
       identity={<FightIdentity draft={draft} reference={reference} showRule={current === DREAM_HUNT_FIGHTS - 1} onChange={change} />}
       result={<FightResult draft={draft} onChange={change} />}
@@ -135,13 +135,13 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
       }}
       error={error}
       status={status}
-      saveLabel={editing ? 'Save changes' : 'Save fights'}
+      saveLabel={editing ? 'Save changes' : 'Save record'}
       onSave={() => void save(false)}
       onSaveAnother={editing ? undefined : () => void save(true)}
       saving={saving.busy}
       onCancel={onCancel}
     >
-      <FightBoard key={current} draft={draft} reference={reference} unavailable={unavailable} borrow={borrow} onChange={change} />
+      <FightEditor key={current} draft={draft} reference={reference} unavailable={unavailable} borrow={borrow} onChange={change} />
     </RecordShell>
     </>
   );

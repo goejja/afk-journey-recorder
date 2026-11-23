@@ -37,13 +37,13 @@ describe('normalizeTags', () => {
 
 describe('tags on records', () => {
   it('saves, filters and lists tags on Arena, Dream Hunt and Stage records', async () => {
-    expect((await json(send('POST', '/api/pvp/battles', battle(['Luna', 'friend'])))).tags).toEqual(['friend', 'Luna']);
-    await send('POST', '/api/pvp/battles', battle(['Other']));
+    expect((await json(send('POST', '/api/pvp/fights', battle(['Luna', 'friend'])))).tags).toEqual(['friend', 'Luna']);
+    await send('POST', '/api/pvp/fights', battle(['Other']));
     await send('POST', '/api/dream-hunt/attempts', fight(['mine']));
     const stage = await json(send('POST', '/api/stages', { season: 8, phase: 0, kind: 'Normal', number: 1, mapName: 'Open' }));
     await send('POST', '/api/attempts', { stageId: stage.id, formation: team(['A']), tags: ['mine'] });
 
-    expect(await json(send('GET', '/api/pvp/battles?tag=luna'))).toHaveLength(1);
+    expect(await json(send('GET', '/api/pvp/fights?tag=luna'))).toHaveLength(1);
     expect(await json(send('GET', '/api/dream-hunt/attempts?tag=mine'))).toHaveLength(1);
     expect(await json(send('GET', '/api/attempts?tag=mine'))).toHaveLength(1);
     expect(await json(send('GET', '/api/attempts?tag=nope'))).toHaveLength(0);
@@ -53,19 +53,19 @@ describe('tags on records', () => {
   });
 
   it('replaces tags on edit, keeps them when the edit sends none, and rejects bad tags', async () => {
-    const created = await json(send('POST', '/api/pvp/battles', battle(['Luna'])));
-    expect((await json(send('PUT', `/api/pvp/battles/${created.id}`, battle(['Kai'])))).tags).toEqual(['Kai']);
-    expect((await json(send('PUT', `/api/pvp/battles/${created.id}`, battle(undefined)))).tags).toEqual(['Kai']);
-    expect((await json(send('PUT', `/api/pvp/battles/${created.id}`, battle([])))).tags).toEqual([]);
-    expect((await send('POST', '/api/pvp/battles', battle('Luna'))).status).toBe(400);
+    const created = await json(send('POST', '/api/pvp/fights', battle(['Luna'])));
+    expect((await json(send('PUT', `/api/pvp/fights/${created.id}`, battle(['Kai'])))).tags).toEqual(['Kai']);
+    expect((await json(send('PUT', `/api/pvp/fights/${created.id}`, battle(undefined)))).tags).toEqual(['Kai']);
+    expect((await json(send('PUT', `/api/pvp/fights/${created.id}`, battle([])))).tags).toEqual([]);
+    expect((await send('POST', '/api/pvp/fights', battle('Luna'))).status).toBe(400);
   });
 
   it('removes tags with their record and filters the Dream Hunt ranking', async () => {
     const mine = await json(send('POST', '/api/dream-hunt/attempts', fight(['mine'])));
     await send('POST', '/api/dream-hunt/attempts', fight(['friend']));
-    const board = (query: string) => json(send('GET', `/api/dream-hunt/leaderboard?boss=King%20Croaker${query}`));
-    expect((await board('')).attempts).toBe(2);
-    expect((await board('&tag=mine')).attempts).toBe(1);
+    const leaderboard = (query: string) => json(send('GET', `/api/dream-hunt/leaderboard?boss=King%20Croaker${query}`));
+    expect((await leaderboard('')).attempts).toBe(2);
+    expect((await leaderboard('&tag=mine')).attempts).toBe(1);
     await send('DELETE', `/api/attempts/${mine.id}`);
     expect(db.prepare("SELECT count(*) FROM attempt_tag WHERE tag = 'mine'").pluck().get()).toBe(0);
   });

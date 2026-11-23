@@ -31,7 +31,7 @@ const fight = (hero: string, extra: Record<string, unknown> = {}) => ({
   opponent: { heroes: [{ tile: 0, hero: 'X' }] },
   ...extra,
 });
-const group = (fights: unknown[], mode = 'Supreme Arena') => send('POST', '/api/pvp/battle-groups', { mode, fights });
+const group = (fights: unknown[], mode = 'Supreme Arena') => send('POST', '/api/pvp/battles', { mode, fights });
 const count = (sql: string) => db.prepare(sql).pluck().get() as number;
 
 describe('battles of several fights', () => {
@@ -41,7 +41,7 @@ describe('battles of several fights', () => {
       [created.id, 1, 'Win'], [created.id, 2, 'Loss'], [created.id, 3, 'Win'],
     ]);
     expect(count('SELECT count(*) FROM attempt')).toBe(3);
-    const listed = await json(send('GET', '/api/pvp/battles'));
+    const listed = await json(send('GET', '/api/pvp/fights'));
     expect(listed.every((f: any) => f.battleId === created.id)).toBe(true);
   });
 
@@ -75,18 +75,18 @@ describe('battles of several fights', () => {
   it('keeps the one-team rule when a fight of a battle is edited, but not for a fight on its own', async () => {
     const created = await json(group([fight('A'), fight('B')]));
     const second = created.fights[1];
-    expect((await send('PUT', `/api/pvp/battles/${second.id}`, { ...fight('A'), mode: 'Supreme Arena' })).status).toBe(400);
-    expect((await send('PUT', `/api/pvp/battles/${second.id}`, { ...fight('C'), mode: 'Supreme Arena' })).status).toBe(200);
-    const alone = await json(send('POST', '/api/pvp/battles', { ...fight('A'), mode: 'Supreme Arena' }));
+    expect((await send('PUT', `/api/pvp/fights/${second.id}`, { ...fight('A'), mode: 'Supreme Arena' })).status).toBe(400);
+    expect((await send('PUT', `/api/pvp/fights/${second.id}`, { ...fight('C'), mode: 'Supreme Arena' })).status).toBe(200);
+    const alone = await json(send('POST', '/api/pvp/fights', { ...fight('A'), mode: 'Supreme Arena' }));
     expect(alone).toMatchObject({ battleId: null, battlePosition: null });
-    expect((await send('PUT', `/api/pvp/battles/${alone.id}`, { ...fight('B'), mode: 'Supreme Arena' })).status).toBe(200);
+    expect((await send('PUT', `/api/pvp/fights/${alone.id}`, { ...fight('B'), mode: 'Supreme Arena' })).status).toBe(200);
   });
 
   it('edits a whole battle: updates a team in place, adds a new one and removes one left out', async () => {
     const created = await json(group([fight('A'), fight('B', { outcome: 'Loss' }), fight('C')]));
     const [first, second] = created.fights.map((f: any) => f.id);
     // A and B swap teams, team 2 is now won, team 3 is left out and team 4 does not exist in this mode.
-    const edited = await send('PUT', `/api/pvp/battle-groups/${created.id}`, {
+    const edited = await send('PUT', `/api/pvp/battles/${created.id}`, {
       fights: [fight('B', { position: 1, note: 'swapped', tags: ['Luna'] }), fight('A', { position: 2 })],
     });
     expect(edited.status).toBe(200);
@@ -96,27 +96,27 @@ describe('battles of several fights', () => {
     expect(result.fights[0]).toMatchObject({ note: 'swapped', tags: ['Luna'] });
     expect(count('SELECT count(*) FROM attempt')).toBe(2);
     // A new number can be added back, and the mode of the battle stays as it was.
-    const again = await json(send('PUT', `/api/pvp/battle-groups/${created.id}`, { fights: [fight('A', { position: 1 }), fight('B', { position: 3 })] }));
+    const again = await json(send('PUT', `/api/pvp/battles/${created.id}`, { fights: [fight('A', { position: 1 }), fight('B', { position: 3 })] }));
     expect(again.fights.map((f: any) => [f.mode, f.battlePosition])).toEqual([['Supreme Arena', 1], ['Supreme Arena', 3]]);
   });
 
   it('lists a battle with all its teams even when the limit would cut it', async () => {
     const created = await json(group([fight('A'), fight('B'), fight('C')]));
-    const limited = await json(send('GET', '/api/pvp/battles?limit=1'));
+    const limited = await json(send('GET', '/api/pvp/fights?limit=1'));
     expect(limited.map((f: any) => f.battleId)).toEqual([created.id, created.id, created.id]);
   });
 
   it('refuses a bad edit of a battle and changes nothing', async () => {
     const created = await json(group([fight('A'), fight('B')]));
-    const url = `/api/pvp/battle-groups/${created.id}`;
+    const url = `/api/pvp/battles/${created.id}`;
     expect((await send('PUT', url, { fights: [fight('A', { position: 1 }), fight('A', { position: 2 })] })).status).toBe(400);
     const wrong = await send('PUT', url, { fights: [fight('A', { position: 1 }), fight('C', { position: 2, mapName: 'Nowhere' })] });
     expect(wrong.status).toBe(400);
     expect((await wrong.json()).error).toMatch(/^Team 2:/);
     expect((await send('PUT', url, { fights: [] })).status).toBe(400);
     expect((await send('PUT', url, { fights: [fight('A', { position: 4 })] })).status).toBe(400);
-    expect((await send('PUT', '/api/pvp/battle-groups/999', { fights: [fight('A')] })).status).toBe(404);
-    const after = await json(send('GET', '/api/pvp/battles'));
+    expect((await send('PUT', '/api/pvp/battles/999', { fights: [fight('A')] })).status).toBe(404);
+    const after = await json(send('GET', '/api/pvp/fights'));
     expect(after.map((f: any) => f.formation.heroes[0].name).sort()).toEqual(['A', 'B']);
   });
 
@@ -151,7 +151,7 @@ describe('the Formation ID of a battle (ADR 0007)', () => {
 
   it('keeps one code for the teams of a side on the battle, and stores the deployment of all the teams', async () => {
     db.prepare("INSERT INTO artifact (name, grp) VALUES ('Candlestick', 'Pre-Season')").run();
-    const created = await json(send('POST', '/api/pvp/battle-groups', withCodes([team('A', 38, 'Candlestick'), team('B', 39), team('C', 40)], { formationId: 'a1b2c3d4', opponentFormationId: 'ZZZZ9999' })));
+    const created = await json(send('POST', '/api/pvp/battles', withCodes([team('A', 38, 'Candlestick'), team('B', 39), team('C', 40)], { formationId: 'a1b2c3d4', opponentFormationId: 'ZZZZ9999' })));
     expect(created.fights.map((f: any) => [f.battleFormationId, f.battleOpponentFormationId, f.formation.formationId, f.opponent.formationId])).toEqual(
       Array(3).fill(['A1B2C3D4', 'ZZZZ9999', null, null]),
     );
@@ -171,8 +171,8 @@ describe('the Formation ID of a battle (ADR 0007)', () => {
   });
 
   it('refuses a code stored for other units in a team, naming the side, and saves nothing', async () => {
-    await send('POST', '/api/pvp/battle-groups', withCodes([team('A', 38), team('B', 39)], { formationId: 'A1B2C3D4' }));
-    const clash = await send('POST', '/api/pvp/battle-groups', withCodes([team('A', 38), team('C', 39)], { formationId: 'A1B2C3D4' }));
+    await send('POST', '/api/pvp/battles', withCodes([team('A', 38), team('B', 39)], { formationId: 'A1B2C3D4' }));
+    const clash = await send('POST', '/api/pvp/battles', withCodes([team('A', 38), team('C', 39)], { formationId: 'A1B2C3D4' }));
     expect(clash.status).toBe(400);
     expect((await clash.json()).error).toMatch(/^Side A: A1B2C3D4 is stored with other units or tiles/);
     expect(count('SELECT count(*) FROM battle')).toBe(1);
@@ -180,14 +180,14 @@ describe('the Formation ID of a battle (ADR 0007)', () => {
 
   it('refuses another artifact on a team the code already has one for', async () => {
     db.prepare("INSERT INTO artifact (name, grp) VALUES ('Candlestick', 'Pre-Season'), ('Tidesurge', 'Pre-Season')").run();
-    await send('POST', '/api/pvp/battle-groups', withCodes([team('A', 38, 'Candlestick')], { formationId: 'A1B2C3D4' }));
-    const clash = await send('POST', '/api/pvp/battle-groups', withCodes([team('A', 38, 'Tidesurge')], { formationId: 'A1B2C3D4' }));
+    await send('POST', '/api/pvp/battles', withCodes([team('A', 38, 'Candlestick')], { formationId: 'A1B2C3D4' }));
+    const clash = await send('POST', '/api/pvp/battles', withCodes([team('A', 38, 'Tidesurge')], { formationId: 'A1B2C3D4' }));
     expect((await clash.json()).error).toMatch(/stored with Candlestick on team 1, not Tidesurge/);
   });
 
   it('extends a code when the battle is edited with more teams, keeps the team numbers, and clears it when left out', async () => {
-    const created = await json(send('POST', '/api/pvp/battle-groups', withCodes([team('A', 38)], { formationId: 'A1B2C3D4' })));
-    const url = `/api/pvp/battle-groups/${created.id}`;
+    const created = await json(send('POST', '/api/pvp/battles', withCodes([team('A', 38)], { formationId: 'A1B2C3D4' })));
+    const url = `/api/pvp/battles/${created.id}`;
     const edited = await json(send('PUT', url, withCodes([{ ...team('A', 38), position: 1 }, { ...team('C', 40), position: 3 }], { formationId: 'A1B2C3D4' })));
     expect(edited.fights.map((f: any) => f.battleFormationId)).toEqual(['A1B2C3D4', 'A1B2C3D4']);
     expect((await library())[0].deployment.teams.map((t: any) => t?.units[0].hero ?? null)).toEqual(['A', null, 'C']);
@@ -197,10 +197,10 @@ describe('the Formation ID of a battle (ADR 0007)', () => {
   });
 
   it('keeps the code of the battle when one of its fights is edited alone, and takes none for that fight', async () => {
-    const created = await json(send('POST', '/api/pvp/battle-groups', withCodes([team('A', 38), team('B', 39)], { formationId: 'A1B2C3D4' })));
+    const created = await json(send('POST', '/api/pvp/battles', withCodes([team('A', 38), team('B', 39)], { formationId: 'A1B2C3D4' })));
     const typed = { ...team('A', 38), mode: 'Supreme Arena' } as any;
     typed.formation.formationId = 'ZZZZ9999';
-    const saved = await send('PUT', `/api/pvp/battles/${created.fights[0].id}`, typed);
+    const saved = await send('PUT', `/api/pvp/fights/${created.fights[0].id}`, typed);
     expect(saved.status).toBe(200);
     expect(await saved.json()).toMatchObject({ battleFormationId: 'A1B2C3D4', formation: { formationId: null } });
     expect((await library()).map((e: any) => e.code)).toEqual(['A1B2C3D4']);

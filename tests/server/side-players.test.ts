@@ -28,29 +28,29 @@ const battle = (extra: Record<string, unknown> = {}) => ({
 
 describe('Player ID of one side', () => {
   it('saves a Player ID per side, and leaves a side alone when it is not sent', async () => {
-    const created = await json(send('POST', '/api/pvp/battles', battle({ playerIdA: '10000002', playerIdB: '10000003' })));
+    const created = await json(send('POST', '/api/pvp/fights', battle({ playerIdA: '10000002', playerIdB: '10000003' })));
     expect(created).toMatchObject({ playerIdA: '10000002', playerIdB: '10000003' });
-    const updated = await json(send('PUT', `/api/pvp/battles/${created.id}`, battle({ playerIdB: '11111111' })));
+    const updated = await json(send('PUT', `/api/pvp/fights/${created.id}`, battle({ playerIdB: '11111111' })));
     expect(updated).toMatchObject({ playerIdA: '10000002', playerIdB: '11111111' });
-    const cleared = await json(send('PUT', `/api/pvp/battles/${created.id}`, battle({ playerIdA: null })));
+    const cleared = await json(send('PUT', `/api/pvp/fights/${created.id}`, battle({ playerIdA: null })));
     expect(cleared).toMatchObject({ playerIdA: null, playerIdB: '11111111' });
   });
 
   it('has no Player ID on a side that was never given one', async () => {
-    expect(await json(send('POST', '/api/pvp/battles', battle()))).toMatchObject({ playerIdA: null, playerIdB: null });
+    expect(await json(send('POST', '/api/pvp/fights', battle()))).toMatchObject({ playerIdA: null, playerIdB: null });
   });
 
   it('trims the ID, and treats empty text as none', async () => {
-    const created = await json(send('POST', '/api/pvp/battles', battle({ playerIdA: ' 123 ', playerIdB: '  ' })));
+    const created = await json(send('POST', '/api/pvp/fights', battle({ playerIdA: ' 123 ', playerIdB: '  ' })));
     expect(created).toMatchObject({ playerIdA: '123', playerIdB: null });
   });
 
   it('refuses a Player ID that is not text', async () => {
-    expect((await send('POST', '/api/pvp/battles', battle({ playerIdA: { id: 1 } }))).status).toBe(400);
+    expect((await send('POST', '/api/pvp/fights', battle({ playerIdA: { id: 1 } }))).status).toBe(400);
   });
 
   it('removes the IDs with the record', async () => {
-    const { id } = await json(send('POST', '/api/pvp/battles', battle({ playerIdA: '123' })));
+    const { id } = await json(send('POST', '/api/pvp/fights', battle({ playerIdA: '123' })));
     await send('DELETE', `/api/attempts/${id}`);
     expect(db.prepare('SELECT count(*) FROM attempt_player').pluck().get()).toBe(0);
   });
@@ -62,7 +62,7 @@ describe('Player ID of one side', () => {
       formation: { heroes: [{ tile, hero }], phantimal: null, assistHero: null, artifact: null},
       opponent: { heroes: [{ tile: enemyTile, hero: enemy }] },
     });
-    const created = await json(send('POST', '/api/pvp/battle-groups', { mode: 'Supreme Arena', fights: [team('A', 38, 'X', 0)] }));
+    const created = await json(send('POST', '/api/pvp/battles', { mode: 'Supreme Arena', fights: [team('A', 38, 'X', 0)] }));
     expect(created.fights[0]).toMatchObject({ playerIdA: '123', playerIdB: '456' });
   });
 });

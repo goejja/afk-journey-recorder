@@ -15,8 +15,8 @@ export function DunlingrCheckList() {
     <>
       <h3>Dunlingr&rsquo;s farthest ally</h3>
       <p className="muted">
-        Dunlingr&rsquo;s order boosts the ally farthest from him, which should be the main Damage dealer or the main Support. The roles are Prydwen&rsquo;s (outside evidence) and
-        &ldquo;main&rdquo; is not checked: only a farthest hero that is a Tank or a Specialist, or has no role, is listed. When two heroes are as far, the rearmost is taken, which is a guess.
+        Dunlingr&rsquo;s order boosts the ally farthest from him, which should be the main Damage dealer or the main Support. The PvP roles are Prydwen&rsquo;s (outside evidence) and
+        &ldquo;main&rdquo; is not checked: only a farthest hero that is a Tank or a Specialist, or has no PvP role, is listed. When two heroes are as far, the rearmost is taken, which is a guess.
         PvP only. A plan of yours can put it there on purpose, so nothing is changed here: look at the record. Dunlingr on a Boost tile of the map is left out.
       </p>
       <p className="muted">
@@ -27,7 +27,7 @@ export function DunlingrCheckList() {
       {data.rows.length === 0 ? (
         <p className="muted">Every record has a Damage dealer or a Support farthest from Dunlingr.</p>
       ) : (
-        <table className="board" aria-label="Dunlingr check">
+        <table className="data-table" aria-label="Dunlingr check">
           <thead>
             <tr>
               <th>Battle</th>
@@ -36,7 +36,7 @@ export function DunlingrCheckList() {
               <th>Map</th>
               <th>Dunlingr&rsquo;s tile</th>
               <th>Farthest hero</th>
-              <th>Role</th>
+              <th>PvP role</th>
             </tr>
           </thead>
           <tbody>

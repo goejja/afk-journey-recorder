@@ -78,7 +78,7 @@ export function FormationIdField({ label, value, onChange, teams }: Props) {
                 key={entry.code}
                 type="button"
                 className="formation-suggestion"
-                title={[seen(entry) || 'no map yet', artifactsOf(entry), match === 'rotated' ? 'the board turned upside down' : ''].filter(Boolean).join(' · ')}
+                title={[seen(entry) || 'no map yet', artifactsOf(entry), match === 'rotated' ? 'the map turned upside down' : ''].filter(Boolean).join(' · ')}
                 onClick={() => onChange(entry.code)}
               >
                 {entry.code}

@@ -6,11 +6,11 @@ import { DEFAULT_UNIT_RULES } from '../../../src/domain/units.js';
 import { HeroAdminPage } from '../../../web/admin/HeroAdminPage.js';
 
 const items = [
-  { name: 'Alna', tier: 'S', class: 'Mage', faction: 'Wilder', damageType: 'Magic', source: 'import', pair: null, summon: null },
-  { name: 'Zanie', tier: 'S', class: 'Marksman', faction: 'Mauler', damageType: 'Physical', source: 'manual', pair: null, summon: { part: 'Laser Turret', count: 2 } },
+  { name: 'Alna', tier: 'S', class: 'Mage', faction: 'Wilder', damageType: 'Magic', source: 'import', handMade: false, pair: null, summon: null },
+  { name: 'Zanie', tier: 'S', class: 'Marksman', faction: 'Mauler', damageType: 'Physical', source: 'manual', handMade: true, pair: null, summon: { part: 'Laser Turret', count: 2 } },
   { name: 'Elijah & Lailah', tier: 'S', class: 'Tank', faction: 'Celestial', damageType: 'Physical', source: 'import', pair: { part1: 'Elijah', part2: 'Lailah' }, summon: null },
 ];
-const free = { roster: 0, records: 0, assists: 0, scenarios: 0, deployments: 0, stageEnemies: 0, pictures: 0, onBoard: 0 };
+const free = { roster: 0, records: 0, assists: 0, scenarios: 0, deployments: 0, stageEnemies: 0, pictures: 0, placements: 0 };
 let usage = free;
 let tierChecks: unknown[] = [];
 let requests: { method: string; url: string; body?: any }[];
@@ -35,16 +35,31 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('HeroAdminPage', () => {
-  it('lists heroes with their units, filters and searches, and badges the player\'s own', async () => {
+  it('lists heroes with their units, filters and searches', async () => {
     const user = userEvent.setup();
     render(<HeroAdminPage />);
     const list = within(await screen.findByRole('list', { name: 'Heroes' }));
-    expect(await list.findByRole('button', { name: /Zanie.*own.*2 × Laser Turret/ })).toBeTruthy();
-    expect(list.getByRole('button', { name: /Elijah & Lailah.*Elijah & Lailah/ })).toBeTruthy();
+    expect(await list.findByRole('button', { name: /Zanie/ })).toBeTruthy();
+    // a row is one line; the units it brings are in its hover text
+    const rowTitles = list.getAllByTitle(/./).filter((e) => e.className === 'catalog-row').map((e) => e.title);
+    expect(rowTitles).toContain('2 × Laser Turret');
+    expect(rowTitles).toContain('Elijah & Lailah');
 
     await user.type(screen.getByLabelText('Search heroes'), 'zan');
     expect(list.queryByRole('button', { name: /Alna/ })).toBeNull();
     expect(list.getByRole('button', { name: /Zanie/ })).toBeTruthy();
+  });
+
+  it('has no Origin filter or own badge, and says on an open hero whether the next import takes it over', async () => {
+    const user = userEvent.setup();
+    render(<HeroAdminPage />);
+    await screen.findByRole('list', { name: 'Heroes' });
+    expect(screen.queryByText('Origin')).toBeNull();
+    expect(screen.queryByText('own')).toBeNull();
+    await user.click(await screen.findByRole('button', { name: /Zanie/ }));
+    expect(screen.getByText(/Not on Yaphalla yet: the next import takes over its tier, class, faction and damage type/)).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /Alna/ }));
+    expect(screen.getByText(/A change you save is kept: an import then leaves it alone/)).toBeTruthy();
   });
 
   it('filters to the heroes whose own record departs from their tier, and says so beside the hint', async () => {
@@ -89,7 +104,7 @@ describe('HeroAdminPage', () => {
     expect(mark.value).toBe('');
     await user.selectOptions(mark, 'Always stands at the back');
     await waitFor(() => expect(requests.find((r) => r.url === '/api/admin/heroes/Alna/back-mark')?.body).toEqual({ mark: 'back' }));
-    await user.selectOptions(mark, 'By range and role');
+    await user.selectOptions(mark, 'By range and PvP role');
     await waitFor(() => expect(requests.filter((r) => r.url === '/api/admin/heroes/Alna/back-mark').at(-1)?.body).toEqual({ mark: null }));
   });
 
@@ -112,14 +127,14 @@ describe('HeroAdminPage', () => {
     });
   });
 
-  it('keeps the name of an existing hero and locks its units once a board has it', async () => {
+  it('keeps the name of an existing hero and locks its units once a team has it', async () => {
     const user = userEvent.setup();
-    usage = { ...free, records: 4, onBoard: 4 };
+    usage = { ...free, records: 4, placements: 4 };
     render(<HeroAdminPage />);
     await user.click(await screen.findByRole('button', { name: /Zanie/ }));
     expect((screen.getByLabelText('Name') as HTMLInputElement).disabled).toBe(true);
     await waitFor(() => expect((screen.getByLabelText('Stands') as HTMLSelectElement).disabled).toBe(true));
-    expect(screen.getByText(/placed on a board in 4 records/)).toBeTruthy();
+    expect(screen.getByText(/placed on a map in 4 records/)).toBeTruthy();
     expect(screen.getByText('4 records')).toBeTruthy();
   });
 

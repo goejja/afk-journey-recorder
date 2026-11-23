@@ -34,12 +34,12 @@ export function phantimalRoutes(db: Database.Database): Hono {
     for (const season of seasons) insert.run(name, season);
   }
 
-  /** What puts a phantimal on a board, which fixes how it stands: saved records, Formation IDs and Round Deployments naming it or its part. */
+  /** What puts a phantimal on a team, which fixes how it stands: saved records, Formation IDs and Round Deployments naming it or its part. */
   function usage(name: string) {
     const part = partOf(name);
     const records = (db.prepare('SELECT (SELECT count(*) FROM formation WHERE phantimal_name = ?) + (SELECT count(*) FROM arena_attempt WHERE opp_phantimal = ?)').pluck().get(name, name) as number);
     const deployments = deploymentsNaming(db, 'hero', name) + (part ? deploymentsNaming(db, 'part', part) : 0);
-    return { records, deployments, onBoard: records + deployments };
+    return { records, deployments, placements: records + deployments };
   }
 
   serve(app, phantimalsContract.usage, ({ params }) => (find(params.name) ? usage(params.name) : fail(404, 'Unknown phantimal')));
@@ -73,7 +73,7 @@ export function phantimalRoutes(db: Database.Database): Hono {
     if (name !== current.name && takenNames(db).parts.has(name.toLowerCase())) return fail(409, `"${name}" is already the name of another unit`);
     if (partChanged) {
       const u = usage(current.name);
-      if (u.onBoard > 0) return fail(409, `${current.name} is on a board in ${u.records} records and ${u.deployments} Formation IDs and Round Deployments, so its second part cannot change`);
+      if (u.placements > 0) return fail(409, `${current.name} is placed in ${u.records} records and ${u.deployments} Formation IDs and Round Deployments, so its second part cannot change`);
       const problem = part ? unitNameProblem(takenNames(db, { phantimal: current.name }), part) : null;
       if (problem) return fail(409, problem);
     }

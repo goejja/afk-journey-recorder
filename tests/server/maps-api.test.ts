@@ -30,14 +30,19 @@ describe('maps API', () => {
   it('lists maps with their tags and no restore option when untouched', async () => {
     const maps = await list();
     expect(maps).toHaveLength(1);
-    expect(maps[0]).toMatchObject({ name: 'Arena I', tags: ['Arena'], source: 'import', canRestore: false });
+    expect(maps[0]).toMatchObject({ name: 'Arena I', tags: ['Arena'], source: 'import', canRestore: false, handMade: false });
     expect(maps[0].rowLengths).toEqual([2, 5, 6, 6, 7, 6, 6, 5, 2]);
   });
 
   it('creates a map', async () => {
     const response = await send('POST', '/api/maps', { name: ' Boss field ', tags: ['Stage'], cells: open });
     expect(response.status).toBe(201);
-    expect(await get('Boss field')).toMatchObject({ source: 'manual', tags: ['Stage'], canRestore: false });
+    expect(await get('Boss field')).toMatchObject({ source: 'manual', tags: ['Stage'], canRestore: false, handMade: false }); // a Stage map is never the source's
+  });
+
+  it('calls an Arena map made here hand-made, which the next import takes over when the source lists its name', async () => {
+    await send('POST', '/api/maps', { name: 'Supreme Arena XV', tags: ['Arena'], cells: open });
+    expect(await get('Supreme Arena XV')).toMatchObject({ source: 'manual', handMade: true });
   });
 
   it('rejects invalid and duplicate maps', async () => {

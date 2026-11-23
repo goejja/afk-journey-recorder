@@ -1,4 +1,4 @@
-import type { ArenaMode, BattleDraftSide, BattleImportPicture, Profile } from '../backend.js';
+import type { ArenaMode, FightDraftSide, FightImportPicture, Profile } from '../backend.js';
 import { fightCoverage, pictureKey, type ImportGroup } from './battle-import.js';
 import type { Round, RoundWarning } from '../../src/domain/tournament.js';
 
@@ -47,8 +47,8 @@ const folded = (name: string | null | undefined) => (name ?? '').trim().toLowerC
  * The pictures with the player's edits over what was read: the fight number given, and the profile given to a name, which wins over the
  * picture's own match (ADR 0021). A name left alone, or given a profile that no longer exists, keeps its match.
  */
-export function applyEdits(queue: BattleImportPicture[], edits: Edits, profiles: Profile[]): BattleImportPicture[] {
-  const give = (side: BattleDraftSide): BattleDraftSide => {
+export function applyEdits(queue: FightImportPicture[], edits: Edits, profiles: Profile[]): FightImportPicture[] {
+  const give = (side: FightDraftSide): FightDraftSide => {
     const name = folded(side.name);
     if (!name || !(name in edits.made)) return side;
     const id = edits.made[name]!;
@@ -133,7 +133,7 @@ export function coverageNotice(group: ImportGroup): string | null {
 }
 
 /** The names each side of a group gave, with the Profile each resolves to now (the picture's match, or the one given by the player). */
-export function namesOf(group: ImportGroup, side: 'A' | 'B'): { name: string; given: BattleDraftSide['profile'] }[] {
+export function namesOf(group: ImportGroup, side: 'A' | 'B'): { name: string; given: FightDraftSide['profile'] }[] {
   const sideOf = (p: ImportGroup['pictures'][number]) => (side === 'A' ? p.draft.sideA : p.draft.sideB);
   const found = new Map<string, string>();
   for (const p of group.pictures) {

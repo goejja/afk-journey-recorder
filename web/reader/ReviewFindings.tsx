@@ -134,10 +134,10 @@ export function ReviewFindingsView({ findings: found, dismissed, placeholder, on
       {findings.kept.length > 0 && (
         <>
           <p className="muted">Pictures kept for a purpose: only you can say whether they are still wanted.</p>
-          <table className="board" aria-label="Kept pictures">
+          <table className="data-table" aria-label="Kept pictures">
             <thead>
               <tr>
-                <th>Category</th>
+                <th>Kind</th>
                 <th>Files</th>
                 <th>Size</th>
                 <th>Oldest</th>

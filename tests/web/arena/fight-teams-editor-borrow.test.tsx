@@ -4,7 +4,7 @@ import { userEvent } from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GameMap, Hero, Rules } from '../../../web/backend.js';
-import { BattleEditor } from '../../../web/arena/BattleEditor.js';
+import { FightTeamsEditor } from '../../../web/arena/FightTeamsEditor.js';
 import { emptyFormation, FormationEditor, type FormationState } from '../../../web/FormationEditor.js';
 import { emptyOpponent, type OpponentState } from '../../../web/arena/OpponentEditor.js';
 
@@ -21,7 +21,7 @@ function Harness({ release, outside }: { release: (hero: string) => void; outsid
   outside.current = setFormation;
   return (
     <>
-      <BattleEditor
+      <FightTeamsEditor
         map={map}
         heroes={[hero('Evie'), hero('Fay')]}
         artifacts={[]}

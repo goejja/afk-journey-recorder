@@ -71,8 +71,8 @@ describe('a Super League battle imported into a Round', () => {
           else stored.push({ profileId: id, name: 'Me', playerId: '1111', teams: body.teams });
           return Response.json({ profileId: id, teams: body.teams });
         }
-        if (url === '/api/pvp/battle-groups' && method === 'POST') return Response.json({ id: 5, fights: [{ id: 51 }] }, { status: 201 });
-        if (url.startsWith('/api/pvp/battles') && method === 'GET') return Response.json([]);
+        if (url === '/api/pvp/battles' && method === 'POST') return Response.json({ id: 5, fights: [{ id: 51 }] }, { status: 201 });
+        if (url.startsWith('/api/pvp/fights') && method === 'GET') return Response.json([]);
         if (url === '/api/roster-import?kind=report') return Response.json({ canRead: true, reason: null, busy: false, queue: [picture] });
         if (url.startsWith('/api/roster-import?ids=') && method === 'DELETE') return new Response(null, { status: 204 });
         if (url === '/api/import-feedback' && method === 'POST') return feedbackAnswer === 'down' ? Response.json({ error: 'Network down' }, { status: 500 }) : Response.json(feedbackAnswer);
@@ -114,7 +114,7 @@ describe('a Super League battle imported into a Round', () => {
       const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
       vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => ((init?.method ?? 'GET') === 'GET' && isIt(url) ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
     };
-    const savedBattles = (url: string) => url.startsWith('/api/pvp/battles') && url.includes('limit=1000') && !url.includes('tournament');
+    const savedBattles = (url: string) => url.startsWith('/api/pvp/fights') && url.includes('limit=1000') && !url.includes('tournament');
     const toWizard = async () => {
       const user = userEvent.setup();
       render(<ArenaPage />);
@@ -197,11 +197,11 @@ describe('a Super League battle imported into a Round', () => {
     expect(within(screen.getByRole('list', { name: 'Placed on Side A' })).queryByText('Wedge of Matter')).toBeNull();
     expect(screen.queryByText(/still has to be placed/)).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: /Save battle/ }));
+    await user.click(screen.getByRole('button', { name: /Save record/ }));
     // one picture of five: the Battle is saved only after the player says so (ADR 0021)
     await user.click(await screen.findByRole('button', { name: 'Save 1' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')).toBe(true));
-    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')!;
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
+    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!;
     expect(saved.body.fights[0].formation.phantimal).toBeNull();
   });
 
@@ -217,11 +217,11 @@ describe('a Super League battle imported into a Round', () => {
     // what the picture said goes with the team, so the same reading is not flagged again
     expect(confirmed.body.teams[0].seenAs[0].heroes.map((h: any) => h.hero)).toEqual(['Evie', 'Fay']);
 
-    await user.click(screen.getByRole('button', { name: /Save battle/ }));
+    await user.click(screen.getByRole('button', { name: /Save record/ }));
     // one picture of five: the Battle is saved only after the player says so (ADR 0021)
     await user.click(await screen.findByRole('button', { name: 'Save 1' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')).toBe(true));
-    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')!;
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
+    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!;
     expect(saved.body).toMatchObject({ mode: 'Super League', tournamentId: 2, round: 'Group stage' });
     // the pictures of the saved battle leave the queue, and the import comes back instead of the overview
     await waitFor(() => expect(requests.some((r) => r.method === 'DELETE' && r.url.startsWith('/api/roster-import'))).toBe(true));
@@ -232,7 +232,7 @@ describe('a Super League battle imported into a Round', () => {
     const saveFromTheForm = async () => {
       const user = await openForm();
       await screen.findByRole('region', { name: 'Round Deployment' });
-      await user.click(screen.getByRole('button', { name: /Save battle/ }));
+      await user.click(screen.getByRole('button', { name: /Save record/ }));
       await user.click(await screen.findByRole('button', { name: 'Save 1' }));
       // the import comes back once the Battle is saved: the save did not wait for the feedback
       expect(await screen.findByRole('region', { name: 'Import battles from pictures' })).toBeTruthy();
@@ -349,12 +349,12 @@ describe('the batch table of a Super League Round', () => {
           deployments = [...deployments.filter((e) => e.profileId !== id), { profileId: id, name: id === 2 ? 'Luna' : 'Rover', playerId: id === 2 ? '2222' : '3333', teams: body.teams }];
           return Response.json({ profileId: id, teams: body.teams });
         }
-        if (url === '/api/pvp/battle-groups' && method === 'POST') return Response.json({ id: 5, fights: [51, 52, 53, 54, 55].map((id) => ({ id })) }, { status: 201 });
+        if (url === '/api/pvp/battles' && method === 'POST') return Response.json({ id: 5, fights: [51, 52, 53, 54, 55].map((id) => ({ id })) }, { status: 201 });
         if (url === '/api/tournaments/2/rounds/Group%20stage/deployments/2' && method === 'DELETE') {
           deployments = deployments.filter((entry) => entry.profileId !== 2);
           return new Response(null, { status: 204 });
         }
-        if (url.startsWith('/api/pvp/battles') && method === 'GET') return Response.json(savedFights);
+        if (url.startsWith('/api/pvp/fights') && method === 'GET') return Response.json(savedFights);
         if (url === '/api/roster-import?kind=report') return Response.json({ canRead: true, reason: null, busy: false, queue: (both ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : [1, 2, 3, 4, 5]).map(picture) });
         if (url.startsWith('/api/roster-import?ids=') && method === 'DELETE') return new Response(null, { status: 204 });
         if (url === '/api/import-feedback' && method === 'POST') return feedbackAnswer === 'down' ? Response.json({ error: 'Network down' }, { status: 500 }) : Response.json(feedbackAnswer);
@@ -382,9 +382,9 @@ describe('the batch table of a Super League Round', () => {
     unreadRank = true;
     const user = await openImport();
     await user.click(await screen.findByRole('button', { name: 'Open battle 1 in the form' }));
-    await user.click(await screen.findByRole('button', { name: /Save battle/ }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')).toBe(true));
-    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')!;
+    await user.click(await screen.findByRole('button', { name: /Save record/ }));
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
+    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!;
     expect(saved.body.fights[0].formation.heroes.find((h: any) => h.hero === 'A1a')).toMatchObject({ rank: 'Mythic+', equipmentLevel: 10 });
   });
 
@@ -394,14 +394,14 @@ describe('the batch table of a Super League Round', () => {
     await waitFor(() => expect(within(table).getByText(/1 of 1 battle ready/)).toBeTruthy());
     expect(within(table).getByText('Ready')).toBeTruthy();
     await user.click(within(table).getByRole('button', { name: 'Save 1 ready battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')).toBe(true));
-    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')!;
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
+    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!;
     expect(saved.body).toMatchObject({ mode: 'Super League', tournamentId: 2, round: 'Group stage' });
     expect(saved.body.fights).toHaveLength(5);
     expect(saved.body.fights[0].formation.heroes.map((h: any) => [h.hero, h.tile])).toEqual([['A1a', 38], ['A1b', 39]]);
     expect(saved.body.fights[0].opponent.heroes.map((h: any) => [h.hero, h.tile])).toEqual([['B1a', 0], ['B1b', 1]]);
     await waitFor(() => expect(requests.some((r) => r.method === 'DELETE' && r.url === '/api/roster-import?ids=1,2,3,4,5')).toBe(true));
-    expect(await screen.findByText(/Saved 1 battle in Season 8, Tournament 2, Group stage/)).toBeTruthy();
+    expect(await screen.findByText(/Saved 1 record in Season 8, Tournament 2, Group stage/)).toBeTruthy();
   });
 
   it('shows one toast for the batch, with the readings parked and the list that is full', async () => {
@@ -410,7 +410,7 @@ describe('the batch table of a Super League Round', () => {
     const table = await screen.findByRole('region', { name: 'Battles of the Round' });
     await waitFor(() => expect(within(table).getByText(/1 of 1 battle ready/)).toBeTruthy());
     await user.click(within(table).getByRole('button', { name: 'Save 1 ready battle' }));
-    expect(await screen.findByText(/Saved 1 battle in Season 8, Tournament 2, Group stage/)).toBeTruthy();
+    expect(await screen.findByText(/Saved 1 record in Season 8, Tournament 2, Group stage/)).toBeTruthy();
     await waitFor(() => expect(toasts()).toContain('3 readings to confirm in Admin > Reader. The To confirm list of differences is full: confirm or dismiss some in Admin > Reader'));
     expect(requests.filter((r) => r.method === 'POST' && r.url === '/api/import-feedback')).toHaveLength(1);
   });
@@ -421,10 +421,10 @@ describe('the batch table of a Super League Round', () => {
     const table = await screen.findByRole('region', { name: 'Battles of the Round' });
     await waitFor(() => expect(within(table).getByText(/1 of 1 battle ready/)).toBeTruthy());
     await user.click(within(table).getByRole('button', { name: 'Save 1 ready battle' }));
-    expect(await screen.findByText(/Saved 1 battle in Season 8, Tournament 2, Group stage/)).toBeTruthy();
+    expect(await screen.findByText(/Saved 1 record in Season 8, Tournament 2, Group stage/)).toBeTruthy();
     await waitFor(() => expect(requests.some((r) => r.url === '/api/import-feedback')).toBe(true));
     await new Promise((r) => setTimeout(r, 20));
-    expect(toasts()).toBe('Saved 1 battle in Season 8, Tournament 2, Group stage.'); // the saved line only, nothing about the readings
+    expect(toasts()).toBe('Saved 1 record in Season 8, Tournament 2, Group stage.'); // the saved line only, nothing about the readings
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -450,8 +450,8 @@ describe('the batch table of a Super League Round', () => {
     await waitFor(() => expect(within(table).getByText(/1 of 1 battle ready/)).toBeTruthy());
     expect(within(table).getByText(/Team 3, Side A \(Luna\): the picture reads differently from the Round Deployment \(Other replaced by A3b\), so the Deployment’s team is used/)).toBeTruthy();
     await user.click(within(table).getByRole('button', { name: 'Save 1 ready battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')).toBe(true));
-    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')!;
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
+    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!;
     expect(saved.body.fights[2].formation.heroes.map((h: any) => h.hero)).toEqual(['A3a', 'Other']);
   });
 
@@ -568,7 +568,7 @@ describe('the batch table of a Super League Round', () => {
     const table = await screen.findByRole('region', { name: 'Battles of the Round' });
     await waitFor(() => expect(within(table).getByText(/1 of 1 battle ready/)).toBeTruthy());
     await user.click(within(table).getByRole('button', { name: 'Save 1 ready battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')).toBe(true));
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
     await waitFor(() => expect(requests.some((r) => r.method === 'PUT' && r.url === '/api/tournaments/2/rounds/Group%20stage/deployments/2')).toBe(true));
     const put = requests.filter((r) => r.method === 'PUT' && r.url.endsWith('/deployments/2')).at(-1)!;
     expect(put.body.teams[0].heroes.map((h: any) => h.tile)).toEqual([38, 39]);
@@ -584,9 +584,9 @@ describe('the batch table of a Super League Round', () => {
     const table = await screen.findByRole('region', { name: 'Battles of the Round' });
     await waitFor(() => expect(within(table).getByText(/1 of 1 battle ready/)).toBeTruthy());
     await user.click(within(table).getByRole('button', { name: 'Save 1 ready battle' }));
-    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')).toBe(true));
-    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battle-groups')!;
-    // Rover stood at 0 and 1 on Side B; on Side A the board is turned over: 44 and 43. Luna stood at 40 and 41 on Side A; on Side B: 4 and 3.
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/pvp/battles')).toBe(true));
+    const saved = requests.find((r) => r.method === 'POST' && r.url === '/api/pvp/battles')!;
+    // Rover stood at 0 and 1 on Side B; on Side A the map is turned over: 44 and 43. Luna stood at 40 and 41 on Side A; on Side B: 4 and 3.
     expect(saved.body.fights[0].formation.heroes.map((h: any) => [h.hero, h.tile])).toEqual([['B1a', 44], ['B1b', 43]]);
     expect(saved.body.fights[0].opponent.heroes.map((h: any) => [h.hero, h.tile])).toEqual([['A1a', 4], ['A1b', 3]]);
   });

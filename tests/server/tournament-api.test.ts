@@ -24,7 +24,7 @@ const fight = (hero: string) => ({
   formation: { heroes: [{ tile: 38, hero }], phantimal: null, assistHero: null, artifact: null },
   opponent: { heroes: [{ tile: 0, hero: 'X' }] },
 });
-const group = (extra: Record<string, unknown> = {}, mode = 'Super League', hero = 'A') => send('POST', '/api/pvp/battle-groups', { mode, fights: [fight(hero)], ...extra });
+const group = (extra: Record<string, unknown> = {}, mode = 'Super League', hero = 'A') => send('POST', '/api/pvp/battles', { mode, fights: [fight(hero)], ...extra });
 const makeTournament = async (number = 2) => (await json(send('POST', '/api/tournaments', { number })))[0].id as number;
 
 describe('Tournaments', () => {
@@ -52,7 +52,7 @@ describe('the Tournament and Round of a Super League battle', () => {
     const created = await json(group({ tournamentId: id, round: 'Swiss stage' }));
     expect(created.fights[0]).toMatchObject({ tournamentId: id, round: 'Swiss stage' });
     await group({ tournamentId: id, round: 'Group stage' }, 'Super League', 'B');
-    const swiss = await json(send('GET', `/api/pvp/battles?tournament=${id}&round=Swiss%20stage`));
+    const swiss = await json(send('GET', `/api/pvp/fights?tournament=${id}&round=Swiss%20stage`));
     expect(swiss).toHaveLength(1);
     expect(await json(send('GET', `/api/tournaments`))).toMatchObject([{ id, battles: 2 }]);
   });
@@ -74,11 +74,11 @@ describe('the Tournament and Round of a Super League battle', () => {
   it('keeps them when an edit does not mention them, and changes them when it does', async () => {
     const id = await makeTournament();
     const created = await json(group({ tournamentId: id, round: 'Group stage' }));
-    const edited = await json(send('PUT', `/api/pvp/battle-groups/${created.id}`, { fights: [fight('B')] }));
+    const edited = await json(send('PUT', `/api/pvp/battles/${created.id}`, { fights: [fight('B')] }));
     expect(edited.fights[0]).toMatchObject({ tournamentId: id, round: 'Group stage' });
-    const moved = await json(send('PUT', `/api/pvp/battle-groups/${created.id}`, { fights: [fight('B')], tournamentId: id, round: 'Top 48' }));
+    const moved = await json(send('PUT', `/api/pvp/battles/${created.id}`, { fights: [fight('B')], tournamentId: id, round: 'Top 48' }));
     expect(moved.fights[0].round).toBe('Top 48');
-    const cleared = await json(send('PUT', `/api/pvp/battle-groups/${created.id}`, { fights: [fight('B')], tournamentId: null, round: null }));
+    const cleared = await json(send('PUT', `/api/pvp/battles/${created.id}`, { fights: [fight('B')], tournamentId: null, round: null }));
     expect(cleared.fights[0]).toMatchObject({ tournamentId: null, round: null });
   });
 });

@@ -10,6 +10,8 @@ export const GameMap = z.object({
   /** The deployment tiles that boost the unit on them (#220), as tile numbers. */
   boostTiles: z.array(z.number()),
   source: z.enum(['import', 'manual']),
+  /** Drawn here while the import's source lacked it: the next import takes it over when the source lists it (#297). */
+  handMade: z.boolean(),
   /** An edited import can go back to its scraped version. */
   canRestore: z.boolean(),
 });

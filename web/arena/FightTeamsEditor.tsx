@@ -85,7 +85,7 @@ export interface SideProfileBarProps {
   placement?: Record<Side, { teams: number[]; canUndo: boolean; onApply: () => void; onUndo: () => void }>;
 }
 
-/** The profile of each side of a battle, kept in the bar above the board so it takes no height from the picker. */
+/** The profile of each side of a battle, kept in the bar above the editor so it takes no height from the picker. */
 export function SideProfileBar({ profiles, sideProfiles, onSideProfile, onNewProfile, onSetPlayerId, placement }: SideProfileBarProps) {
   return (
     <>
@@ -134,7 +134,7 @@ export function SideProfileBar({ profiles, sideProfiles, onSideProfile, onNewPro
 }
 
 /** Both sides on one map, with a Side A / Side B switch beside it choosing whose heroes the icons place. */
-export function BattleEditor({ map, heroes, artifacts, rules, formation, onFormation, opponent, onOpponent, onBoth, unavailable, borrow, sideAHeroes = 'all', editSideAStates = false, heroesOnly = false, phantimals, labels = { a: 'Side A', b: 'Side B' }, onlySide, sideRosters }: Props) {
+export function FightTeamsEditor({ map, heroes, artifacts, rules, formation, onFormation, opponent, onOpponent, onBoth, unavailable, borrow, sideAHeroes = 'all', editSideAStates = false, heroesOnly = false, phantimals, labels = { a: 'Side A', b: 'Side B' }, onlySide, sideRosters }: Props) {
   const [side, setSide] = useState<Side>(onlySide ?? 'A');
   const sidesId = useId();
   const [picked, setPicked] = useState<Picked | null>(null);

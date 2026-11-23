@@ -22,7 +22,7 @@ beforeEach(() => {
       if (url === '/api/artifacts' && method === 'GET') return Response.json(artifacts);
       if (url === '/api/artifacts' && method === 'POST') return Response.json({ ...body, source: 'manual', uses: 0 }, { status: 201 });
       if (url.startsWith('/api/artifacts/') && method === 'PUT') return Response.json({ ...body, source: 'manual', uses: 0 });
-      if (url.startsWith('/api/artifacts/') && method === 'DELETE') return Response.json({ error: '2 records use Bladestorm' }, { status: 409 });
+      if (url.startsWith('/api/artifacts/') && method === 'DELETE') return Response.json({ error: 'Bladestorm is used by 2 records, so it cannot be deleted' }, { status: 409 });
       if (url === '/api/seasons') return Response.json([{ number: 9, current: true, stages: 0, phantimals: 0 }, { number: 8, current: false, stages: 3, phantimals: 0 }]);
       return Response.json({}, { status: 404 });
     }),
@@ -66,6 +66,22 @@ describe('Artifacts page', () => {
     await user.click(await screen.findByRole('button', { name: /^Bladestorm/ }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('2 records use Bladestorm');
+    expect((await screen.findByRole('alert')).textContent).toBe('Bladestorm is used by 2 records, so it cannot be deleted');
+  });
+
+  it('steps through the filtered list with Previous and Next, and with the arrow keys while the list has focus', async () => {
+    const user = userEvent.setup();
+    render(<ArtifactsPage />);
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull(); // nothing is open yet
+    await user.click(await screen.findByRole('button', { name: /^Bladestorm/ }));
+    expect((screen.getByRole('button', { name: 'Previous' }) as HTMLButtonElement).disabled).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: 'Awakening' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
+
+    screen.getByRole('button', { name: /^Awakening/ }).focus();
+    await user.keyboard('{ArrowUp}');
+    expect(screen.getByRole('heading', { name: 'Bladestorm' })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /^Bladestorm/ }));
   });
 });
