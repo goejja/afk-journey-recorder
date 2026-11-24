@@ -4,6 +4,7 @@ import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import { columnsOf } from '../css-columns.js';
+import { clearAnswers } from '../../../web/answers.js';
 import { DreamHuntPage } from '../../../web/dream-hunt/DreamHuntPage.js';
 import { ToastProvider } from '../../../web/ui/Toast.js';
 
@@ -126,10 +127,14 @@ describe('Fights list', () => {
 
 describe('Dream Hunt page', () => {
   it('says when the maps could not be read, since the tables then show no map', async () => {
+    const user = userEvent.setup();
     const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
-    let asked = 0; // the page reads the maps for its own reference first; the table reads them again
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/maps' && ++asked > 1 ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
     render(<DreamHuntPage />);
+    await screen.findByRole('tab', { name: 'Finder' });
+    // the page holds the maps it read; a table that is opened later reads them again only when they are not held (web/answers.ts)
+    clearAnswers();
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/maps' ? Response.json({ error: 'Network down' }, { status: 500 }) : base(url, init))));
+    await user.click(screen.getByRole('tab', { name: 'Finder' }));
     const alerts = await screen.findAllByRole('alert');
     expect(alerts.map((a) => a.textContent)).toContain('The maps could not be read: Network down');
   });

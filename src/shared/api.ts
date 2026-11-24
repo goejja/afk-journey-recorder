@@ -480,6 +480,12 @@ export interface PartnerTag {
   heroes: string[];
 }
 
+/** A list of rows cut to the best ones, with how many there were before the cut. */
+export interface StatRows<T> {
+  rows: T[];
+  total: number;
+}
+
 export interface PairStat {
   heroA: string;
   heroB: string;

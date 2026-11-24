@@ -10,7 +10,7 @@ import { Portrait } from '../../Portrait.js';
 import { RecordShell } from '../../RecordShell.js';
 import { swapParts } from '../../swap.js';
 import { Notice } from '../../ui/Notice.js';
-import { type BattleDraft, type FightDraft, type Reference, hasSetupFor, newDraft, toBattle, totals, withPhases } from './draft.js';
+import { type BattleDraft, type FightDraft, type Reference, hasSetupFor, newDraft, toBattle, totalOf, withPhases } from './draft.js';
 
 interface Props {
   reference: Reference;
@@ -47,8 +47,7 @@ export function BattleForm({ reference, initial, editing, onSaved, onRecorded, o
   });
   const borrow = formationBorrow(draft.fights, current, 'fight', setFights, true);
 
-  const { sum, game } = totals(draft);
-  const mismatch = sum !== null && game !== null && sum !== game;
+  const sum = totalOf(draft);
   const maxLevel = MAX_LEVEL[draft.seasonPhase]!;
 
   const phases = (seasonPhase: number, titanPhase: TitanPhase) => setDraft((d) => withPhases(reference, d, seasonPhase, titanPhase));
@@ -65,7 +64,7 @@ export function BattleForm({ reference, initial, editing, onSaved, onRecorded, o
     }
     if (!another || editing) return onSaved();
     // The teams stay, so the same ones can be tried again with only the damage changed.
-    setDraft((d) => ({ ...d, gameTotal: '', note: '', fights: d.fights.map((f) => ({ ...f, damage: '' })) }));
+    setDraft((d) => ({ ...d, note: '', fights: d.fights.map((f) => ({ ...f, damage: '' })) }));
     setError(null);
     setStatus('Saved the Battle. The teams are still here: enter the new damage and save again.');
     onRecorded();
@@ -121,11 +120,6 @@ export function BattleForm({ reference, initial, editing, onSaved, onRecorded, o
       <span className="badge" title="The two fights added up: what the game ranks">
         Total {sum === null ? '–' : formatDamage(sum)}
       </span>
-      <label className="field">
-        Total the game showed (check)
-        <input placeholder="Optional" value={draft.gameTotal} onChange={(e) => setDraft({ ...draft, gameTotal: e.target.value })} />
-      </label>
-      {mismatch && <Notice kind="warning" as="span">The game’s total differs: the fights add up to {formatDamage(sum)}.</Notice>}
       {!hasSetupFor(reference, draft.seasonPhase) && (
         <span className="muted">
           No Titan Reaver bosses set for Season Phase {draft.seasonPhase}: set them in <a href="#admin">Admin &gt; Weekly default</a>.
@@ -147,7 +141,7 @@ export function BattleForm({ reference, initial, editing, onSaved, onRecorded, o
       // A code stands for both teams of the Battle: the units, tiles and artifacts of each fight placed (ADR 0007).
       formationIds={<FormationIdField label="both teams" value={draft.formationId} onChange={(formationId) => setDraft({ ...draft, formationId })} teams={draft.fights.map((f) => ({ placed: f.formation.placed, phantimal: f.formation.phantimal, artifact: f.formation.artifact }))} />}
       teams={{
-        labels: draft.fights.map((f, i) => `Fight ${i + 1}${f.boss ? ` · ${f.boss}` : ''}${f.formation.placed.length > 0 ? ` (${f.formation.placed.length})` : ''}`),
+        labels: draft.fights.map((f, i) => `Fight ${i + 1}${f.formation.placed.length > 0 ? ` (${f.formation.placed.length})` : ''}`),
         current,
         onSelect: setCurrent,
         hint: 'The two teams of a Battle share no hero or Artifact: those the other fight uses are greyed out, and a click moves one here. The map is always the Open map.',

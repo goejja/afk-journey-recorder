@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { ARENA_MODES, TEAMS_PER_MODE } from '../../src/domain/arena.js';
 import { api, type ArenaFight } from '../backend.js';
 import { RecordToolbar, useGroupedList, type ListItem as GroupedItem } from '../records/GroupedList.js';
@@ -19,6 +19,7 @@ import { sendFeedback, useParkedToast, type FeedbackAnswer } from '../reader/par
 import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { useConfirmActions } from '../hooks/confirm.js';
 import { useDebouncedValue } from '../hooks/debounced.js';
+import { useStableCallback } from '../hooks/stable-callback.js';
 import { MultiSelect } from '../MultiSelect.js';
 import { FormationIdBadge } from '../FormationIdField.js';
 import { TagBadges, TagFilter } from '../Tags.js';
@@ -35,7 +36,10 @@ type ListItem = GroupedItem<ArenaFight>;
 interface FightRowProps {
   fight: ArenaFight;
   reference: Reference;
-  shown: Set<number>;
+  /** Whether the map of this fight is open: a flag, not the set of every open map, so opening one map renders one row. */
+  shown: boolean;
+  /** The map of the fight, found once for the list rather than by a search in each row. */
+  map: Reference['maps'][number] | undefined;
   onToggleMap: (id: number) => void;
   onEdit: (fight: ArenaFight) => void;
   onDelete: (fight: ArenaFight) => void;
@@ -55,7 +59,7 @@ function UnionRecap({ fight }: { fight: ArenaFight }) {
 }
 
 /** One fight of the list: what it was, the buttons, the two teams and, on request, the map. */
-function ArenaFightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDelete, onClone, inBattle = false }: FightRowProps) {
+const ArenaFightRow = memo(function ArenaFightRow({ fight: b, reference, shown, map, onToggleMap, onEdit, onDelete, onClone, inBattle = false }: FightRowProps) {
   return (
     <FightRow
       infoClassName={inBattle ? undefined : 'one-line'}
@@ -80,8 +84,8 @@ function ArenaFightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDele
         </>
       }
       leading={
-        <button aria-expanded={shown.has(b.id)} onClick={() => onToggleMap(b.id)}>
-          {shown.has(b.id) ? 'Hide map' : 'Show map'}
+        <button aria-expanded={shown} onClick={() => onToggleMap(b.id)}>
+          {shown ? 'Hide map' : 'Show map'}
         </button>
       }
       cloneTitle="Start a new record from this one"
@@ -102,10 +106,10 @@ function ArenaFightRow({ fight: b, reference, shown, onToggleMap, onEdit, onDele
         <span className="muted">vs</span>
         <TeamOverview label="Side B" side="b" outcome={b.outcome === 'Win' ? 'lost' : 'won'} heroes={b.opponent.heroes} phantimal={b.opponent.phantimal} artifact={b.opponent.artifact} size={36} />
       </div>
-      {shown.has(b.id) && <FightMapPreview battle={b} map={reference.maps.find((m) => m.name === b.mapName)} />}
+      {shown && <FightMapPreview battle={b} map={map} />}
     </FightRow>
   );
-}
+});
 
 const NO_BATTLES: ArenaFight[] = [];
 
@@ -129,7 +133,7 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
   const sync = useRosterSync();
   const [shownMaps, setShownMaps] = useState<Set<number>>(new Set()); // battles whose map is open
   const reportParked = useParkedToast();
-  const toggleMap = (id: number) => setShownMaps((old) => toggled(old, id));
+  const toggleMap = useStableCallback((id: number) => setShownMaps((old) => toggled(old, id)));
 
   /** The Player typed once the typing has paused; the input shows `player`, the list and its "no match" message follow this. */
   const askedPlayer = useDebouncedValue(player.trim(), PLAYER_SEARCH_WAIT_MS);
@@ -145,10 +149,16 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
   const reload = loaded.reload;
 
   const remove = (battle: ArenaFight) => confirmRun({ title: `Delete this ${battle.mode} record?`, confirmLabel: 'Delete' }, () => api.deleteArenaFight(battle.id), reload);
+  // The handlers of a row keep one identity, so a row renders again only when its own fight, its map or its open state changes.
+  const editFight = useStableCallback((f: ArenaFight) => (setAdding(false), setEditing(f)));
+  const deleteFight = useStableCallback((f: ArenaFight) => void remove(f));
+  const cloneFights = useStableCallback((fights: ArenaFight[], side?: Side) => (setEditing(null), setCloning(cloneOf(reference, fights, false, side)), setAdding(true)));
+  const mapsByName = useMemo(() => new Map(reference.maps.map((m) => [m.name, m])), [reference.maps]);
   const removeBattle = (id: number) => confirmRun({ title: 'Delete this record?', confirmLabel: 'Delete' }, () => api.deleteBattleGroup(id, true), reload);
 
   const list = useGroupedList(battles);
-  const rowProps = { reference, shown: shownMaps, onToggleMap: toggleMap, onEdit: (f: ArenaFight) => (setAdding(false), setEditing(f)), onDelete: (f: ArenaFight) => void remove(f), onClone: (fights: ArenaFight[], side?: Side) => (setEditing(null), setCloning(cloneOf(reference, fights, false, side)), setAdding(true)) };
+  const rowProps = { reference, onToggleMap: toggleMap, onEdit: editFight, onDelete: deleteFight, onClone: cloneFights };
+  const rowOf = (fight: ArenaFight, inBattle = false) => <ArenaFightRow fight={fight} shown={shownMaps.has(fight.id)} map={mapsByName.get(fight.mapName)} inBattle={inBattle} {...rowProps} />;
 
   useEffect(() => {
     if (importing || adding) return;
@@ -186,7 +196,7 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
   const renderItem = (item: ListItem) =>
     item.kind === 'fight' ? (
       <li key={`fight-${item.fight.id}`} className="attempt">
-        <ArenaFightRow fight={item.fight} {...rowProps} />
+        {rowOf(item.fight)}
       </li>
     ) : (
       <GroupCard
@@ -235,7 +245,7 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
           </>
         }
         onDelete={() => void removeBattle(item.id)}
-        renderFight={(fight) => <ArenaFightRow fight={fight} inBattle {...rowProps} />}
+        renderFight={(fight) => rowOf(fight, true)}
       />
     );
 

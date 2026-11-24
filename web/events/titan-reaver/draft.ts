@@ -35,8 +35,6 @@ export interface BattleDraft {
   seasonPhase: number;
   titanPhase: TitanPhase;
   level: string;
-  /** The total the game showed, typed as a check; never saved. */
-  gameTotal: string;
   note: string;
   tags: string[];
   formationId: string;
@@ -67,7 +65,6 @@ export function newDraft(reference: Reference): BattleDraft {
     seasonPhase,
     titanPhase,
     level: String(MAX_LEVEL[seasonPhase]),
-    gameTotal: '',
     note: '',
     tags: [],
     formationId: '',
@@ -80,7 +77,6 @@ export const draftFromBattle = (b: TitanReaverBattle): BattleDraft => ({
   seasonPhase: b.seasonPhase,
   titanPhase: b.titanPhase,
   level: String(b.level),
-  gameTotal: '',
   note: b.note ?? '',
   tags: b.tags,
   formationId: b.formationId ?? '',
@@ -132,10 +128,10 @@ export function withPhases(reference: Reference, draft: BattleDraft, seasonPhase
   };
 }
 
-/** The damage of the fights as far as it reads, and the game total typed beside it when it reads. */
-export function totals(draft: BattleDraft): { sum: number | null; game: number | null } {
+/** The damage of the two fights added up, or null while one of them does not read as a number. */
+export function totalOf(draft: BattleDraft): number | null {
   const damages = draft.fights.map((f) => parseDamage(f.damage));
-  return { sum: damages.every((d) => d !== null) ? battleTotal(damages.map((d) => ({ damage: d! }))) : null, game: draft.gameTotal.trim() === '' ? null : parseDamage(draft.gameTotal) };
+  return damages.every((d) => d !== null) ? battleTotal(damages.map((d) => ({ damage: d! }))) : null;
 }
 
 /** The Battle as the API takes it, or what is missing. */
@@ -149,7 +145,6 @@ export function toBattle(d: BattleDraft): { battle: TitanReaverBattleInput } | {
     if (damage === null) return { error: `Fight ${i + 1}: enter the damage as a number (1234567890, 1,234,567,890) or short (1.2B, 850K)` };
     fights.push({ boss: f.boss, damage, formation: toPayload(f.formation) });
   }
-  if (d.gameTotal.trim() !== '' && parseDamage(d.gameTotal) === null) return { error: 'Enter the total the game showed as a number, or leave it empty' };
   return { battle: { seasonPhase: d.seasonPhase, titanPhase: d.titanPhase, level, note: d.note, tags: d.tags, formationId: d.formationId || null, fights } };
 }
 

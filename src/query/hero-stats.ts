@@ -1,6 +1,25 @@
 import type Database from 'better-sqlite3';
 import { gameRowOf } from '../domain/map-geometry.js';
+import type { PairStat, StatRows, TrioStat } from '../shared/api.js';
+import { HERO_SETS_SHOWN, MAX_HERO_SET_ROWS } from '../domain/stats.js';
 import { type StatFilters, MAX_ROWS, APPEARANCES, whereFor } from './filters.js';
+
+export type HeroSetSort = 'winRate' | 'games';
+export interface HeroSetPaging {
+  /** How many rows to keep after sorting: `HERO_SETS_SHOWN` when absent, at most `MAX_HERO_SET_ROWS`. */
+  limit?: number;
+  /** The order the rows are cut in: by win rate (the default) or by games played; ties go to the other, then to the names. */
+  sort?: HeroSetSort;
+}
+
+/** The rows cut to the best `limit` in the order asked for, with how many there were before the cut. */
+function cutOf<T extends { games: number; winRate: number }>(all: T[], { limit, sort = 'winRate' }: HeroSetPaging): StatRows<T> {
+  const keep = Math.min(Math.max(1, Math.floor(limit ?? HERO_SETS_SHOWN)), MAX_HERO_SET_ROWS);
+  const [first, second] = sort === 'games' ? (['games', 'winRate'] as const) : (['winRate', 'games'] as const);
+  // the rows come in the order of the heroes, so the sort (which is stable) breaks a full tie the same way every time
+  const rows = [...all].sort((a, b) => b[first] - a[first] || b[second] - a[second]).slice(0, keep);
+  return { rows, total: all.length };
+}
 
 /**
  * Win rate of each hero across the records it appeared in, with its pick rate: the share of all sides (in the same filter)
@@ -21,18 +40,19 @@ export function heroStats(db: Database.Database, filters: StatFilters & { minGam
     .all(Math.max(sides, 1), ...params, filters.minGames ?? 1);
 }
 
-/** Win rate of each pair of heroes fielded together on the same side. */
-export function pairStats(db: Database.Database, filters: StatFilters & { minGames?: number } = {}) {
+/** Win rate of each pair of heroes fielded together on the same side: the best of them, and how many pairs there are. */
+export function pairReport(db: Database.Database, filters: StatFilters & { minGames?: number } = {}, paging: HeroSetPaging = {}): StatRows<PairStat> {
   const params: unknown[] = [];
   const where = whereFor(filters, params);
-  return db
+  const all = db
     .prepare(
       `SELECT x.hero AS heroA, y.hero AS heroB, count(*) AS games, sum(x.won) AS wins, round(1.0 * sum(x.won) / count(*), 3) AS winRate
        FROM (${APPEARANCES}) x
        JOIN (${APPEARANCES}) y ON y.attempt_id = x.attempt_id AND y.side = x.side AND y.hero > x.hero
-       ${where} GROUP BY x.hero, y.hero HAVING count(*) >= ? ORDER BY winRate DESC, games DESC LIMIT ${MAX_ROWS}`,
+       ${where} GROUP BY x.hero, y.hero HAVING count(*) >= ? ORDER BY x.hero, y.hero`,
     )
-    .all(...params, filters.minGames ?? 1);
+    .all(...params, filters.minGames ?? 1) as PairStat[];
+  return cutOf(all, paging);
 }
 
 /**
@@ -76,19 +96,20 @@ export function heroDistribution(db: Database.Database, hero: string, filters: S
   return { hero, players: latest.size, unknown, cells };
 }
 
-/** Win rate of each trio of heroes fielded together on the same side. */
-export function trioStats(db: Database.Database, filters: StatFilters & { minGames?: number } = {}) {
+/** Win rate of each trio of heroes fielded together on the same side: the best of them, and how many trios there are. */
+export function trioReport(db: Database.Database, filters: StatFilters & { minGames?: number } = {}, paging: HeroSetPaging = {}): StatRows<TrioStat> {
   const params: unknown[] = [];
   const where = whereFor(filters, params);
-  return db
+  const all = db
     .prepare(
       `SELECT x.hero AS heroA, y.hero AS heroB, z.hero AS heroC, count(*) AS games, sum(x.won) AS wins, round(1.0 * sum(x.won) / count(*), 3) AS winRate
        FROM (${APPEARANCES}) x
        JOIN (${APPEARANCES}) y ON y.attempt_id = x.attempt_id AND y.side = x.side AND y.hero > x.hero
        JOIN (${APPEARANCES}) z ON z.attempt_id = x.attempt_id AND z.side = x.side AND z.hero > y.hero
-       ${where} GROUP BY x.hero, y.hero, z.hero HAVING count(*) >= ? ORDER BY winRate DESC, games DESC LIMIT ${MAX_ROWS}`,
+       ${where} GROUP BY x.hero, y.hero, z.hero HAVING count(*) >= ? ORDER BY x.hero, y.hero, z.hero`,
     )
-    .all(...params, filters.minGames ?? 1);
+    .all(...params, filters.minGames ?? 1) as TrioStat[];
+  return cutOf(all, paging);
 }
 
 /** Win rate of each artifact, from the side that used it. A side whose artifact is not known is left out. */

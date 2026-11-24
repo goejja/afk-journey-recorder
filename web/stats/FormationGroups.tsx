@@ -284,10 +284,11 @@ function GamesBar({ group, most }: { group: { games: number; winRate: number }; 
 
 /** The pairs of the group's own heroes, from the pairs statistics under the same mode and season filters. */
 function GroupPairs({ heroes, filters }: { heroes: Set<string>; filters: Filters }) {
-  const pairs = useLoad(() => api.statsPairs({ mode: filters.mode, playedIn: filters.playedIn }), [filters.mode, filters.playedIn]);
+  // The most played pairs: the list is cut to its best rows, and the pairs of a group are the ones played most.
+  const pairs = useLoad(() => api.statsPairs({ mode: filters.mode, playedIn: filters.playedIn, sort: 'games' }), [filters.mode, filters.playedIn]);
   if (pairs.error) return <Notice kind="error">{pairs.error}</Notice>;
   if (!pairs.data) return <Loading />;
-  const own = pairs.data.filter((p) => heroes.has(p.heroA) && heroes.has(p.heroB)).sort((a, b) => b.games - a.games).slice(0, PAIRS_SHOWN);
+  const own = pairs.data.rows.filter((p) => heroes.has(p.heroA) && heroes.has(p.heroB)).sort((a, b) => b.games - a.games).slice(0, PAIRS_SHOWN);
   return (
     <>
       <h4>Pairs in this group</h4>

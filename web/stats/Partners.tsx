@@ -4,7 +4,7 @@ import { isSmallSample, SMALL_SAMPLE } from '../../src/domain/stats.js';
 import { api, type PartnerStat, type PositionalPartnerStat } from '../backend.js';
 import { percent, record } from '../format.js';
 import { useLoad } from '../hooks/load.js';
-import { heroCell, rateColumns, StatsTable } from './StatsTable.js';
+import { heroCell, rateColumns, StatsTable, type Column } from './StatsTable.js';
 import { Notice } from '../ui/Notice.js';
 
 interface Filters {
@@ -17,6 +17,22 @@ interface Filters {
 
 const ANY = '';
 
+// Column lists and row keys of the two tables: made once per hero, so a table skips its render when nothing it shows has changed.
+const shareHeader = (hero: string) => `Share of ${hero}'s games`;
+const positionalColumns = (hero: string): Column<PositionalPartnerStat>[] => [
+  { key: 'hero', header: 'Stood there', value: (r) => r.hero, render: (r) => heroCell(r.hero) },
+  ...rateColumns<PositionalPartnerStat>(),
+  { key: 'share', header: shareHeader(hero), value: (r) => r.share, render: (r) => percent(r.share) },
+  { key: 'players', header: 'Players', value: (r) => r.players },
+  { key: 'layouts', header: 'Layouts', value: (r) => r.layouts, render: (r) => <>{r.layouts}{r.oneLayout && <span className="badge few" title="Half or more of these games are one exact formation">mostly one layout</span>}</> },
+];
+const partnerColumns = (hero: string): Column<PartnerStat>[] => [
+  { key: 'hero', header: 'Fielded with', value: (r) => r.hero, render: (r) => heroCell(r.hero) },
+  ...rateColumns<PartnerStat>(),
+  { key: 'share', header: shareHeader(hero), value: (r) => r.share, render: (r) => percent(r.share) },
+];
+const partnerKey = (r: { hero: string }) => r.hero;
+
 /** Who stood in one relation to the hero at the start of the fight; the relation is chosen in a select. */
 function Positions({ hero, filters }: { hero: string; filters: Filters }) {
   const [relation, setRelation] = useState<PartnerRelation>('behind');
@@ -25,6 +41,7 @@ function Positions({ hero, filters }: { hero: string; filters: Filters }) {
     [hero, relation, filters],
   );
   const data = report.data;
+  const columns = useMemo(() => positionalColumns(hero), [hero]);
   return (
     <>
       <h3>Where they stood</h3>
@@ -44,14 +61,8 @@ function Positions({ hero, filters }: { hero: string; filters: Filters }) {
           <StatsTable<PositionalPartnerStat>
             label={`Heroes that stood ${PARTNER_RELATION_TEXT[relation].toLowerCase()} of ${hero}`}
             rows={data.partners}
-            rowKey={(r) => r.hero}
-            columns={[
-              { key: 'hero', header: 'Stood there', value: (r) => r.hero, render: (r) => heroCell(r.hero) },
-              ...rateColumns<PositionalPartnerStat>(),
-              { key: 'share', header: `Share of ${hero}'s games`, value: (r) => r.share, render: (r) => percent(r.share) },
-              { key: 'players', header: 'Players', value: (r) => r.players },
-              { key: 'layouts', header: 'Layouts', value: (r) => r.layouts, render: (r) => <>{r.layouts}{r.oneLayout && <span className="badge few" title="Half or more of these games are one exact formation">mostly one layout</span>}</> },
-            ]}
+            rowKey={partnerKey}
+            columns={columns}
           />
         </>
       )}
@@ -74,6 +85,7 @@ export function Partners({ filters }: { filters: Filters }) {
     [hero, filters],
   );
   const data = report.data;
+  const columns = useMemo(() => partnerColumns(data?.hero ?? ''), [data?.hero]);
 
   return (
     <>
@@ -109,12 +121,8 @@ export function Partners({ filters }: { filters: Filters }) {
           <StatsTable<PartnerStat>
             label={`Heroes fielded with ${data.hero}`}
             rows={data.partners}
-            rowKey={(r) => r.hero}
-            columns={[
-              { key: 'hero', header: 'Fielded with', value: (r) => r.hero, render: (r) => heroCell(r.hero) },
-              ...rateColumns<PartnerStat>(),
-              { key: 'share', header: `Share of ${data.hero}'s games`, value: (r) => r.share, render: (r) => percent(r.share) },
-            ]}
+            rowKey={partnerKey}
+            columns={columns}
           />
           <Positions hero={data.hero} filters={filters} />
         </>

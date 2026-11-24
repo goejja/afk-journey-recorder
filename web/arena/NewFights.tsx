@@ -59,7 +59,7 @@ export function NewFights({ reference, patchReference, initial, editing, savedRo
   });
   const sync = useRosterSync();
   // The saved fights of the mode, whose placements the "Place … as in saved fights" button offers; a saved battle being edited does not get them.
-  const loadedFights = useLoad(() => api.arenaFights({ mode: [mode], limit: '1000' }), [mode, editing], editing == null);
+  const loadedFights = useLoad(() => api.savedFights(mode), [mode, editing], editing == null);
   const savedFights: ArenaFight[] = Array.isArray(loadedFights.data) ? loadedFights.data : [];
   // What a click replaced, per side and team, to undo it while the side is as the click left it.
   const [replaced, setReplaced] = useState<Record<Side, { team: number; before: Draft['formation'] | Draft['opponent']; after: Draft['formation'] | Draft['opponent'] }[]>>({ A: [], B: [] });

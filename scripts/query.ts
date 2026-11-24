@@ -6,7 +6,9 @@ import { problemWith } from '../src/domain/schema.js';
 import { formationProfile, formationReport } from '../src/query/formation-profile.js';
 import { factionMismatches } from '../src/query/faction-mismatches.js';
 import { reviewRun } from '../src/query/review-run.js';
-import { dreamHuntBest, formationIds, parseDeployment, profiles, heroInfo, heroStats, pairStats, partnerStats, positionalPartners, artifactStats, formationGroups, formationStats, groupCounterReport, counterSummary, counterRule, heroDistribution, heroRowStats, mapStats, mapFormations, playerIds, modesFor, playerStats, roster, trioStats, runSelect, scenario, scenarios, stageHistory, summary } from '../src/query/index.js';
+import { MAX_HERO_SET_ROWS } from '../src/domain/stats.js';
+import type { HeroSetPaging } from '../src/query/index.js';
+import { dreamHuntBest, formationIds, parseDeployment, profiles, heroInfo, heroStats, pairReport, partnerStats, positionalPartners, artifactStats, formationGroups, formationStats, groupCounterReport, counterSummary, counterRule, heroDistribution, heroRowStats, mapStats, mapFormations, playerIds, modesFor, playerStats, roster, trioReport, runSelect, scenario, scenarios, stageHistory, summary } from '../src/query/index.js';
 import { cliCommands, cliUsage } from '../src/advisor/index.js';
 
 const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run query -- <command> [options]
@@ -15,7 +17,7 @@ const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run quer
   roster        [--profile NAME]              the heroes you own, with rank and equipment (the default profile unless told)
   profiles                                    the profiles: name, player ID, default, number of heroes
   hero-stats    [--mode M[,M]] [--tag T ...] [--min N]   win rate per hero (several modes comma-separated, --tag repeated)
-  pair-stats    [--mode M[,M]] [--tag T ...] [--min N]   win rate per pair of heroes on one side
+  pair-stats    [--mode M[,M]] [--tag T ...] [--min N] [--sort winRate|games] [--limit N]   win rate per pair of heroes on one side: the best 500 by win rate unless --limit (at most 5000) or --sort says otherwise. When rows are left out it says so on stderr ("showing N of TOTAL"): a cut list is a sample, and by win rate it favours pairs of one game
   partner-stats --name HERO [--relation R] [--mode M[,M]] [--tag T ...] [--min N]   the heroes fielded on the same side as HERO (games, win rate, share of its games); team membership only, not the target of a skill. With --relation behind|front|adjacent|within2|sameRow|mirror|rearmost|rearmost2|daimon: who stood there at the start, with the Players and exact layouts behind each (a statistic of positions, not the target of a skill)
   artifact-stats [--mode M[,M]] [--tag T ...] [--min N]   win rate per artifact, from the side that used it
   map-stats     [--mode M[,M]] [--tag T ...] [--min N]   win rate of Side A per map (both sides share the map, so Side A only)
@@ -28,7 +30,7 @@ const USAGE = `Read-only queries on the AFK Journey history. Usage: npm run quer
   formation-report [--mode M[,M]] [--tag T ...] [--player P ...] [--hero H ...]   the Formation groups under Archetype rows: core and flex heroes with shares, games, win rate against the average of all sides, players, labels
   group-counters [--mode M[,M]] [--tag T ...] [--player P ...] [--played-in N[,N]] [--min N] [--min-win-rate R] [--min-games N]   which Formation group beats which, from the PvP battles selected (both sides count, a --player keeps the battles that Player was in): per group the groups it beats and loses to with the head-to-head record, and the groups met in too few games. A counter has at least the minimum games (Admin default 5) and win rate (Admin default 65%, given as 0.65 or 65); the two flags override the saved ones
   formation-profile --core "A,B,C" [--mode M[,M]] [--tag T ...] [--player P ...]   one group: artifacts, variations, hero impact, enemy groups it is strong or weak against, results by upgrade gap
-  trio-stats    [--mode M[,M]] [--tag T ...] [--min N]   win rate per trio of heroes on one side
+  trio-stats    [--mode M[,M]] [--tag T ...] [--min N] [--sort winRate|games] [--limit N]   win rate per trio of heroes on one side: cut like pair-stats
   hero-distribution --name HERO [--mode M[,M]] [--tag T ...]   how many Players fielded a hero at each rank and equipment level (latest record of each Player)
   player-stats  [--mode M[,M]] [--min N]   win rate per Player (Player ID on a side of a PvP record), with their most used formations
   stage         --season N --kind K --number N [--phase P]    attempts on one stage
@@ -54,7 +56,7 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     db: { type: 'string' }, mode: { type: 'string' }, tag: { type: 'string', multiple: true }, player: { type: 'string', multiple: true }, 'played-in': { type: 'string' }, 'exclude-default': { type: 'boolean' }, 'no-gap': { type: 'boolean' }, 'archetype-similarity': { type: 'string' }, min: { type: 'string' }, 'min-win-rate': { type: 'string' }, 'min-games': { type: 'string' }, relation: { type: 'string' },
-    enemy: { type: 'string' }, core: { type: 'string' }, hero: { type: 'string', multiple: true }, team: { type: 'string' }, 'min-similarity': { type: 'string' }, limit: { type: 'string' },
+    enemy: { type: 'string' }, core: { type: 'string' }, hero: { type: 'string', multiple: true }, team: { type: 'string' }, 'min-similarity': { type: 'string' }, limit: { type: 'string' }, sort: { type: 'string' },
     run: { type: 'string' }, season: { type: 'string' }, kind: { type: 'string' }, number: { type: 'string' }, phase: { type: 'string' },
     map: { type: 'string' }, boss: { type: 'string' }, profile: { type: 'string' }, against: { type: 'string' }, 'min-sample': { type: 'string' }, 'prior-strength': { type: 'string' }, 'stronger-weight': { type: 'string' }, rule: { type: 'string' }, id: { type: 'string' }, scenario: { type: 'string' }, name: { type: 'string' }, units: { type: 'string' }, phantimal: { type: 'string' },
   },
@@ -72,6 +74,16 @@ const need = (name: keyof typeof values) => {
   return value as string;
 };
 const num = (text: string | undefined) => (text === undefined ? undefined : Number(text));
+/** --limit and --sort of the lists of hero groups. */
+const heroSetPaging = (): HeroSetPaging => {
+  if (values.sort !== undefined && values.sort !== 'winRate' && values.sort !== 'games') throw new Error('--sort is winRate or games');
+  return { limit: num(values.limit), sort: values.sort };
+};
+/** The rows of a cut list; when some were left out it says how many on stderr, so the answer is read as a sample. */
+const saidIfCut = <T,>(page: { rows: T[]; total: number }): T[] => {
+  if (page.total > page.rows.length) console.error(`Showing ${page.rows.length} of ${page.total} rows, cut by ${values.sort ?? 'winRate'}: a sample, not the whole list. Pass --limit (at most ${MAX_HERO_SET_ROWS}), --sort or a higher --min to see others.`);
+  return page.rows;
+};
 
 const dbPath = values.db ?? process.env['AFK_DB'] ?? 'data/afk.db';
 // Never migrates: a database that is not at the current version is opened by the app (or `npm run db:init`) first.
@@ -87,7 +99,7 @@ try {
       case 'roster': return roster(db, values.profile);
       case 'profiles': return profiles(db);
       case 'hero-stats': return heroStats(db, { ...statFilters, minGames: num(values.min) });
-      case 'pair-stats': return pairStats(db, { ...statFilters, minGames: num(values.min) });
+      case 'pair-stats': return saidIfCut(pairReport(db, { ...statFilters, minGames: num(values.min) }, heroSetPaging()));
       case 'partner-stats': {
         if (values.relation === undefined) return partnerStats(db, need('name'), { ...statFilters, minGames: num(values.min) });
         if (!isPartnerRelation(values.relation)) throw new Error(`--relation is one of ${PARTNER_RELATIONS.join(', ')}`);
@@ -110,7 +122,7 @@ try {
         return counterSummary(groupCounterReport(db, { ...statFilters, minGames: num(values.min) }, rule));
       }
       case 'formation-profile': return formationProfile(db, need('core').split(',').map((s) => s.trim()).filter(Boolean), statFilters) ?? { error: 'No formation group has these core heroes' };
-      case 'trio-stats': return trioStats(db, { ...statFilters, minGames: num(values.min) });
+      case 'trio-stats': return saidIfCut(trioReport(db, { ...statFilters, minGames: num(values.min) }, heroSetPaging()));
       case 'hero-distribution': return heroDistribution(db, need('name'), statFilters);
       case 'player-stats': return playerStats(db, { mode: statFilters.mode, playedIn: statFilters.playedIn, excludeDefault: statFilters.excludeDefault, minGames: num(values.min) });
       case 'stage':

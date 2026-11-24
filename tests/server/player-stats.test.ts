@@ -77,7 +77,7 @@ describe('filtering statistics by Player', () => {
   });
 
   it('works for groups, artifacts, maps, rules, rows and the distribution, and the pick rate counts the Player’s sides only', async () => {
-    expect(await json(send('GET', '/api/stats/pairs?player=111'))).toEqual([{ heroA: 'A', heroB: 'B', games: 1, wins: 1, winRate: 1 }]);
+    expect(await json(send('GET', '/api/stats/pairs?player=111'))).toEqual({ rows: [{ heroA: 'A', heroB: 'B', games: 1, wins: 1, winRate: 1 }], total: 1 });
     expect(await json(send('GET', '/api/stats/maps?player=222'))).toEqual([]); // Side B only: maps count Side A
     expect(await json(send('GET', '/api/stats/maps?player=111'))).toEqual([{ map: 'Open', games: 2, wins: 1, winRate: 0.5 }]);
     expect((await json(send('GET', '/api/stats/heroes/H/rows?player=111'))).length).toBe(0);

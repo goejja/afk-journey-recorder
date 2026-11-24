@@ -2,6 +2,7 @@
 import { act, cleanup, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JobsSummary } from '../../../web/backend.js';
+import { keptAnswer } from '../../../web/answers.js';
 import { useJobChange, useJobFinished, useJobs } from '../../../web/jobs/JobsProvider.js';
 import { jobsBody, renderWithJobs } from '../support/jobs.js';
 import { jobsStream } from '../support/jobs-stream.js';
@@ -34,6 +35,18 @@ describe('the job watcher', () => {
     expect(jobsStream.opened).toBe(1);
     cleanup();
     expect(jobsStream.opened).toBe(0);
+  });
+
+  it('clears the answers the pages hold when work that was running finishes, and not before', async () => {
+    const ask = vi.fn(async () => ['a map']);
+    await arrive({ scenarios: { 3: { state: 'running' } } });
+    await keptAnswer('/api/maps', ask);
+    await push({ scenarios: { 3: { state: 'running' } } });
+    await keptAnswer('/api/maps', ask);
+    expect(ask).toHaveBeenCalledTimes(1);
+    await push({ scenarios: { 3: { state: 'done' } } });
+    await keptAnswer('/api/maps', ask);
+    expect(ask).toHaveBeenCalledTimes(2);
   });
 
   it('knows work that starts after the app opened, with nothing asked and no page telling it', async () => {

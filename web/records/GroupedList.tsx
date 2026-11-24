@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { groupByWeek, WeekSection, weekSummary } from '../weeks.js';
 import { toggled } from '../format.js';
 
@@ -21,17 +21,26 @@ export function useGroupedList<F extends Groupable>(fights: F[]) {
   const [open, setOpen] = useState<Set<number>>(new Set()); // battles whose fights are open
   const [weekOpen, setWeekOpen] = useState<Map<string, boolean>>(new Map()); // weeks opened or closed by hand; the newest is open until then
 
-  const items: ListItem<F>[] = [];
-  const seen = new Set<number>();
-  for (const fight of fights) {
-    if (!grouped || fight.battleId == null) {
-      items.push({ kind: 'fight', fight });
-    } else if (!seen.has(fight.battleId)) {
-      seen.add(fight.battleId);
-      items.push({ kind: 'battle', id: fight.battleId, fights: fights.filter((f) => f.battleId === fight.battleId).sort((a, b) => (a.battlePosition ?? 0) - (b.battlePosition ?? 0)) });
+  // One pass groups the fights of each battle (O(N)); the lists are rebuilt only when the fights or the grouping change, not on every keystroke of a search box.
+  const items = useMemo(() => {
+    const battles = new Map<number, F[]>();
+    for (const fight of fights) {
+      if (grouped && fight.battleId != null) (battles.get(fight.battleId) ?? battles.set(fight.battleId, []).get(fight.battleId)!).push(fight);
     }
-  }
-  const weeks = groupByWeek(items, (item) => (item.kind === 'fight' ? item.fight.createdAt : item.fights[0]!.createdAt));
+    for (const group of battles.values()) group.sort((a, b) => (a.battlePosition ?? 0) - (b.battlePosition ?? 0));
+    const list: ListItem<F>[] = [];
+    const seen = new Set<number>();
+    for (const fight of fights) {
+      if (!grouped || fight.battleId == null) {
+        list.push({ kind: 'fight', fight });
+      } else if (!seen.has(fight.battleId)) {
+        seen.add(fight.battleId);
+        list.push({ kind: 'battle', id: fight.battleId, fights: battles.get(fight.battleId)! });
+      }
+    }
+    return list;
+  }, [fights, grouped]);
+  const weeks = useMemo(() => groupByWeek(items, (item) => (item.kind === 'fight' ? item.fight.createdAt : item.fights[0]!.createdAt)), [items]);
 
   const toggle = (id: number) => setOpen((old) => toggled(old, id));
   const expandAll = () => (setOpen(new Set(items.flatMap((i) => (i.kind === 'battle' ? [i.id] : [])))), setWeekOpen(new Map(weeks.map((w) => [w.start, true]))));

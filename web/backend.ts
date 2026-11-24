@@ -39,6 +39,8 @@ import type { RoundDeployment } from '../src/domain/round-deployment.js';
 import type { Round } from '../src/domain/tournament.js';
 import type { GameMap, Phantimal, StageKind, StageKey, Stage, BossRule, StageAttemptInput, StageRangeInput, DreamHuntInput, BattleImportState, ImportApplySection, ImportFeedbackSide, ImportScreen, RosterImportState, ReaderExample, CleanupRequest, ScenarioInput, AgentSettings, ArenaMode, BattleFormationIds, BattleRound, ArenaFightInput, HeroAdminBody, PlacementRuleBody, PvpHintBody, TitanReaverBattleInput } from '../src/shared/api.js';
 
+import { clearAnswers, keptAnswer } from './answers.js';
+
 export type * from '../src/shared/api.js';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -52,16 +54,37 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
-/** Calls a route described in `src/shared/contract.ts`; the path parameters and the body are typed by its schemas, and the answer by its response schema. */
-export function call<E extends Endpoint>(route: E, ...[input]: {} extends ClientInput<E> ? [input?: ClientInput<E>] : [input: ClientInput<E>]): Promise<z.output<E['response']>> {
-  const { params, query, body } = (input ?? {}) as { params?: Record<string, string>; query?: Record<string, string | string[]>; body?: unknown };
+/** The path and query string of a call. */
+function urlFor<E extends Endpoint>(route: E, input?: ClientInput<E>): string {
+  const { params, query } = (input ?? {}) as { params?: Record<string, string>; query?: Record<string, string | string[]> };
   const search = query ? queryStringOf(query) : '';
-  const url = pathOf(route.path, params) + (search ? `?${search}` : '');
-  if (route.body === Upload) {
-    const file = body as Blob;
-    return request(url, { method: route.method, headers: { 'content-type': file.type || 'application/octet-stream' }, body: file });
-  }
-  return route.method === 'GET' || (route.method === 'DELETE' && !route.body) ? request(url, { method: route.method }) : sendJson(url, route.method, body);
+  return pathOf(route.path, params) + (search ? `?${search}` : '');
+}
+
+type CallArgs<E extends Endpoint> = {} extends ClientInput<E> ? [input?: ClientInput<E>] : [input: ClientInput<E>];
+
+/**
+ * Calls a route described in `src/shared/contract.ts`; the path parameters and the body are typed by its schemas, and the answer by its response schema.
+ * A request that changes something (not a GET) clears the kept answers, see `web/answers.ts`.
+ */
+export function call<E extends Endpoint>(route: E, ...[input]: CallArgs<E>): Promise<z.output<E['response']>> {
+  const { body } = (input ?? {}) as { body?: unknown };
+  const url = urlFor(route, input);
+  const send = (): Promise<z.output<E['response']>> => {
+    if (route.body === Upload) {
+      const file = body as Blob;
+      return request(url, { method: route.method, headers: { 'content-type': file.type || 'application/octet-stream' }, body: file });
+    }
+    return route.method === 'GET' || (route.method === 'DELETE' && !route.body) ? request(url, { method: route.method }) : sendJson(url, route.method, body);
+  };
+  if (route.method === 'GET') return send();
+  clearAnswers();
+  return send().finally(clearAnswers);
+}
+
+/** Like `call` for a GET of reference data: the answer is kept and frozen, and shared by every page that asks (`web/answers.ts`). */
+function keep<E extends Endpoint>(route: E, ...args: CallArgs<E>): Promise<z.output<E['response']>> {
+  return keptAnswer(urlFor(route, args[0]), () => call(route, ...args));
 }
 
 /** The picture of a tile of the current roster import. */
@@ -86,10 +109,10 @@ export type Query = Record<string, string | string[]>;
 const profileQuery = (profile?: number) => (profile === undefined ? {} : { profile: String(profile) });
 
 export const api = {
-  rules: () => call(rosterContract.rules),
+  rules: () => keep(rosterContract.rules),
   unitRules: () => call(unitRulesContract.get),
-  heroes: (profile?: number) => call(rosterContract.heroes, { query: profileQuery(profile) }),
-  profiles: () => call(profilesContract.list),
+  heroes: (profile?: number) => keep(rosterContract.heroes, { query: profileQuery(profile) }),
+  profiles: () => keep(profilesContract.list),
   createProfile: (profile: { name: string; playerId?: string | null; copyFrom?: number }) => call(profilesContract.create, { body: profile }),
   updateProfile: (id: number, change: { name?: string; playerId?: string | null }) => call(profilesContract.update, { params: { id: String(id) }, body: change }),
   /** Remembers a spelling a picture gave this Profile, so the same spelling resolves to it in later imports (ADR 0021). */
@@ -105,7 +128,7 @@ export const api = {
   removeHero: (name: string, profile?: number) => call(rosterContract.remove, { params: { name }, query: profileQuery(profile) }),
   resetRoster: (profile?: number) => call(rosterContract.reset, { query: profileQuery(profile) }),
 
-  phantimals: () => call(phantimalsContract.list),
+  phantimals: () => keep(phantimalsContract.list),
   phantimalUsage: (name: string) => call(phantimalsContract.usage, { params: { name } }),
   adminHeroes: () => call(heroesContract.list),
   heroUsage: (name: string) => call(heroesContract.usage, { params: { name } }),
@@ -160,11 +183,11 @@ export const api = {
   addFormationId: (code: string, deployment: Deployment) => call(formationIdsContract.create, { body: { code, deployment } }),
   deleteFormationId: (code: string) => call(formationIdsContract.remove, { params: { code } }),
 
-  artifacts: () => call(artifactsContract.list),
+  artifacts: () => keep(artifactsContract.list),
   createArtifact: (a: { name: string; group: string }) => call(artifactsContract.create, { body: a }),
   saveArtifact: (originalName: string, a: { name: string; group: string }) => call(artifactsContract.save, { params: { name: originalName }, body: a }),
   deleteArtifact: (name: string) => call(artifactsContract.remove, { params: { name } }),
-  enemies: () => call(stagesContract.enemies),
+  enemies: () => keep(stagesContract.enemies),
   /** The stages with this identity, without creating one; none while the stage has not been recorded. */
   findStages: (key: StageKey) => call(stagesContract.list, { query: { season: String(key.season), phase: String(key.phase ?? 0), kind: key.kind, number: String(key.number) } }),
   /** Every stage with a record, once per kind, phase and number across seasons, and the current season. */
@@ -184,11 +207,11 @@ export const api = {
   updateAttempt: (id: number, attempt: StageAttemptInput) => call(stagesContract.updateAttempt, { params: { id: String(id) }, body: attempt }),
   deleteAttempt: (id: number) => call(stagesContract.removeAttempt, { params: { id: String(id) } }),
 
-  bosses: () => call(bossesContract.list),
+  bosses: () => keep(bossesContract.list),
   createBoss: (b: BossInput) => call(bossesContract.create, { body: b }),
   saveBoss: (name: string, b: BossInput) => call(bossesContract.save, { params: { name }, body: b }),
   deleteBoss: (name: string) => call(bossesContract.remove, { params: { name } }),
-  bossRules: () => call(dreamHuntContract.rules),
+  bossRules: () => keep(dreamHuntContract.rules),
   createBossRule: (rule: BossRule) => call(dreamHuntContract.createRule, { body: rule }),
   saveBossRule: (originalName: string, rule: BossRule) =>
     call(dreamHuntContract.saveRule, { params: { name: originalName }, body: rule }),
@@ -210,7 +233,7 @@ export const api = {
   deleteCleanup: (selection: CleanupRequest, expectedCount: number) =>
     call(cleanupContract.delete, { body: { ...selection, expectedCount } }),
   optimizeDatabase: () => call(cleanupContract.optimize),
-  scenarios: () => call(scenariosContract.list),
+  scenarios: () => keep(scenariosContract.list),
   createScenario: (scenario: ScenarioInput) => call(scenariosContract.create, { body: scenario }),
   updateScenario: (id: number, scenario: ScenarioInput) => call(scenariosContract.save, { params: { id: String(id) }, body: scenario }),
   deleteScenario: (id: number) => call(scenariosContract.remove, { params: { id: String(id) } }),
@@ -271,7 +294,7 @@ export const api = {
   counterRule: () => call(counterRuleContract.get),
   saveCounterRule: (rule: { winRate: number; minGames: number }) => call(counterRuleContract.save, { body: rule }),
   resetCounterRule: () => call(counterRuleContract.reset),
-  defaults: () => call(defaultsContract.list),
+  defaults: () => keep(defaultsContract.list),
   saveDefaults: (mode: DefaultMode, slots: DefaultSlot[]) => call(defaultsContract.save, { params: { mode }, body: { slots } }),
   clearDefaults: (mode: DefaultMode) => call(defaultsContract.clear, { params: { mode } }),
   titanReaverSetup: () => call(titanReaverContract.get),
@@ -287,13 +310,15 @@ export const api = {
   setCurrentSeason: (number: number) => call(seasonsContract.setCurrent, { body: { number } }),
   setSeasonPhase: (phase: number) => call(seasonsContract.setPhase, { body: { phase } }),
   deleteSeason: (number: number) => call(seasonsContract.remove, { params: { number: String(number) } }),
-  tags: () => call(tagsContract.list),
+  tags: () => keep(tagsContract.list),
   renameTag: (tag: string, name: string) => call(tagsContract.rename, { params: { tag }, body: { name } }),
   deleteTag: (tag: string) => call(tagsContract.remove, { params: { tag } }),
   restoreBackup: (file: File) =>
     call(adminContract.restore, { body: new Blob([file], { type: 'application/octet-stream' }) }),
 
   arenaFights: (query: Query = {}) => call(arenaContract.list, { query }),
+  /** The 1000 newest saved fights of a mode, which a batch import and the form read to place a team; held, so one import reads them once (web/answers.ts). */
+  savedFights: (mode: ArenaMode) => keep(arenaContract.list, { query: { mode: [mode], limit: '1000' } }),
   createArenaBattle: (mode: ArenaMode, fights: ArenaFightInput[], codes: BattleFormationIds, where?: BattleRound) =>
     call(arenaContract.createBattle, { body: { mode, fights, ...codes, ...where } }),
   deleteBattleGroup: (id: number, withFights: boolean) =>
@@ -318,7 +343,7 @@ export const api = {
   updateArenaFight: (id: number, battle: ArenaFightInput) => call(arenaContract.update, { params: { id: String(id) }, body: battle }),
   deleteArenaFight: (id: number) => call(stagesContract.removeAttempt, { params: { id: String(id) } }),
 
-  maps: () => call(mapsContract.list),
+  maps: () => keep(mapsContract.list),
   createMap: (map: Pick<GameMap, 'name' | 'tags' | 'cells'>) => call(mapsContract.create, { body: map }),
   saveMap: (originalName: string, map: Pick<GameMap, 'name' | 'tags' | 'cells'>) => call(mapsContract.save, { params: { name: originalName }, body: map }),
   duplicateMap: (name: string, newName: string) => call(mapsContract.duplicate, { params: { name }, body: { name: newName } }),

@@ -92,7 +92,7 @@ beforeEach(() => {
       if (url.startsWith('/api/stats/players')) return Response.json([]);
       if (url.startsWith('/api/stats/heroes')) return Response.json(['Gunnar', 'Kulu', 'Perseus'].map((h) => ({ hero: h, games: 9, wins: 5, winRate: 0.556, pickRate: 0.1 })));
       if (url === '/api/maps') return Response.json(maps);
-      if (url.startsWith('/api/stats/pairs')) return Response.json(pairs);
+      if (url.startsWith('/api/stats/pairs')) return Response.json({ rows: pairs, total: pairs.length });
       if (url.startsWith('/api/stats/formation-report')) return Response.json(report);
       if (url.startsWith('/api/stats/formation-profile')) return Response.json(profile);
       if (url.startsWith('/api/stats/group-counters')) return Response.json(counters);

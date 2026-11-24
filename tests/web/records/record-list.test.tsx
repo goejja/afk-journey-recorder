@@ -104,3 +104,26 @@ describe('RecordListView', () => {
     expect(onOlder).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('useGroupedList', () => {
+  const inBattle = (id: number, battleId: number, battlePosition: number): Fight => ({ id, battleId, battlePosition, createdAt: '2026-11-16 10:00:00' });
+
+  it('puts the fights of a battle on one card where its newest fight is, in the order of their positions, and leaves a lone fight on its own', () => {
+    const fights = [inBattle(1, 7, 2), fight(2), inBattle(3, 7, 1), inBattle(4, 8, 1)];
+    const { result } = renderHook(() => useGroupedList(fights));
+    expect(result.current.items.map((i) => (i.kind === 'fight' ? `fight ${i.fight.id}` : `battle ${i.id}: ${i.fights.map((f) => f.id).join(',')}`))).toEqual(['battle 7: 3,1', 'fight 2', 'battle 8: 4']);
+    act(() => result.current.setGrouped(false));
+    expect(result.current.items.map((i) => (i.kind === 'fight' ? i.fight.id : -1))).toEqual([1, 2, 3, 4]);
+  });
+
+  it('keeps its cards when it renders again for another reason, and builds them again when the fights change', () => {
+    const fights = [inBattle(1, 7, 1), inBattle(2, 7, 2)];
+    const { result, rerender } = renderHook(({ list }) => useGroupedList(list), { initialProps: { list: fights } });
+    const first = result.current;
+    rerender({ list: fights });
+    expect(result.current.items).toBe(first.items);
+    expect(result.current.weeks).toBe(first.weeks);
+    rerender({ list: [...fights] });
+    expect(result.current.items).not.toBe(first.items);
+  });
+});

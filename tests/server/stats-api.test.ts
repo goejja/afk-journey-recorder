@@ -28,15 +28,49 @@ describe('stats', () => {
     const heroes = await json(send('GET', '/api/stats/heroes?mode=Arena'));
     expect(Object.fromEntries(heroes.map((h: any) => [h.hero, [h.games, h.wins]]))).toEqual({ A: [1, 1], B: [1, 1], H: [1, 0] });
     expect((await json(send('GET', '/api/stats/heroes?min=2'))).length).toBe(0);
-    expect(await json(send('GET', '/api/stats/pairs'))).toEqual([{ heroA: 'A', heroB: 'B', games: 1, wins: 1, winRate: 1 }]);
+    expect(await json(send('GET', '/api/stats/pairs'))).toEqual({ rows: [{ heroA: 'A', heroB: 'B', games: 1, wins: 1, winRate: 1 }], total: 1 });
     expect((await json(send('GET', '/api/stats/summary'))).records).toMatchObject([{ mode: 'Arena', records: 1, wins: 1 }]);
   });
 
   it('gives win rates of heroes fielded three together on one side, never across the two sides', async () => {
     await send('POST', '/api/pvp/fights', { mode: 'Arena', mapName: 'Open', outcome: 'Win', formation: team(['A', 'B', 'H']), opponent: { heroes: [{ tile: 0, hero: 'H' }, { tile: 1, hero: 'A' }] } });
     await send('POST', '/api/pvp/fights', { mode: 'Supreme Arena', mapName: 'Open', outcome: 'Loss', formation: team(['A', 'B', 'H']), opponent: { heroes: [{ tile: 0, hero: 'A' }] } });
-    expect(await json(send('GET', '/api/stats/trios'))).toEqual([{ heroA: 'A', heroB: 'B', heroC: 'H', games: 2, wins: 1, winRate: 0.5 }]);
-    expect(await json(send('GET', '/api/stats/trios?mode=Arena'))).toEqual([{ heroA: 'A', heroB: 'B', heroC: 'H', games: 1, wins: 1, winRate: 1 }]);
-    expect(await json(send('GET', '/api/stats/trios?min=3'))).toEqual([]);
+    expect(await json(send('GET', '/api/stats/trios'))).toEqual({ rows: [{ heroA: 'A', heroB: 'B', heroC: 'H', games: 2, wins: 1, winRate: 0.5 }], total: 1 });
+    expect(await json(send('GET', '/api/stats/trios?mode=Arena'))).toEqual({ rows: [{ heroA: 'A', heroB: 'B', heroC: 'H', games: 1, wins: 1, winRate: 1 }], total: 1 });
+    expect(await json(send('GET', '/api/stats/trios?min=3'))).toEqual({ rows: [], total: 0 });
+  });
+
+  describe('a list of pairs or trios cut to its best rows', () => {
+    const fight = (names: string[], outcome: 'Win' | 'Loss') =>
+      send('POST', '/api/pvp/fights', { mode: 'Arena', mapName: 'Open', outcome, formation: team(names), opponent: { heroes: [{ tile: 0, hero: 'H' }] } });
+    const AB = { heroA: 'A', heroB: 'B', games: 2, wins: 1, winRate: 0.5 };
+    const AH = { heroA: 'A', heroB: 'H', games: 1, wins: 1, winRate: 1 };
+
+    beforeEach(async () => {
+      await fight(['A', 'B'], 'Win');
+      await fight(['A', 'B'], 'Loss');
+      await fight(['A', 'H'], 'Win');
+    });
+
+    it('keeps the best by win rate unless told otherwise, and says how many pairs there are before the cut', async () => {
+      expect(await json(send('GET', '/api/stats/pairs'))).toEqual({ rows: [AH, AB], total: 2 });
+      expect(await json(send('GET', '/api/stats/pairs?limit=1'))).toEqual({ rows: [AH], total: 2 });
+    });
+
+    it('cuts by games played when asked, and the count does not change', async () => {
+      expect(await json(send('GET', '/api/stats/pairs?limit=1&sort=games'))).toEqual({ rows: [AB], total: 2 });
+    });
+
+    it('cuts the trios the same way, and refuses a sort it does not know', async () => {
+      db.prepare('INSERT INTO hero (name) VALUES (?)').run('C');
+      await send('POST', '/api/pvp/fights', { mode: 'Arena', mapName: 'Open', outcome: 'Win', formation: team(['A', 'B', 'C', 'H']), opponent: { heroes: [{ tile: 0, hero: 'H' }] } });
+      const trios = await json(send('GET', '/api/stats/trios?limit=1'));
+      expect(trios.total).toBeGreaterThan(1);
+      expect(trios.rows).toHaveLength(1);
+      const refused = await send('GET', '/api/stats/pairs?sort=luck');
+      expect(refused.status).toBe(400);
+      expect((await refused.json()).error).toBe('The sort is winRate or games');
+      expect((await send('GET', '/api/stats/trios?sort=luck')).status).toBe(400);
+    });
   });
 });

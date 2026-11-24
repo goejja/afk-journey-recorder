@@ -3,7 +3,7 @@ import type { Hono } from 'hono';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../../src/db/open.js';
 import { TILE, TILE_COUNT } from '../../src/domain/map.js';
-import { heroStats, pairStats } from '../../src/query/index.js';
+import { heroStats, pairReport } from '../../src/query/index.js';
 import { createApp } from '../../src/server/app.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
@@ -55,6 +55,6 @@ describe('filters that take several values', () => {
     expect(await games('mode=Arena&mode=Guild+Duel')).toBe(2);
     expect(await games('tag=Mia&tag=Luna')).toBe(2);
     expect((heroStats(db, { mode: ['Arena', 'Supreme Arena'] }) as any[]).find((h) => h.hero === 'B').games).toBe(1);
-    expect(pairStats(db, { mode: [] })).toBeTruthy(); // an empty list filters nothing
+    expect(pairReport(db, { mode: [] }).rows).toBeTruthy(); // an empty list filters nothing
   });
 });

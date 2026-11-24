@@ -58,7 +58,7 @@ beforeEach(() => {
           { playerId: '10000001', name: null, games: 2, wins: 0, winRate: 0, modes: ['Arena'], first: '2026-10-05', last: '2026-10-06', formations: [{ heroes: ['Fay'], games: 2, wins: 0, winRate: 0 }] },
         ]);
       }
-      if (url.startsWith('/api/stats/trios')) return Response.json([{ heroA: 'Evie', heroB: 'Fay', heroC: 'Zed', games: 4, wins: 3, winRate: 0.75 }]);
+      if (url.startsWith('/api/stats/trios')) return Response.json({ rows: [{ heroA: 'Evie', heroB: 'Fay', heroC: 'Zed', games: 4, wins: 3, winRate: 0.75 }], total: 1 });
       if (url === '/api/stats/faction-mismatches') {
         return Response.json([
           { attemptId: 31, side: 'A', mode: 'Stage', mapName: 'Open', phantimal: 'Gervan', problem: 'Normal stage never holds a Phantimal' },
@@ -84,7 +84,7 @@ beforeEach(() => {
           onBoostTile: 3,
         });
       }
-      if (url.startsWith('/api/stats/pairs')) return Response.json([{ heroA: 'Evie', heroB: 'Fay', games: 6, wins: 5, winRate: 0.833 }]);
+      if (url.startsWith('/api/stats/pairs')) return Response.json({ rows: [{ heroA: 'Evie', heroB: 'Fay', games: 6, wins: 5, winRate: 0.833 }], total: 1 });
       return Response.json({}, { status: 404 });
     }),
   );
@@ -346,6 +346,35 @@ describe('Statistics page', () => {
     await user.type(screen.getByLabelText('At least (games)'), '7');
     await user.click(screen.getByRole('radio', { name: 'Trios' }));
     await waitFor(() => expect(requests.at(-1)).toBe('/api/stats/trios?min=7'));
+  });
+
+  it('says a list of pairs is cut to its best rows, shows 500 more on request and starts again when the sort changes', async () => {
+    const base = fetch as unknown as (url: string) => Promise<Response>;
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (!url.startsWith('/api/stats/pairs')) return base(url);
+      requests.push(url);
+      return Response.json({ rows: [{ heroA: 'Evie', heroB: 'Fay', games: 1, wins: 1, winRate: 1 }], total: 1340 });
+    }));
+    const asked = () => requests.filter((u) => u.startsWith('/api/stats/pairs'));
+    const user = userEvent.setup();
+    render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
+    expect(await screen.findByText(/Showing the top 1 of 1340 pairs by win rate/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show 500 more' })).toBeTruthy();
+    expect(asked().at(-1)).toBe('/api/stats/pairs?min=1'); // what the server does when nothing is said is not said
+    await user.click(screen.getByRole('button', { name: 'Show 500 more' }));
+    await waitFor(() => expect(asked().at(-1)).toBe('/api/stats/pairs?min=1&limit=1000'));
+    await user.selectOptions(screen.getByLabelText('Sort by'), 'games');
+    await waitFor(() => expect(asked().at(-1)).toBe('/api/stats/pairs?min=1&sort=games'));
+    expect(await screen.findByText(/of 1340 pairs by games played/)).toBeTruthy();
+  });
+
+  it('says nothing about a cut when the whole list is shown', async () => {
+    const user = userEvent.setup();
+    render(<StatsPage />);
+    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
+    expect(await screen.findByText('83%')).toBeTruthy();
+    expect(screen.queryByText(/Showing the top/)).toBeNull();
   });
 
   it('shows pairs', async () => {

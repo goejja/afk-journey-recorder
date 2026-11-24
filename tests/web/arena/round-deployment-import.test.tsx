@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TILE, TILE_COUNT } from '../../../src/domain/map.js';
 import type { RoundTeam } from '../../../src/domain/round-deployment.js';
 import { ArenaPage } from '../../../web/arena/ArenaPage.js';
+import { clearAnswers } from '../../../web/answers.js';
 import { ToastProvider } from '../../../web/ui/Toast.js';
 
 const cells = Array.from({ length: TILE_COUNT }, (_, i) => (i < 5 ? TILE.ENEMY : i >= 38 ? TILE.PLAYER : TILE.OPEN));
@@ -142,6 +143,7 @@ describe('a Super League battle imported into a Round', () => {
     it('does not open a battle in the form without the roster of a Profile, and names the Profile', async () => {
       const user = await toWizard();
       await screen.findByRole('button', { name: 'Open in the form' });
+      clearAnswers(); // a roster the page already holds is not read again: this one is not held
       failing((url) => url === '/api/heroes?profile=2');
       await user.click(screen.getByRole('button', { name: 'Open in the form' }));
       expect((await screen.findByRole('alert')).textContent).toBe('The roster of Luna could not be read: Network down');

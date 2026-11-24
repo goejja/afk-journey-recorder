@@ -1,9 +1,9 @@
 import type Database from 'better-sqlite3';
 import { Hono, type Context } from 'hono';
-import type { ArtifactStat, BackCheck, DunlingrCheck, HeroStat, PairStat, PartnerReport, PositionalPartnerReport, FormationGroupStat, Summary, TrioStat } from '../../shared/api.js';
+import type { ArtifactStat, BackCheck, DunlingrCheck, HeroStat, PartnerReport, PositionalPartnerReport, FormationGroupStat, Summary } from '../../shared/api.js';
 import { statsContract } from '../../shared/contracts/stats.js';
 import { formationProfile, formationReport } from '../../query/formation-profile.js';
-import { artifactStats, groupCounterReport, heroDistribution, heroRowStats, heroStats, mapStats, mapFormations, pairStats, partnerStats, partnerTags, positionalPartners, playerStats, trioStats, summary } from '../../query/index.js';
+import { type HeroSetPaging, artifactStats, groupCounterReport, heroDistribution, heroRowStats, heroStats, mapStats, mapFormations, pairReport, partnerStats, partnerTags, positionalPartners, playerStats, trioReport, summary } from '../../query/index.js';
 import { isPartnerRelation, PARTNER_RELATIONS } from '../../domain/partner-relation.js';
 import { factionMismatches } from '../../query/faction-mismatches.js';
 import { backCheck, dunlingrCheck } from '../../advisor/index.js';
@@ -17,6 +17,13 @@ export function statsRoutes(db: Database.Database): Hono {
   /** The filters every view of sides shares: modes, tags, Players (by Player ID) and the seasons records were played in, each matching any of those given. */
   const common = (c: Context) => ({ mode: listParam(c, 'mode'), tag: listParam(c, 'tag'), player: listParam(c, 'player'), playedIn: listParam(c, 'playedIn'), excludeDefault: c.req.query('excludeDefault') === 'true' });
   const withMin = (c: Context) => ({ ...common(c), minGames: number(c.req.query('min')) });
+  /** How many hero groups to keep and in which order (the lists of pairs and trios are cut to the best rows). */
+  const heroSetPaging = (c: Context): HeroSetPaging => {
+    const sort = c.req.query('sort');
+    return { limit: number(c.req.query('limit')), sort: sort === 'winRate' || sort === 'games' ? sort : undefined };
+  };
+  const badSort = (c: Context) => ![undefined, '', 'winRate', 'games'].includes(c.req.query('sort'));
+  const BAD_SORT = 'The sort is winRate or games';
 
   serve(app, statsContract.summary, () => summary(db) as Summary);
 
@@ -34,7 +41,7 @@ export function statsRoutes(db: Database.Database): Hono {
   serve(app, statsContract.backCheck, () => backCheck(db) as BackCheck);
   serve(app, statsContract.dunlingrCheck, () => dunlingrCheck(db) as DunlingrCheck);
 
-  serve(app, statsContract.pairs, (_, c) => pairStats(db, withMin(c)) as PairStat[]);
+  serve(app, statsContract.pairs, (_, c) => (badSort(c) ? fail(400, BAD_SORT) : pairReport(db, withMin(c), heroSetPaging(c))));
   serve(app, statsContract.partners, (_, c) => {
     const hero = c.req.query('hero');
     return hero ? (partnerStats(db, hero, withMin(c)) as PartnerReport) : fail(400, 'A hero is required');
@@ -47,7 +54,7 @@ export function statsRoutes(db: Database.Database): Hono {
     return positionalPartners(db, hero, relation, withMin(c)) as PositionalPartnerReport;
   });
   serve(app, statsContract.partnerTags, () => partnerTags(db));
-  serve(app, statsContract.trios, (_, c) => trioStats(db, withMin(c)) as TrioStat[]);
+  serve(app, statsContract.trios, (_, c) => (badSort(c) ? fail(400, BAD_SORT) : trioReport(db, withMin(c), heroSetPaging(c))));
 
   serve(app, statsContract.players, (_, c) => playerStats(db, { mode: listParam(c, 'mode'), playedIn: listParam(c, 'playedIn'), excludeDefault: c.req.query('excludeDefault') === 'true', minGames: number(c.req.query('min')) }));
 

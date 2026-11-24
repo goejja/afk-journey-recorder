@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, memo, useMemo, useState, type ReactNode } from 'react';
 import { isSmallSample } from '../../src/domain/stats.js';
 import { Portrait } from '../Portrait.js';
 import { percent, toggled } from '../format.js';
@@ -20,8 +20,13 @@ export interface Column<Row> {
   render?: (row: Row) => ReactNode;
 }
 
-/** A table whose columns sort on a click; rows with a small sample are dimmed and flagged. */
-export function StatsTable<Row extends { games: number; wins: number }>({ rows, columns, rowKey, detail, label }: {
+/**
+ * A table whose columns sort on a click; rows with a small sample are dimmed and flagged. It renders again only when what it was given
+ * changes, so a page that holds one passes the same `columns`, `rowKey` and `detail` on every render (made once, or memoised).
+ */
+export const StatsTable = memo(StatsTableBase) as typeof StatsTableBase;
+
+function StatsTableBase<Row extends { games: number; wins: number }>({ rows, columns, rowKey, detail, label }: {
   /** Names the table for screen readers, when a page holds several. */
   label?: string;
   rows: Row[];

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DREAM_HUNT_FIGHTS, formatDuration } from '../../src/domain/dream-hunt.js';
 import { api, type DreamHuntAttempt, type WeeklySetups } from '../backend.js';
 import { RecordToolbar, useGroupedList, type ListItem } from '../records/GroupedList.js';
@@ -6,6 +6,7 @@ import { FightRow } from '../records/FightRow.js';
 import { GroupCard } from '../records/GroupCard.js';
 import { RecordListView } from '../records/RecordListView.js';
 import { useRecordList } from '../records/useRecordList.js';
+import { useStableCallback } from '../hooks/stable-callback.js';
 import { useLinkedRecord } from '../records/linked-record.js';
 import { Portrait } from '../Portrait.js';
 import { timeShare } from './ThisWeek.js';
@@ -97,7 +98,7 @@ interface FightRowProps {
 }
 
 /** One boss fight of the list: the boss and result, the buttons and the team. */
-function BossFightRow({ fight: f, onEdit, onDelete, onClone, shares, inBattle = false }: FightRowProps) {
+const BossFightRow = memo(function BossFightRow({ fight: f, onEdit, onDelete, onClone, shares, inBattle = false }: FightRowProps) {
   return (
     <FightRow
       infoClassName={`fight-line${inBattle ? ' in-battle' : ''}`}
@@ -130,7 +131,7 @@ function BossFightRow({ fight: f, onEdit, onDelete, onClone, shares, inBattle = 
       <TeamOverview heroes={f.formation.heroes} artifact={f.formation.artifact} size={32} />
     </FightRow>
   );
-}
+});
 
 const NO_FIGHTS: DreamHuntAttempt[] = [];
 
@@ -175,13 +176,14 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
   useEffect(() => onForm(adding || editing !== null || editingDay !== null), [adding, editing, editingDay, onForm]);
 
   const list = useGroupedList(fights);
-  const shares = timeShares(list.weeks);
-  const totalShares = dayShares(list.weeks);
+  const shares = useMemo(() => timeShares(list.weeks), [list.weeks]);
+  const totalShares = useMemo(() => dayShares(list.weeks), [list.weeks]);
+  // The handlers of a row keep one identity, so a row renders again only when its own fight or the shares it is shaded by change.
   const rowProps = {
     shares,
-    onEdit: (f: DreamHuntAttempt) => (setAdding(false), setEditing(f)),
-    onDelete: (f: DreamHuntAttempt) => void remove(f),
-    onClone: (list: DreamHuntAttempt[]) => (setEditing(null), setCloning(list), setAdding(true)),
+    onEdit: useStableCallback((f: DreamHuntAttempt) => (setAdding(false), setEditing(f))),
+    onDelete: useStableCallback((f: DreamHuntAttempt) => void remove(f)),
+    onClone: useStableCallback((list: DreamHuntAttempt[]) => (setEditing(null), setCloning(list), setAdding(true))),
   };
 
   const renderItem = (item: FightItem) => {

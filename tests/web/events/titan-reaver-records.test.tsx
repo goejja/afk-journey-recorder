@@ -124,6 +124,18 @@ describe('the Events page', () => {
     expect(field('Boss').value).toBe('Cerberus');
   });
 
+  it('names the fight tabs by their number only, as Dream Hunt and the PvP modes do', async () => {
+    seasonPhase = 2;
+    setup = { bosses: ['Aegis', 'Basilisk', 'Cerberus', null, null, null], updatedAt: '2026-11-20 09:00:00' };
+    const user = userEvent.setup();
+    await renderRecords();
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
+    await screen.findByRole('heading', { name: 'New Titan Reaver record' });
+    expect(screen.getByRole('tab', { name: 'Fight 1' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Fight 2' })).toBeTruthy();
+    expect(field('Boss').value).toBe('Aegis'); // the boss is still picked in the tab
+  });
+
   it('says where to set the bosses when none are set', async () => {
     const user = userEvent.setup();
     await renderRecords();
@@ -151,8 +163,7 @@ describe('the Events page', () => {
     await user.type(field('Damage'), '750,000,000');
     expect(screen.getByText(/Total 1,950,000,000/)).toBeTruthy();
 
-    await user.type(screen.getByLabelText('Total the game showed (check)'), '2B');
-    expect(screen.getByText(/The game’s total differs: the fights add up to 1,950,000,000/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Total the game showed/)).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Save record' }));
     await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/titan-reaver/battles')).toBe(true));

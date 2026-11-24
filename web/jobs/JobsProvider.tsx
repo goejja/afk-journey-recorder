@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { JobsSummary } from '../backend.js';
 import { jobsContract } from '../../src/shared/contracts/jobs.js';
+import { clearAnswers } from '../answers.js';
 import { useToast } from '../ui/Toast.js';
 import { announcement, finishedBetween, showsResult, type JobEvent, type JobKind } from './finished.js';
 
@@ -36,6 +37,8 @@ export function JobsProvider({ page, children }: { page: string; children: React
     (next: JobsSummary) => {
       const events = seen.current ? finishedBetween(seen.current, next) : [];
       seen.current = next;
+      // finished work may have changed reference data that pages hold (web/answers.ts), so they must ask again
+      if (events.length > 0) clearAnswers();
       setSummary(next);
       setError(null);
       for (const event of events) {

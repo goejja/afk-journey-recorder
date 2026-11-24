@@ -178,7 +178,7 @@ async function reading<T>(what: string, read: Promise<T>): Promise<T> {
 }
 
 /** The saved fights of a mode (Super League, whose Round is picked where it matters): a Player with none in the Round falls back to these (ADR 0021). */
-export const savedOfMode = (mode: ArenaMode = 'Super League'): Promise<ArenaFight[]> => reading(`The saved ${mode} battles`, api.arenaFights({ mode: [mode], limit: '1000' }));
+export const savedOfMode = (mode: ArenaMode = 'Super League'): Promise<ArenaFight[]> => reading(`The saved ${mode} battles`, api.savedFights(mode));
 
 /** The rosters of the Profiles the pictures name, by Profile id: the ranks and equipment a picture could not read come from them (ADR 0021). */
 export async function rostersOf(groups: ImportGroup[]): Promise<Map<number, Hero[]>> {

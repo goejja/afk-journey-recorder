@@ -44,3 +44,7 @@ export const round3 = (value: number) => Math.round(value * 1000) / 1000;
 
 /** A value to two decimals. */
 export const round2 = (value: number) => Math.round(value * 100) / 100;
+
+/** How many hero groups (pairs, trios) a list shows at first, and the most a list may be asked to show. */
+export const HERO_SETS_SHOWN = 500;
+export const MAX_HERO_SET_ROWS = 5000;

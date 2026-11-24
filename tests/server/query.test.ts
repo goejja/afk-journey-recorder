@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
 import { openDb } from '../../src/db/open.js';
 import { TILE, TILE_COUNT } from '../../src/domain/map.js';
-import { dreamHuntBest, heroStats, pairStats, roster, runSelect, stageHistory, summary } from '../../src/query/index.js';
+import { dreamHuntBest, heroStats, pairReport, roster, runSelect, stageHistory, summary } from '../../src/query/index.js';
 import { createApp } from '../../src/server/app.js';
 
 let app: Hono;
@@ -39,7 +39,7 @@ describe('queries', () => {
 
   it('counts pairs fielded together on one side, never across sides', async () => {
     await battle(['A', 'B'], ['X', 'Y'], 'Win');
-    const pairs = (pairStats(db) as any[]).map((r) => `${r.heroA}${r.heroB}:${r.wins}/${r.games}`).sort();
+    const pairs = (pairReport(db).rows as any[]).map((r) => `${r.heroA}${r.heroB}:${r.wins}/${r.games}`).sort();
     expect(pairs).toEqual(['AB:1/1', 'XY:0/1']);
   });
 
