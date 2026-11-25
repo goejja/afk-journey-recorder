@@ -19,7 +19,7 @@ import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { useConfirm, useNameDialog } from '../ui/Dialog.js';
 import { FormationIdField } from '../FormationIdField.js';
 import { useLoad } from '../hooks/load.js';
-import { type PatchReference, type Reference, type Draft, onMap, newDraft, weekly, withDefault, sharedTags, toInput, type Clone, profileByPlayerId, type Side } from './draft.js';
+import { type PatchReference, type Reference, type Draft, onMap, newDraft, weekly, withDefault, sharedTags, swappedOnMap, toInput, type Clone, profileByPlayerId, type Side } from './draft.js';
 import { ArenaIdentity, WinnerField, FightEditor, FightFormationIds, UnionLevels } from './FightParts.js';
 
 /** Sets up one team per slot of the mode, greying out heroes the other teams use, then saves each as its own record. */
@@ -28,6 +28,7 @@ export function NewFights({ reference, patchReference, initial, editing, savedRo
   const [editedRound, setEditedRound] = useState<Round | null>(savedRound?.round ?? null);
   const [drafts, setDrafts] = useState<Draft[]>(() => initial?.drafts ?? [newDraft(reference)]);
   const [current, setCurrent] = useState(0);
+  const [side, setSide] = useState<Side>('A'); // the side the editor places, which the known layouts are offered for
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog: saveDialog } = useConfirm();
   const reportParked = useParkedToast();
@@ -49,6 +50,12 @@ export function NewFights({ reference, patchReference, initial, editing, savedRo
     update: (change) => setDrafts((old) => old.map(change)),
     // Editing a saved battle keeps the states it recorded (ADR 0001): only heroes with none take the profile's.
     overwrite: editing == null,
+    swapDraft: (d) => swappedOnMap(reference, d),
+    // The Formation ID of a side goes with it; the placements a click replaced belong to the side they were made on.
+    onSwapped: () => {
+      setFormationIds((old) => ({ a: old.b, b: old.a }));
+      setReplaced({ A: [], B: [] });
+    },
     run: formAction.run,
     onError: (message) => {
       setError(message);
@@ -211,7 +218,7 @@ export function NewFights({ reference, patchReference, initial, editing, savedRo
     <RecordShell
       title={editing != null ? `Edit ${mode} record` : 'New record'}
       onSetDefault={weekly(mode) === null || editing != null ? undefined : () => void setDefault()}
-      identity={<ArenaIdentity mode={mode} onMode={editing != null ? undefined : changeMode} draft={draft} reference={reference} onChange={change} />}
+      identity={<ArenaIdentity mode={mode} onMode={editing != null ? undefined : changeMode} draft={draft} reference={reference} onChange={change} side={side} excludeAttempts={editing != null ? initial?.attemptIds : undefined} />}
       result={<WinnerField draft={draft} onChange={change} />}
       note={draft.note}
       onNote={(note) => change({ ...draft, note })}
@@ -261,12 +268,6 @@ export function NewFights({ reference, patchReference, initial, editing, savedRo
         current,
         onSelect: setCurrent,
         hint: `Heroes used by your other teams are greyed out: click one to move it here. Each team with heroes is saved as its own record.${editing != null ? ' A team left without heroes is removed from the battle.' : ''}`,
-        onCopyPrevious: () => {
-          const previous = drafts[current - 1];
-          if (!previous) return;
-          const sameMap = previous.mapName === draft.mapName;
-          change({ ...draft, mapName: previous.mapName, rule: previous.rule, ...(sameMap ? {} : onMap(reference, previous.mapName, draft)) });
-        },
         // The formations trade places, on one side or both; the map, rule and result stay with the team.
         swap: {
           sides: [{ value: 'mine', label: 'my formation' }, { value: 'opponent', label: 'the opponent’s formation' }, { value: 'both', label: 'both formations' }],
@@ -283,7 +284,7 @@ export function NewFights({ reference, patchReference, initial, editing, savedRo
       onCancel={onCancel}
       cancelLabel={cancelLabel}
     >
-      <FightEditor key={current} draft={draft} mode={mode} reference={reference} unavailable={unavailable} borrow={borrow} sideRosters={profileRoster} onChange={change} />
+      <FightEditor key={current} draft={draft} mode={mode} reference={reference} unavailable={unavailable} borrow={borrow} sideRosters={profileRoster} side={side} onSide={setSide} onChange={change} />
       {nameDialog}
       {saveDialog}
     </RecordShell>

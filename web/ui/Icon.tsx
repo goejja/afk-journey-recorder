@@ -1,6 +1,6 @@
 import type { MouseEventHandler, ReactElement } from 'react';
 
-export type IconName = 'chevron-right' | 'chevron-down' | 'close' | 'minus' | 'info' | 'star';
+export type IconName = 'chevron-right' | 'chevron-down' | 'close' | 'minus' | 'info' | 'star' | 'swap';
 
 /** The shapes on a 16 by 16 grid. The chevrons are solid triangles; the rest are thin rounded strokes (`.icon-solid`, `.icon` in styles.css). */
 const SHAPES: Record<IconName, { solid?: boolean; draw: ReactElement }> = {
@@ -16,6 +16,7 @@ const SHAPES: Record<IconName, { solid?: boolean; draw: ReactElement }> = {
       </>
     ),
   },
+  swap: { draw: <path d="M13 6.5A5.2 5.2 0 0 0 3.4 5M3 2.4V5.2h2.8M3 9.5a5.2 5.2 0 0 0 9.6 1.5M13 13.6v-2.8h-2.8" /> },
   star: { draw: <path d="M8 1.9l1.9 3.9 4.2.6-3.1 3 .8 4.2L8 11.6l-3.8 2 .8-4.2-3.1-3 4.2-.6z" /> },
 };
 

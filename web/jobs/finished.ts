@@ -35,7 +35,7 @@ export function finishedBetween(before: JobsSummary, after: JobsSummary): JobEve
 }
 
 /** The page of the app that shows the result of each kind of work: a person already there sees it without a toast. */
-const RESULT_PAGE: Record<JobKind, string> = { scenario: 'scenarios', review: 'admin', roster: 'roster', battle: 'arena' };
+const RESULT_PAGE: Record<JobKind, string> = { scenario: 'arena', review: 'admin', roster: 'roster', battle: 'arena' };
 
 export const showsResult = (event: JobEvent, page: string) => RESULT_PAGE[event.kind] === page;
 

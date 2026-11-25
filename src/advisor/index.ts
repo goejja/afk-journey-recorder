@@ -15,6 +15,9 @@ export function mountAdvisorRoutes(_app: Hono, _db: Database.Database, _loadRule
 export const dunlingrCheck = (_db: Database.Database): { rows: unknown[]; records: number; boosted: number; onBoostTile: number } => ({ rows: [], records: 0, boosted: 0, onBoostTile: 0 });
 export const backCheck = (_db: Database.Database): { rows: unknown[]; onBoostTile: number } => ({ rows: [], onBoostTile: 0 });
 
+/** How many formation ideas use a hero, a map, an artifact or a Phantimal; this build has no ideas. */
+export const ideasUsing = (_db: Database.Database, _kind: 'hero' | 'map' | 'artifact' | 'phantimal', _name: string): number => 0;
+
 export const tierVsRecords = (_db: Database.Database): unknown[] => [];
 
 export const cliUsage = '';

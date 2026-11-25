@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { MAX_STANDARD_HEROES } from '../../src/domain/formation.js';
 import { heroCount, isSummon } from '../../src/domain/units.js';
 import { playerOnTop, TILE } from '../../src/domain/map.js';
@@ -19,6 +19,7 @@ import { derivePhantimal, type PhantimalOption } from '../phantimal.js';
 import { PhantimalField } from '../PhantimalField.js';
 import { firstFreeTile, phantimalAt, phantimalTileOf, missingPhantimalPart, swapPhantimal, swapTiles, rowName, selectorHeroes, unitsUnavailable } from '../units.js';
 import { useConfirm } from '../ui/Dialog.js';
+import { IconButton } from '../ui/Icon.js';
 import { TabPanel, Tabs } from '../ui/Tabs.js';
 import { Notice } from '../ui/Notice.js';
 
@@ -53,6 +54,9 @@ interface Props {
   labels?: { a: string; b: string };
   /** Edit one side only: the other side's tab and placed units are hidden. */
   onlySide?: Side;
+  /** The side being edited, when the form above also needs it (the known-layout selector); omit and the editor keeps it itself. */
+  side?: Side;
+  onSide?: (side: Side) => void;
   /** The roster of the profile whose ranks and equipment a side's heroes take on placement (null: leave them be). */
   sideRosters?: Record<Side, Hero[] | null>;
 }
@@ -81,17 +85,21 @@ export interface SideProfileBarProps {
   onNewProfile?: (side: Side) => void;
   /** Gives the profile of a side its Player ID. Without one, a record cannot remember the side's player (ADR 0006), so a side whose profile has none is offered this. */
   onSetPlayerId?: (side: Side, playerId: string) => void;
+  /** Exchanges the two sides, with their profiles, units and the result. */
+  onSwapSides?: () => void;
   /** Per side, the teams whose heroes a saved side has exactly, standing elsewhere: the button beside the profile places them as the saved side did. */
   placement?: Record<Side, { teams: number[]; canUndo: boolean; onApply: () => void; onUndo: () => void }>;
 }
 
 /** The profile of each side of a battle, kept in the bar above the editor so it takes no height from the picker. */
-export function SideProfileBar({ profiles, sideProfiles, onSideProfile, onNewProfile, onSetPlayerId, placement }: SideProfileBarProps) {
+export function SideProfileBar({ profiles, sideProfiles, onSideProfile, onNewProfile, onSetPlayerId, onSwapSides, placement }: SideProfileBarProps) {
   return (
     <>
       <div className="side-profiles" role="group" aria-label="Profiles of the sides">
         {(['A', 'B'] as Side[]).map((s) => (
-          <label key={s} className="field">
+          <Fragment key={s}>
+          {s === 'A' && onSwapSides && <IconButton icon="swap" className="swap-sides" label="Swap sides" onClick={onSwapSides} />}
+          <label className="field">
             Profile of Side {s}
             <select value={sideProfiles[s] ?? ''} onChange={(e) => (e.target.value === 'new' ? onNewProfile?.(s) : onSideProfile(s, e.target.value === '' ? null : Number(e.target.value)))}>
               <option value="">None</option>
@@ -104,6 +112,7 @@ export function SideProfileBar({ profiles, sideProfiles, onSideProfile, onNewPro
               {onNewProfile && <option value="new">New profile…</option>}
             </select>
           </label>
+          </Fragment>
         ))}
         {placement &&
           (['A', 'B'] as Side[]).map((s) => (
@@ -134,8 +143,9 @@ export function SideProfileBar({ profiles, sideProfiles, onSideProfile, onNewPro
 }
 
 /** Both sides on one map, with a Side A / Side B switch beside it choosing whose heroes the icons place. */
-export function FightTeamsEditor({ map, heroes, artifacts, rules, formation, onFormation, opponent, onOpponent, onBoth, unavailable, borrow, sideAHeroes = 'all', editSideAStates = false, heroesOnly = false, phantimals, labels = { a: 'Side A', b: 'Side B' }, onlySide, sideRosters }: Props) {
-  const [side, setSide] = useState<Side>(onlySide ?? 'A');
+export function FightTeamsEditor({ map, heroes, artifacts, rules, formation, onFormation, opponent, onOpponent, onBoth, unavailable, borrow, sideAHeroes = 'all', editSideAStates = false, heroesOnly = false, phantimals, labels = { a: 'Side A', b: 'Side B' }, onlySide, side: controlledSide, onSide, sideRosters }: Props) {
+  const [ownSide, setOwnSide] = useState<Side>(onlySide ?? 'A');
+  const side = controlledSide ?? ownSide;
   const sidesId = useId();
   const [picked, setPicked] = useState<Picked | null>(null);
   const currentSeason = useCurrentSeason();
@@ -179,7 +189,8 @@ export function FightTeamsEditor({ map, heroes, artifacts, rules, formation, onF
   }, [sideRosters, formation, opponent]);
 
   function chooseSide(next: Side) {
-    setSide(next);
+    setOwnSide(next);
+    onSide?.(next);
     setPicked(null);
     setMessage(null);
   }

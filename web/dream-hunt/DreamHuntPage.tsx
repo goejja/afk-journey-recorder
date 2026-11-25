@@ -9,23 +9,22 @@ import { Finder } from './Finder.js';
 import { useSentTeams } from './sentTeams.js';
 import { type Draft, newDraft, draftFromFight } from './draft.js';
 import { Fights } from './FightList.js';
-import { TabPanel, Tabs } from '../ui/Tabs.js';
+import { TabbedPage } from '../ui/Tabs.js';
 import { Notice } from '../ui/Notice.js';
 
 type View = 'week' | 'advisor' | 'simulator' | 'best' | 'finder' | 'fights';
 
 const VIEWS: { key: View; label: string }[] = [
   { key: 'week', label: 'This week' },
+  { key: 'fights', label: 'Records' },
   { key: 'advisor', label: 'Advisor' },
   { key: 'simulator', label: 'Simulator' },
   { key: 'best', label: 'Best teams' },
   { key: 'finder', label: 'Finder' },
-  { key: 'fights', label: 'Records' },
 ];
 
 export function DreamHuntPage() {
   const [view, setView] = useState<View>(() => (recordOfHash(window.location.hash) === null ? 'week' : 'fights')); // a link to a record opens the fights
-  const [full, setFull] = useState(false);
   const loaded = useReference({ bosses: api.bosses, rules: api.bossRules, maps: api.maps, heroes: api.heroes, artifacts: api.artifacts, heroRules: api.rules, defaults: api.defaults });
   const reference = loaded.data ?? null;
   const patchReference = loaded.patch;
@@ -75,28 +74,25 @@ export function DreamHuntPage() {
     isSent: shelf.has,
   };
 
-  const views = (
-    <>
-        {reference && view === 'week' && <ThisWeek key={version} slots={reference.defaults['Dream Hunt'].slots} />}
-        {reference && view === 'advisor' && <Advisor key={version} onRecord={(picks) => void record(picks)} />}
-        {reference && view === 'simulator' && <Simulator key={version} reference={reference} onRecord={(picks) => void record(picks)} sent={shelf.sent} onRemoveSent={shelf.remove} />}
-        {reference && view === 'best' && <BestTeams key={version} bosses={reference.bosses} rules={reference.rules} send={toSimulator} />}
-        {reference && view === 'finder' && <Finder key={version} rules={reference.rules} send={toSimulator} />}
-        {reference && view === 'fights' && <Fights reference={reference} onChanged={() => (setVersion((v) => v + 1), void reloadHeroes())} onDefaults={(defaults) => patchReference({ defaults })} onForm={setFull} prefill={prefill} onPrefillUsed={prefillUsed} />}
-    </>
-  );
-
   return (
-    <div>
-      {!full && <Tabs id="dream-hunt" label="Dream Hunt views" tabs={VIEWS} value={view} onChange={setView} />}
-      {(error ?? loaded.error) && (
-        <Notice kind="error">
-          {error ?? loaded.error}
-        </Notice>
+    <TabbedPage
+      id="dream-hunt"
+      label="Dream Hunt views"
+      tabs={VIEWS}
+      value={view}
+      onChange={setView}
+      notice={(error ?? loaded.error) && <Notice kind="error">{error ?? loaded.error}</Notice>}
+    >
+      {(onForm) => (
+        <>
+          {reference && view === 'week' && <ThisWeek key={version} slots={reference.defaults['Dream Hunt'].slots} />}
+          {reference && view === 'advisor' && <Advisor key={version} onRecord={(picks) => void record(picks)} />}
+          {reference && view === 'simulator' && <Simulator key={version} reference={reference} onRecord={(picks) => void record(picks)} sent={shelf.sent} onRemoveSent={shelf.remove} />}
+          {reference && view === 'best' && <BestTeams key={version} bosses={reference.bosses} rules={reference.rules} send={toSimulator} />}
+          {reference && view === 'finder' && <Finder key={version} rules={reference.rules} send={toSimulator} />}
+          {reference && view === 'fights' && <Fights reference={reference} onChanged={() => (setVersion((v) => v + 1), void reloadHeroes())} onDefaults={(defaults) => patchReference({ defaults })} onForm={onForm} prefill={prefill} onPrefillUsed={prefillUsed} />}
+        </>
       )}
-      <TabPanel id="dream-hunt" value={full ? null : view}>
-        {views}
-      </TabPanel>
-    </div>
+    </TabbedPage>
   );
 }

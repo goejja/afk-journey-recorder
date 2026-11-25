@@ -55,12 +55,13 @@ export const PlacementRule = z.object({
 });
 export type PlacementRule = z.infer<typeof PlacementRule>;
 
-/** What uses a hero. `placements` (records, scenarios and Formation IDs that place it) fixes the units it brings. */
+/** What uses a hero. `placements` (records, scenarios, ideas and Formation IDs that place it) fixes the units it brings. `ideas` is always 0 in a build without the Advisor. */
 export const HeroUsage = z.object({
   roster: z.number(),
   records: z.number(),
   assists: z.number(),
   scenarios: z.number(),
+  ideas: z.number(),
   deployments: z.number(),
   stageEnemies: z.number(),
   pictures: z.number(),

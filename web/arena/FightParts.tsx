@@ -1,12 +1,13 @@
 import { ARENA_MODES, FIXED_MAP, modeAllowsPhantimal, TEAMS_PER_MODE, UNION_LEVEL_MAX } from '../../src/domain/arena.js';
 import { type ArenaFight, type ArenaMode, type Hero, type Profile } from '../backend.js';
+import { KnownLayoutControl } from '../advisor/index.js';
 import { FightTeamsEditor } from './FightTeamsEditor.js';
 import { type Borrow } from './borrow.js';
 import { FormationIdField } from '../FormationIdField.js';
 import { type Reference, type Draft, onMap, playerName, type Side } from './draft.js';
 
 /** The mode, map and rule of a battle: what it is about. */
-export function ArenaIdentity({ mode, onMode, draft, reference, onChange }: { mode: ArenaMode; onMode?: (mode: ArenaMode) => void; draft: Draft; reference: Reference; onChange: (draft: Draft) => void }) {
+export function ArenaIdentity({ mode, onMode, draft, reference, onChange, side = 'A', excludeAttempts }: { mode: ArenaMode; onMode?: (mode: ArenaMode) => void; draft: Draft; reference: Reference; onChange: (draft: Draft) => void; /** The side being edited, which the known layouts are offered for. */ side?: Side; /** The saved fights being edited. */ excludeAttempts?: number[] }) {
   const arenaMaps = reference.maps.filter((m) => m.tags.includes('Arena'));
   return (
     <>
@@ -28,6 +29,11 @@ export function ArenaIdentity({ mode, onMode, draft, reference, onChange }: { mo
           ))}
         </select>
       </label>
+      {side === 'A' ? (
+        <KnownLayoutControl mode={mode} map={draft.mapName || null} placement={draft.formation} excludeAttempts={excludeAttempts} onChange={(formation) => onChange({ ...draft, formation })} />
+      ) : (
+        <KnownLayoutControl mode={mode} map={draft.mapName || null} placement={draft.opponent} turned excludeAttempts={excludeAttempts} onChange={(opponent) => onChange({ ...draft, opponent })} />
+      )}
       {mode === 'Supreme Arena' && (
         <label className="field">
           Rule
@@ -57,7 +63,7 @@ export function WinnerField({ draft, onChange }: { draft: Draft; onChange: (draf
   );
 }
 
-export function FightEditor({ draft, mode, reference, unavailable, borrow, sideRosters, onChange }: { draft: Draft; mode: string; reference: Reference; unavailable?: Map<string, string>; borrow?: Borrow; sideRosters?: Record<Side, Hero[] | null>; onChange: (draft: Draft) => void }) {
+export function FightEditor({ draft, mode, reference, unavailable, borrow, sideRosters, side, onSide, onChange }: { side?: Side; onSide?: (side: Side) => void; draft: Draft; mode: string; reference: Reference; unavailable?: Map<string, string>; borrow?: Borrow; sideRosters?: Record<Side, Hero[] | null>; onChange: (draft: Draft) => void }) {
   const map = reference.maps.find((m) => m.name === draft.mapName);
   if (!map) return <p className="muted">Pick a map.</p>;
   return (
@@ -76,6 +82,8 @@ export function FightEditor({ draft, mode, reference, unavailable, borrow, sideR
       editSideAStates
       phantimals={modeAllowsPhantimal(mode) ? reference.phantimals : undefined}
       sideRosters={sideRosters}
+      side={side}
+      onSide={onSide}
     />
   );
 }

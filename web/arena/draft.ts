@@ -14,6 +14,7 @@ import { applyToOpponent, applyToOwn, deploymentsFromRecords, guessOf, mergeDepl
 import { TILE } from '../../src/domain/map.js';
 import { correctHeroes, knownTeams, misfitsMap, placeOpponent, placeOwn, readingOf, reusedSide, savedPlacements, savedSides, unplacedUnit, type ImportedTeam, type ImportGroup, type KnownTeam, type SavedSide } from '../reader/battle-import.js';
 import { derivePhantimal } from '../phantimal.js';
+import { swapSides } from './swap-sides.js';
 
 export interface Reference {
   defaults: WeeklySetups;
@@ -58,6 +59,12 @@ export interface Draft {
 export const onMap = (reference: Reference, mapName: string, draft: Draft) => {
   const map = reference.maps.find((m) => m.name === mapName);
   return map ? keepOnMap(map.cells, draft.formation, draft.opponent) : { formation: draft.formation, opponent: draft.opponent };
+};
+
+/** The draft with its sides exchanged and the units put back on the tiles its map allows (the turned tiles may not all be deployment tiles). */
+export const swappedOnMap = (reference: Reference, draft: Draft): Draft => {
+  const swapped = swapSides(draft);
+  return { ...swapped, ...onMap(reference, swapped.mapName, swapped) };
 };
 
 export const newDraft = (reference: Reference): Draft => ({
@@ -125,6 +132,8 @@ export const toInput = (mode: ArenaMode, d: Draft) => ({
 /** Teams to start a new battle from: a saved fight or battle, with everything but the result and the note. */
 export interface Clone {
   mode: ArenaMode;
+  /** The saved fights `drafts` were made from, so that a battle being edited does not offer its own layout back. */
+  attemptIds?: number[];
   drafts: Draft[];
   /** The Formation ID of each side for the teams of a whole battle, as typed. */
   formationIds: { a: string; b: string };
@@ -159,6 +168,7 @@ export function cloneOf(reference: Reference, fights: ArenaFight[], keepResult =
     side === 'A' ? { ...d, opponent: blank.opponent, playerIdB: null, opponentUnionLevel: '' } : side === 'B' ? { ...d, formation: blank.formation, playerIdA: null, unionLevel: '' } : d;
   return {
     mode,
+    attemptIds: fights.map((f) => f.id),
     formationIds: { a: side === 'B' ? '' : fights[0]!.battleFormationId ?? '', b: side === 'A' ? '' : fights[0]!.battleOpponentFormationId ?? '' },
     drafts: Array.from({ length: TEAMS_PER_MODE[mode] }, (_, i) => {
       const fight = fights.find((f) => (f.battlePosition ?? 1) - 1 === i);

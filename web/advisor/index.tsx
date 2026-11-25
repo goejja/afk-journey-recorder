@@ -1,5 +1,5 @@
 import type { FormationState } from '../FormationEditor.js';
-import type { Artifact, GameMap, Hero, Rules, WeeklySetups } from '../backend.js';
+import type { ArenaMode, Artifact, GameMap, Hero, Phantimal, Rules, WeeklySetups } from '../backend.js';
 import type { SentTeam } from '../dream-hunt/sentTeams.js';
 
 /**
@@ -27,6 +27,8 @@ const Missing = ({ name }: { name: string }) => (
 
 export const Advisor = (_props: { onRecord: (picks: RecordPick[]) => void }) => <Missing name="Advisor" />;
 
+export const Ideas = (_props: { reference: { maps: GameMap[]; heroes: Hero[]; artifacts: Artifact[]; phantimals: Phantimal[] }; onForm: (open: boolean) => void }) => <Missing name="Ideas tab" />;
+
 export const Simulator = (_props: {
   reference: { defaults: WeeklySetups; maps: GameMap[]; heroes: Hero[]; artifacts: Artifact[]; heroRules: Rules };
   onRecord: (picks: RecordPick[]) => void;
@@ -36,11 +38,23 @@ export const Simulator = (_props: {
 
 export const CounterAdvisor = () => <Missing name="Counter Advisor" />;
 
-export const TeamGenerator = () => <Missing name="Team generator" />;
+export const KnownAdvisor = (_props: { reference: { maps: GameMap[]; heroes: Hero[]; defaults: WeeklySetups; heroRules: Rules } }) => <Missing name="Advisor" />;
+
+/** The known-layout selector of the editors; there are no known layouts in this build. */
+export const KnownLayoutControl = <T extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: { tile: number; name: string; partnerTile?: number | null } | null }>(_props: {
+  mode: ArenaMode;
+  map: string | null;
+  placement: T;
+  turned?: boolean;
+  excludeAttempts?: number[];
+  excludeIdea?: number | null;
+  onChange: (next: T) => void;
+}) => null;
 
 export const PlacementRulesAdmin = (_props: { hero: string }) => null;
 
 export const ScoreSettingsAdmin = () => null;
+export const IdeaStandingsAdmin = () => null;
 
 export const TitanReaverAdvisor = (_props: { onRecord: (plan: TitanRecordPlan) => void }) => <Missing name="Advisor" />;
 

@@ -26,7 +26,7 @@ const profile = (id: number, playerId: string | null = null) => ({ id, name: `Pr
 const blank = () => ({ playerIdA: 'old A', playerIdB: 'old B', formation: {}, opponent: {} }) as any;
 
 /** The hook inside a form of one draft, with `run` doing the action and its follow-up. */
-function setup(options: { opening?: { A: number | null; B: number | null }; overwrite?: boolean; askNewName?: (side: 'A' | 'B') => Promise<string | null | undefined> } = {}) {
+function setup(options: { opening?: { A: number | null; B: number | null }; overwrite?: boolean; askNewName?: (side: 'A' | 'B') => Promise<string | null | undefined>; onSwapped?: () => void } = {}) {
   const profiles = [profile(1, '111'), profile(2, '222'), profile(3)];
   const patchReference = vi.fn();
   const onError = vi.fn();
@@ -50,6 +50,8 @@ function setup(options: { opening?: { A: number | null; B: number | null }; over
       run: run as any,
       onError,
       askNewName: options.askNewName,
+      swapDraft: (d: any) => ({ ...d, playerIdA: d.playerIdB, playerIdB: d.playerIdA }),
+      onSwapped: options.onSwapped,
     });
     return { draft, ...hook };
   });
@@ -95,6 +97,19 @@ describe('useSideProfiles', () => {
     expect(result.current.chosenProfile.A).toBeNull();
     expect(result.current.draft.playerIdA).toBeNull();
     expect(result.current.profileRoster.A).toBeNull();
+  });
+
+  it('swaps the profiles, their rosters and every draft, and tells the form', async () => {
+    heroes.mockImplementation(async (id: number) => roster(`hero of ${id}`));
+    const onSwapped = vi.fn();
+    const { result } = setup({ opening: { A: 1, B: 2 }, onSwapped });
+    await waitFor(() => expect(result.current.profileRoster.B).not.toBeNull());
+    act(() => result.current.barProps.onSwapSides!());
+    expect(result.current.chosenProfile).toEqual({ A: 2, B: 1 });
+    expect(result.current.profileRoster).toEqual({ A: roster('hero of 2'), B: roster('hero of 1') });
+    expect(result.current.draft.playerIdA).toBe('old B');
+    expect(result.current.draft.playerIdB).toBe('old A');
+    expect(onSwapped).toHaveBeenCalledOnce();
   });
 
   it('drops a roster that arrives after another profile was chosen for the same side', async () => {

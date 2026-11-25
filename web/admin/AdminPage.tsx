@@ -5,7 +5,7 @@ import { allowsRule, DEFAULT_MODES, DEFAULT_SLOTS, emptySlot } from '../../src/d
 import { MapPicker } from '../MapPicker.js';
 import { urlOf } from '../../src/shared/contract.js';
 import { adminContract } from '../../src/shared/contracts/admin.js';
-import { ScoreSettingsAdmin } from '../advisor/index.js';
+import { IdeaStandingsAdmin, ScoreSettingsAdmin } from '../advisor/index.js';
 import { api, type AgentSettings, type Boss, type CounterRuleView, type BossRule, type DefaultMode, type DefaultSlot, type GameMap, type StatsSettingsView, type WeeklySetups, type SeasonEntry } from '../backend.js';
 import { BossRules } from '../dream-hunt/BossRules.js';
 import { CleanupPage } from '../reader/CleanupPage.js';
@@ -207,6 +207,7 @@ function GeneralAdmin() {
       </ul>
       <UpdateDateAdmin />
       <ScoreSettingsAdmin />
+      <IdeaStandingsAdmin />
       <StatsSettingsAdmin />
       <CounterRuleAdmin />
     </section>
@@ -579,17 +580,17 @@ function WeeklyAdmin() {
 const SECTIONS = [
   { key: 'general', label: 'General', component: GeneralAdmin },
   { key: 'weekly', label: 'Weekly default', component: WeeklyAdmin },
+  { key: 'rules', label: 'Rules', component: RulesAdmin },
   { key: 'units', label: 'Units', component: UnitsPage },
   { key: 'artifacts', label: 'Artifacts', component: ArtifactsPage },
   { key: 'maps', label: 'Maps', component: MapsPage },
-  { key: 'images', label: 'Images', component: ImagesPage },
   { key: 'tags', label: 'Tags', component: TagsAdmin },
   { key: 'formationIds', label: 'Formation IDs', component: FormationIdsAdmin },
-  { key: 'rules', label: 'Rules', component: RulesAdmin },
-  { key: 'database', label: 'Database', component: DatabaseAdmin },
-  { key: 'agent', label: 'Agent', component: AgentAdmin },
+  { key: 'images', label: 'Images', component: ImagesPage },
   { key: 'reader', label: 'Reader', component: ReaderPage },
   { key: 'review', label: 'Review', component: ReviewPage },
+  { key: 'agent', label: 'Agent', component: AgentAdmin },
+  { key: 'database', label: 'Database', component: DatabaseAdmin },
 ] as const;
 
 /** Upkeep that is not part of recording battles. */

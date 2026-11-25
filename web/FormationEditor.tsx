@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { isSummon, PARTNER_PHANTIMALS } from '../src/domain/units.js';
+import { isSummon } from '../src/domain/units.js';
 import { selectableArtifacts } from '../src/domain/stage.js';
 import { useCurrentSeason } from './seasons.js';
 import { TILE } from '../src/domain/map.js';
@@ -15,7 +15,7 @@ import { ArtifactSlot } from './ArtifactSlot.js';
 import { heldIcons, type Borrow } from './arena/borrow.js';
 import { confirmBorrowedMove, placePhantimalPart } from './placement.js';
 import { addHeroUnits, addUnit, firstFreeTile, phantimalAt, phantimalTileOf, missingPhantimalPart, swapPhantimal, swapTiles, resolveUnit, rowName, selectorHeroes, unitsUnavailable, type PlacedRow } from './units.js';
-import { derivePhantimal, eligiblePhantimals, type PhantimalOption } from './phantimal.js';
+import { derivePhantimal, phantimalOptionsOf, withAutoPhantimal } from './phantimal.js';
 import { PhantimalField } from './PhantimalField.js';
 import { useConfirm } from './ui/Dialog.js';
 import { HeroStateButtons } from './ui/HeroStateButtons.js';
@@ -127,10 +127,12 @@ interface Props {
   borrow?: Borrow;
   /** The mode always brings the Phantimal its heroes allow (Titan Reaver): it appears with the third hero of a faction and goes below three, and there is no picker. */
   autoPhantimal?: boolean;
+  /** The side whose half of the map the heroes stand on: 'B' puts the artifact slot on the top half, with that side's colour (an Idea entered as a shared defense). */
+  side?: 'A' | 'B';
 }
 
 /** Placing your heroes on the map's player tiles, plus the assist hero and artifact. */
-export function FormationEditor({ map, heroes, artifacts, phantimals, season, value, onChange, unavailable, rules, heroSource = 'roster', mapLabel = 'Your formation map', heroesOnly = false, stateTags = true, withState = true, withAssist = true, borrow, autoPhantimal = false }: Props) {
+export function FormationEditor({ map, heroes, artifacts, phantimals, season, value, onChange, unavailable, rules, heroSource = 'roster', mapLabel = 'Your formation map', heroesOnly = false, stateTags = true, withState = true, withAssist = true, borrow, autoPhantimal = false, side = 'A' }: Props) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Picked | null>(null);
@@ -151,13 +153,12 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
   const playerTileCount = map.cells.filter((c) => c === TILE.PLAYER).length;
   const isPlayerTile = (tile: number) => map.cells[tile] === TILE.PLAYER;
   // The Phantimal is a property of the team, not a Unit placed by hand: it stands while the heroes bring it (ADR 0029).
-  const phantimalOptions: PhantimalOption[] = (phantimals ?? []).filter((p) => !PARTNER_PHANTIMALS.has(p.name)).map((p) => ({ name: p.name, faction: p.faction }));
+  const phantimalOptions = phantimalOptionsOf(phantimals);
   const heroFactions = new Map(heroes.map((h) => [h.name, h.faction]));
   /** Every change to the team re-derives the Phantimal, so it appears and disappears with the heroes. */
   const change = (next: FormationState) => {
     // In a mode that always brings one, the heroes choose it: the Phantimal of the faction three of them share, or none.
-    const chosen = autoPhantimal ? { ...next, phantimalChoice: eligiblePhantimals(next.placed, phantimalOptions, heroFactions)[0] ?? '' } : next;
-    onChange(derivePhantimal(chosen, map.cells, TILE.PLAYER, phantimalOptions, heroFactions));
+    onChange(autoPhantimal ? withAutoPhantimal(next, map.cells, TILE.PLAYER, phantimalOptions, heroFactions) : derivePhantimal(next, map.cells, TILE.PLAYER, phantimalOptions, heroFactions));
   };
   const choosePhantimal = (name: string) => change({ ...value, phantimalChoice: name, phantimal: null });
   // A selection only counts while its hero is still placed.
@@ -168,6 +169,11 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
   const stuck = borrow ? new Map([...(unavailable ?? [])].filter(([name]) => !borrow.heroHolder(name))) : unavailable;
   const disabledIcons = unitsUnavailable(value.placed, stuck);
   const heroIcons = selectorHeroes(owned);
+
+  const artifactSlot = heroesOnly ? undefined : (
+    <ArtifactSlot side={side === 'B' ? 'b' : 'a'} label="artifact" size={RECORD_ARTIFACT_SIZE} artifacts={usableArtifacts} value={value.artifact} currentSeason={season === undefined ? currentSeason : undefined}
+      onChange={(artifact) => change({ ...value, artifact })} borrow={borrow} />
+  );
 
   function clickTile(index: number, button: HTMLElement) {
     // Clicking a placed hero opens its rank and equipment (clicking it again closes them); the list below has the remove buttons.
@@ -251,10 +257,8 @@ export function FormationEditor({ map, heroes, artifacts, phantimals, season, va
                 return phantimalAt(value.phantimal, index);
               }}
               tileClassName={(index) => [(dragging || moving !== null) && canDropOn(index) ? 'tile-droppable' : '', isSelectedTile(index) ? 'tile-selected' : ''].filter(Boolean).join(' ') || undefined}
-              slotA={heroesOnly ? undefined : (
-                <ArtifactSlot side="a" label="artifact" size={RECORD_ARTIFACT_SIZE} artifacts={usableArtifacts} value={value.artifact} currentSeason={season === undefined ? currentSeason : undefined}
-                  onChange={(artifact) => change({ ...value, artifact })} borrow={borrow} />
-              )}
+              slotA={side === 'A' ? artifactSlot : undefined}
+              slotB={side === 'B' ? artifactSlot : undefined}
               canDrop={(index) => canDropOn(index)}
               onTileDrop={dropOnTile}
               canDrag={(index) => value.placed.some((p) => p.tile === index) || phantimalAt(value.phantimal, index) !== undefined}

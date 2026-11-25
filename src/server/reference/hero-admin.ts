@@ -7,6 +7,7 @@ import type { TierCheck } from '../../shared/api.js';
 import { heroesContract, type HeroAdmin, type PlacementRule } from '../../shared/contracts/heroes.js';
 import { fail, serve } from '../contract.js';
 import { deploymentsNaming, takenNames, unitNameProblem } from './unit-names.js';
+import { ideasUsing } from '../../advisor/index.js';
 import { describeUsage, refuseUsed, type Usage } from './usage.js';
 
 interface HeroRow {
@@ -87,18 +88,20 @@ export function heroAdminRoutes(db: Database.Database): Hono {
       scenarios,
       deployments,
       assists: count('SELECT (SELECT count(*) FROM formation WHERE assist_hero = ?) + (SELECT count(*) FROM arena_attempt WHERE opp_assist_hero = ?)'),
+      ideas: ideasUsing(db, 'hero', name),
       roster: count('SELECT count(*) FROM roster WHERE hero_name = ?'),
       stageEnemies: count('SELECT count(*) FROM stage_enemy WHERE hero_name = ?'),
       pictures: count('SELECT (SELECT count(*) FROM hero_look WHERE hero_name = ?) + (SELECT count(*) FROM hero_example WHERE hero_name = ?)'),
     };
   }
-  const placements = (u: ReturnType<typeof usage>) => u.records + u.scenarios + u.deployments;
+  const placements = (u: ReturnType<typeof usage>) => u.records + u.scenarios + u.deployments + u.ideas;
   const usageOf = (u: ReturnType<typeof usage>): Usage[] => [
     { label: 'roster entries', one: 'roster entry', count: u.roster },
     { label: 'records', count: u.records },
     { label: 'records as assist hero', one: 'record as assist hero', count: u.assists },
     { label: 'scenarios', count: u.scenarios },
     { label: 'Formation IDs and Round Deployments', one: 'Formation ID or Round Deployment', count: u.deployments },
+    { label: 'ideas', one: 'idea', count: u.ideas },
     { label: 'stages', count: u.stageEnemies },
     { label: 'reader pictures', one: 'reader picture', count: u.pictures },
   ];

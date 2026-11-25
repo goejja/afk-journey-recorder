@@ -2,7 +2,7 @@
 
 A local tool that records the owner's AFK Journey battles (Stages, Stages Apex, Dream Hunt, Arena, Supreme Arena, Super League, Guild Duel, Treasure Rush) in SQLite, so that past results can be read back as statistics.
 
-This build has no Advisor: the Win Score, the Generated formation, the Counter Advisor and the Dream Hunt plans are not part of it. The statistics and the recording tools are.
+This build has no Advisor: the Win Score, the Known formations, the Counter Advisor and the Dream Hunt plans are not part of it. The statistics and the recording tools are.
 
 ## Reading the data
 

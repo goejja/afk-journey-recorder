@@ -384,6 +384,31 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .ranked { font-weight: 600; color: color-mix(in hsl, var(--danger) calc(var(--worst) * 100%), var(--win)); }
 .week-team { display: flex; flex-direction: column; gap: var(--sp-1); }
 .week-team-units { display: flex; flex-wrap: wrap; gap: var(--gap-hair); align-items: center; }
+.artifact-replaced { display: inline-flex; border: 2px solid var(--warn); border-radius: var(--r-control); }
+.artifact-empty { display: inline-block; width: 28px; height: 28px; }
+.advice-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-auto-flow: row dense; gap: var(--sp-3); align-items: start; }
+.advice-card { grid-column: span var(--span); min-width: 0; cursor: pointer; display: grid; gap: var(--sp-2); }
+.advice-open { border-color: var(--accent); }
+.advice-cells { display: grid; grid-template-columns: repeat(var(--teams), minmax(0, 1fr)); gap: var(--sp-3); }
+.advice-cell, .advice-panel-row > div { min-width: 0; }
+.advice-notes { font-size: var(--font-sm); display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
+.advice-standing { display: flex; flex-wrap: wrap; column-gap: var(--sp-2); align-items: baseline; font-variant-numeric: tabular-nums; }
+.advice-standing .muted { font-size: var(--font-sm); }
+.advice-notes .badge.few { margin-left: 0; }
+.idea-teams { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--sp-3); margin-top: var(--sp-2); }
+.idea-team { grid-column: var(--col); min-width: 0; padding: var(--sp-2); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-control); }
+@media (max-width: 900px) {
+  .idea-teams { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .idea-team { grid-column: auto; }
+}
+.advice-toggle { flex-direction: row; align-items: center; min-height: 0; }
+.advice-panel { grid-column: 1 / -1; border-color: var(--accent); }
+.advice-panel-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--sp-3); }
+.advice-panel-row + .advice-panel-row { margin-top: var(--sp-3); }
+@media (max-width: 900px) {
+  .advice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .advice-multi { grid-column: 1 / -1; }
+}
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table th, .data-table td { text-align: left; padding: var(--sp-2) var(--sp-2); border-bottom: 1px solid var(--border); vertical-align: middle; }
 .data-table tr.low { opacity: 0.75; }
@@ -485,6 +510,8 @@ a.button:hover { background: var(--panel-hi); }
 .workspace-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3); margin-bottom: var(--sp-2); }
 .workspace-row .tabs { margin: 0; }
 .swap-control { display: flex; gap: var(--sp-2); align-items: flex-end; }
+.side-switch { align-self: flex-end; }
+.side-switch.active { background: var(--accent); border-color: var(--accent); color: var(--on-color); }
 .workspace-row .side-profiles { display: contents; }
 /* The line under the title is the same in every mode, so its captions give way to placeholders and the fields share the width. */
 .workspace-row .field > .field-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -593,6 +620,7 @@ a.button:hover { background: var(--panel-hi); }
 .side-profiles { flex-wrap: nowrap; }
 .side-profiles .field { flex: 1 1 0; width: auto; min-width: 0; }
 .side-profiles select { width: 100%; min-width: 0; }
+.side-profiles .swap-sides { flex: none; align-self: flex-end; }
 .side-profiles .row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .profile-sidebar-actions { display: grid; gap: var(--sp-2); }
 .profile-new { width: 100%; margin-bottom: 0; }

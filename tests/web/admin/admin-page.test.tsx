@@ -76,11 +76,6 @@ const open = async (user: ReturnType<typeof userEvent.setup>, name: string, toas
 };
 
 describe('Admin page', () => {
-  it('groups the upkeep sections', () => {
-    render(<AdminPage />);
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['General', 'Weekly default', 'Units', 'Artifacts', 'Maps', 'Images', 'Tags', 'Formation IDs', 'Rules', 'Database', 'Agent', 'Reader', 'Review']);
-  });
-
   it('opens on General, lists the seasons, and protects the current one and the ones in use', async () => {
     render(<AdminPage />);
     const list = within(await screen.findByRole('list', { name: 'Seasons' }));

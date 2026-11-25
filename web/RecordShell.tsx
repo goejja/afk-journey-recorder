@@ -11,8 +11,6 @@ interface TeamTabs {
   onSelect: (index: number) => void;
   /** Short explanation behind an ⓘ at the end of the tabs, for example that used heroes are greyed out. */
   hint?: string;
-  /** Copies what the teams usually share (the map) from the previous tab. */
-  onCopyPrevious?: () => void;
   /** Exchanges the formation of the current team with another one's; `sides` (a battle with two sides) lets the player pick what is exchanged. */
   swap?: { sides?: { value: string; label: string }[]; onSwap: (other: number, side: string) => void };
 }
@@ -57,8 +55,9 @@ interface Props {
   result: ReactNode;
   note: string;
   onNote: (note: string) => void;
-  tags: string[];
-  onTags: (tags: string[]) => void;
+  /** The record's tags; a record without tags (an idea) passes neither. */
+  tags?: string[];
+  onTags?: (tags: string[]) => void;
   /** Tags the record carries that cannot be removed here, with why. */
   lockedTags?: { tag: string; title: string }[];
   /** What only this mode has and always needs in view, on a line of its own under the common one: the profile of each side, the Round, the Union Levels, a stage's range and enemies. */
@@ -142,7 +141,7 @@ export function RecordShell({ title, identity, result, note, onNote, tags, onTag
             <span className="field-caption">Note</span>
             <input value={note} placeholder="Note" onChange={(e) => onNote(e.target.value)} />
           </label>
-          <TagInput value={tags} onChange={onTags} locked={lockedTags} />
+          {tags && onTags && <TagInput value={tags} onChange={onTags} locked={lockedTags} />}
           {formationIds}
         </div>
         {fields && <div className="workspace-row">{fields}</div>}
@@ -150,11 +149,6 @@ export function RecordShell({ title, identity, result, note, onNote, tags, onTag
         {teams && teams.labels.length > 1 && (
           <div className="workspace-row">
             <Tabs id={teamsId} label="Teams" tabs={teams.labels.map((label, i) => ({ key: i, label }))} value={teams.current} onChange={teams.onSelect} />
-            {teams.onCopyPrevious && (
-              <button onClick={teams.onCopyPrevious} disabled={teams.current === 0}>
-                Copy the map from the previous team
-              </button>
-            )}
             {teams.swap && <SwapControl teams={teams} swap={teams.swap} />}
             {teams.hint && (
               <span className="hint-icon" role="img" tabIndex={0} title={teams.hint} aria-label={teams.hint}>

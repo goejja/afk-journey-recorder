@@ -62,7 +62,7 @@ Background work has one answer: `GET /api/jobs` (`src/server/agent/job-registry.
 
 ## The Advisor
 
-Everything that estimates a chance or proposes a team (the Win Score, the generated formation, the Counter Advisor, the Dream Hunt plans and the Titan Reaver plans) is the Advisor. It lives in three directories:
+Everything that estimates a chance or proposes a team (the Win Score, the Known formations of the Advisor tab, the Counter Advisor, the Dream Hunt plans and the Titan Reaver plans) is the Advisor. It lives in three directories:
 
 - `src/advisor`: the queries, rules, routes and CLI commands;
 - `web/advisor`: the screens;

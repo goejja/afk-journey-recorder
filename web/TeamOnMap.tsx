@@ -2,7 +2,7 @@ import type { GameMap, GeneratedTeam } from './backend.js';
 import { UnitsOnMap, type MapUnit } from './admin/UnitsOnMap.js';
 
 /** A proposed team drawn on its map, every Unit on its tile (both parts of a pair, the summons, both wedge tiles). A suggested tile says so in its title. */
-export function TeamOnMap({ proposal, map, label }: { proposal: GeneratedTeam; map: GameMap | undefined; label: string }) {
+export function TeamOnMap({ proposal, map, label, tileWidth, portraitSize }: { proposal: GeneratedTeam; map: GameMap | undefined; label: string; tileWidth?: number; portraitSize?: number }) {
   if (!proposal.team) return null;
   if (!map) return <p className="muted">The map “{proposal.map}” no longer exists.</p>;
   const heroAt = new Map(proposal.team.filter((t) => t.tile !== null).map((t) => [t.tile!, t]));
@@ -21,7 +21,7 @@ export function TeamOnMap({ proposal, map, label }: { proposal: GeneratedTeam; m
   };
   return (
     <div className="battle-map">
-      <UnitsOnMap rowLengths={map.rowLengths} cells={map.cells} label={label} unitAt={unitAt} />
+      <UnitsOnMap rowLengths={map.rowLengths} cells={map.cells} label={label} unitAt={unitAt} tileWidth={tileWidth} portraitSize={portraitSize} />
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { AdminPage } from './admin/AdminPage.js';
 import { DreamHuntPage } from './dream-hunt/DreamHuntPage.js';
 import { EventsPage } from './events/EventsPage.js';
 import { RosterPage } from './reader/RosterPage.js';
-import { ScenariosPage } from './scenarios/ScenariosPage.js';
 import { StatsPage } from './stats/StatsPage.js';
 import { StagesPage } from './stages/StagesPage.js';
 import { JobsProvider } from './jobs/JobsProvider.js';
@@ -16,7 +15,6 @@ const PAGES = {
   dreamHunt: { label: 'Dream Hunt', component: DreamHuntPage },
   events: { label: 'Events', component: EventsPage },
   arena: { label: 'PvP', component: ArenaPage },
-  scenarios: { label: 'Scenarios', component: ScenariosPage },
   stats: { label: 'Statistics', component: StatsPage },
   admin: { label: 'Admin', component: AdminPage },
 };

@@ -24,7 +24,7 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
-      requests.push({ method, url, body: init?.body ? JSON.parse(init.body as string) : undefined });
+      if (!url.startsWith('/api/advisor/known-layouts')) requests.push({ method, url, body: init?.body ? JSON.parse(init.body as string) : undefined }); // the layout lookups are not what these tests are about
       if (url === '/api/maps') return Response.json([{ name: 'Duel', tags: ['Arena'], rowLengths: [2, 5, 6, 6, 7, 6, 6, 5, 2], cells, source: 'manual', canRestore: false }]);
       if (url === '/api/heroes') return Response.json([hero('Evie'), hero('Fay'), hero('Zed'), hero('Zanie'), hero('Elijah & Lailah'), { ...hero('Lucca'), owned: false, rank: null, equipmentLevel: null }]);
       if (url === '/api/profiles') return Response.json([{ id: 1, name: 'Me', playerId: '1111', isDefault: true, heroCount: 3 }, { id: 2, name: 'Luna', playerId: '2222', isDefault: false, heroCount: 2 }, { id: 3, name: 'Kai', playerId: '3333', isDefault: false, heroCount: 1 }, { id: 4, name: 'Empty', playerId: null, isDefault: false, heroCount: 0 }]);
@@ -95,6 +95,17 @@ describe('Arena page', () => {
     await user.type(screen.getByRole('searchbox', { name: 'Player' }), 'Luna');
     expect(await screen.findByText('No records match these filters.')).toBeTruthy();
     expect(screen.queryByText('No records yet.')).toBeNull();
+  });
+
+  it('opens on Records, hides the tabs while a form is open and pauses the Planner', async () => {
+    const user = userEvent.setup();
+    render(<ArenaPage />);
+    expect(screen.getByRole('tab', { name: 'Records', selected: true })).toBeTruthy();
+    await user.click(await screen.findByRole('button', { name: 'New record' }));
+    expect(screen.queryByRole('tablist', { name: 'PvP views' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('tab', { name: 'Planner' }));
+    expect(screen.getByText('The Scenario planner is paused while it is re-evaluated.')).toBeTruthy();
   });
 
   it('says only why when the first load failed, not that nothing is recorded', async () => {
@@ -469,7 +480,7 @@ describe('Arena page', () => {
     const reference = Object.freeze({ maps, heroes, artifacts, rules, heroRules, phantimals, defaults, profiles: Object.freeze(profiles) as typeof profiles }); // writing to it throws
     const patchReference = vi.fn();
     const user = userEvent.setup();
-    render(<Battles reference={reference} patchReference={patchReference} />);
+    render(<Battles reference={reference} patchReference={patchReference} onForm={vi.fn()} />);
     await user.click(await screen.findByRole('button', { name: 'New record' }));
     await placeFirstHero(user, /^Evie/);
     await user.selectOptions(screen.getByLabelText('Profile of Side A'), '4');

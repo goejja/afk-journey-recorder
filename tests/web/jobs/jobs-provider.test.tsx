@@ -66,7 +66,7 @@ describe('the job watcher', () => {
     expect(screen.queryByText(/has an answer/)).toBeNull();
     await push({ scenarios: { 3: { state: 'done' } } });
     expect(screen.getByText(/Scenario 3 has an answer\./)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('#scenarios');
+    expect(screen.getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('#arena');
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -102,7 +102,7 @@ describe('the job watcher', () => {
       useJobFinished('scenario', (event) => seen.push(event));
       return null;
     }
-    await arriveWith(<Page />, { scenarios: { 3: { state: 'running' } } }, 'scenarios');
+    await arriveWith(<Page />, { scenarios: { 3: { state: 'running' } } }, 'arena');
     await push({ scenarios: { 3: { state: 'done' } } });
     expect(screen.queryByText(/has an answer/)).toBeNull();
     expect(seen).toEqual([{ kind: 'scenario', id: 3, state: 'done' }]);
@@ -114,7 +114,7 @@ describe('the job watcher', () => {
       seen = useJobs();
       return null;
     }
-    await arriveWith(<Page />, { scenarios: { 3: { state: 'running' } } }, 'arena');
+    await arriveWith(<Page />, { scenarios: { 3: { state: 'running' } } }, 'roster');
     await act(async () => jobsStream.drop());
     expect(seen.error).toBe('Lost the connection to the app.');
     expect(seen.summary?.scenarios).toEqual({ 3: { state: 'running' } });

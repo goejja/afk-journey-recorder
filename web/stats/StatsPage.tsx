@@ -24,12 +24,12 @@ type View = 'overview' | 'players' | 'formations' | 'heroes' | 'pairs' | 'partne
 const VIEWS: { key: View; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'players', label: 'Players' },
-  { key: 'formations', label: 'Formations' },
   { key: 'heroes', label: 'Heroes' },
-  { key: 'pairs', label: 'Hero pairs and trios' },
+  { key: 'pairs', label: 'Pairs and trios' },
   { key: 'partners', label: 'Partners' },
-  { key: 'artifacts', label: 'Artifacts' },
+  { key: 'formations', label: 'Formations' },
   { key: 'maps', label: 'Maps' },
+  { key: 'artifacts', label: 'Artifacts' },
   { key: 'phantimals', label: 'Phantimal check' },
   { key: 'placement', label: 'Placement check' },
 ];

@@ -94,9 +94,9 @@ export function FormationIdField({ label, value, onChange, teams }: Props) {
 }
 
 /** A record's Formation ID, small, in a list. */
-export function FormationIdBadge({ code, side }: { code: string | null | undefined; side?: 'A' | 'B' }) {
+export function FormationIdBadge({ code, side, title }: { code: string | null | undefined; side?: 'A' | 'B'; title?: string }) {
   return code ? (
-    <span className="badge formation-id-badge" title={`Formation ID${side ? ` of Side ${side}` : ''}`}>
+    <span className="badge formation-id-badge" title={title ?? `Formation ID${side ? ` of Side ${side}` : ''}`}>
       {side ? `${side}: ` : ''}
       {code}
     </span>

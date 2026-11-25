@@ -37,11 +37,11 @@ describe('a toast for work that failed in the background', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(
       <ToastProvider>
-        <Show message="Done" options={{ href: '#scenarios' }} />
+        <Show message="Done" options={{ href: '#arena' }} />
       </ToastProvider>,
     );
     await user.click(screen.getByRole('button', { name: 'show' }));
-    expect(screen.getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('#scenarios');
+    expect(screen.getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('#arena');
     expect(screen.queryByRole('alert')).toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(TOAST_MS));
     await act(() => vi.advanceTimersByTimeAsync(TOAST_FADE_MS));

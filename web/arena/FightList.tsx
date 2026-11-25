@@ -116,7 +116,7 @@ const NO_BATTLES: ArenaFight[] = [];
 /** How long the Player search waits after the last key before it asks the server. */
 const PLAYER_SEARCH_WAIT_MS = 250;
 
-export function Battles({ reference, patchReference }: { reference: Reference; patchReference: PatchReference }) {
+export function Battles({ reference, patchReference, onForm }: { reference: Reference; patchReference: PatchReference; onForm: (open: boolean) => void }) {
   const [mode, setMode] = useState<string[]>([]);
   const [tag, setTag] = useState<string[]>([]);
   const [player, setPlayer] = useState('');
@@ -131,6 +131,8 @@ export function Battles({ reference, patchReference }: { reference: Reference; p
   const [editingBattle, setEditingBattle] = useState<{ id: number; clone: Clone; round: Round | null; tournamentId: number | null } | null>(null);
   /** The roster sync a batch save offers, as the form does for one side (ADR 0021). */
   const sync = useRosterSync();
+  const formOpen = adding || importing || editing != null || editingBattle != null;
+  useEffect(() => onForm(formOpen), [formOpen, onForm]);
   const [shownMaps, setShownMaps] = useState<Set<number>>(new Set()); // battles whose map is open
   const reportParked = useParkedToast();
   const toggleMap = useStableCallback((id: number) => setShownMaps((old) => toggled(old, id)));

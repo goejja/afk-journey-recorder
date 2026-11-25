@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 export interface TabItem<K extends string | number> {
   key: K;
@@ -54,6 +54,31 @@ export function TabPanel<K extends string | number>({ id, value, className, chil
   return (
     <div role={value === null ? undefined : 'tabpanel'} id={value === null ? undefined : panelId(id)} aria-labelledby={value === null ? undefined : tabId(id, value)} className={className}>
       {children}
+    </div>
+  );
+}
+
+/**
+ * A Page, or a view inside one, made of Tabs: the strip, a notice under it, and the one `TabPanel` of the selected view. A view that has a
+ * form calls the `onForm` it is given with whether the form is open: the form then takes the whole Page, so the strip goes and the panel is a
+ * plain `div` (docs/ui-conventions.md, "Pages and Tabs"). `onForm` of the component itself passes that on to the Page above it.
+ */
+export function TabbedPage<K extends string | number>({ id, label, tabs, value, onChange, notice, onForm, children }: { id: string; label: string; tabs: readonly TabItem<K>[]; value: K; onChange: (key: K) => void; notice?: ReactNode; onForm?: (open: boolean) => void; children: (onForm: (open: boolean) => void) => ReactNode }) {
+  const [full, setFull] = useState(false);
+  const form = useCallback(
+    (open: boolean) => {
+      setFull(open);
+      onForm?.(open);
+    },
+    [onForm],
+  );
+  return (
+    <div>
+      {!full && <Tabs id={id} label={label} tabs={tabs} value={value} onChange={onChange} />}
+      {notice}
+      <TabPanel id={id} value={full ? null : value}>
+        {children(form)}
+      </TabPanel>
     </div>
   );
 }

@@ -48,9 +48,9 @@ describe('finishedBetween for the picture queues', () => {
 
 describe('announcement', () => {
   it('points each kind to the page that shows its result, which needs no toast', () => {
-    expect(announcement({ kind: 'scenario', id: 3, state: 'done' }).href).toBe('#scenarios');
+    expect(announcement({ kind: 'scenario', id: 3, state: 'done' }).href).toBe('#arena');
     expect(announcement({ kind: 'review', id: 1, state: 'done' }).href).toBe('#admin');
-    expect(showsResult({ kind: 'scenario', id: 3, state: 'done' }, 'scenarios')).toBe(true);
+    expect(showsResult({ kind: 'scenario', id: 3, state: 'done' }, 'arena')).toBe(true);
     expect(showsResult({ kind: 'scenario', id: 3, state: 'done' }, 'admin')).toBe(false);
   });
 });

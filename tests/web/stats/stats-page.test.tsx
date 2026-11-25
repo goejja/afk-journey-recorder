@@ -326,7 +326,7 @@ describe('Statistics page', () => {
   it('switches hero groups between pairs and trios, asking for at least 3 games of a trio', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
-    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
+    await user.click(screen.getByRole('tab', { name: 'Pairs and trios' }));
     expect(await screen.findByText('83%')).toBeTruthy(); // pairs first
     await user.click(screen.getByRole('radio', { name: 'Trios' }));
     expect(await screen.findByText('75%')).toBeTruthy();
@@ -341,7 +341,7 @@ describe('Statistics page', () => {
   it('keeps a minimum the player typed when the group size changes', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
-    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
+    await user.click(screen.getByRole('tab', { name: 'Pairs and trios' }));
     await user.clear(screen.getByLabelText('At least (games)'));
     await user.type(screen.getByLabelText('At least (games)'), '7');
     await user.click(screen.getByRole('radio', { name: 'Trios' }));
@@ -358,7 +358,7 @@ describe('Statistics page', () => {
     const asked = () => requests.filter((u) => u.startsWith('/api/stats/pairs'));
     const user = userEvent.setup();
     render(<StatsPage />);
-    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
+    await user.click(screen.getByRole('tab', { name: 'Pairs and trios' }));
     expect(await screen.findByText(/Showing the top 1 of 1340 pairs by win rate/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Show 500 more' })).toBeTruthy();
     expect(asked().at(-1)).toBe('/api/stats/pairs?min=1'); // what the server does when nothing is said is not said
@@ -372,7 +372,7 @@ describe('Statistics page', () => {
   it('says nothing about a cut when the whole list is shown', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
-    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
+    await user.click(screen.getByRole('tab', { name: 'Pairs and trios' }));
     expect(await screen.findByText('83%')).toBeTruthy();
     expect(screen.queryByText(/Showing the top/)).toBeNull();
   });
@@ -380,7 +380,7 @@ describe('Statistics page', () => {
   it('shows pairs', async () => {
     const user = userEvent.setup();
     render(<StatsPage />);
-    await user.click(screen.getByRole('tab', { name: 'Hero pairs and trios' }));
+    await user.click(screen.getByRole('tab', { name: 'Pairs and trios' }));
     expect(await screen.findByText('83%')).toBeTruthy();
   });
 });

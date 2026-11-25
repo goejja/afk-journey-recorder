@@ -65,6 +65,7 @@ const usageText = (u: HeroUsage) =>
     [u.records, 'records'],
     [u.assists, 'records as assist hero'],
     [u.scenarios, 'scenarios'],
+    [u.ideas, 'ideas'],
     [u.deployments, 'Formation IDs and Round Deployments'],
     [u.stageEnemies, 'stages'],
     [u.pictures, 'reader pictures'],
@@ -246,7 +247,7 @@ export function HeroAdminPage() {
         </div>
         {locked && (
           <p className="muted">
-            This hero is placed on a map in {usage.records} records, {usage.scenarios} scenarios and {usage.deployments} Formation IDs and Round Deployments, so the units it brings cannot change.
+            This hero is placed on a map in {usage.records} records, {usage.scenarios} scenarios, {usage.ideas} ideas and {usage.deployments} Formation IDs and Round Deployments, so the units it brings cannot change.
           </p>
         )}
 

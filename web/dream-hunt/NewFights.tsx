@@ -125,11 +125,6 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
         current,
         onSelect: setCurrent,
         hint: `Heroes and artifacts used in another fight are greyed out: click one to move it here. Each fight with heroes is saved as its own record; the fifth fight can carry a rule.${editing ? ' A fight left without heroes is removed from the day.' : ''}`,
-        onCopyPrevious: () => {
-          const previous = drafts[current - 1];
-          if (!previous) return;
-          change({ ...draft, mapName: previous.mapName, ...(previous.mapName === draft.mapName ? {} : { formation: onMap(reference, previous.mapName, draft) }) });
-        },
         // The formations trade places; the boss, map, rule and result stay with the fight.
         swap: { onSwap: (other) => setDrafts((old) => swapParts(old, current, other, ['formation'], (d) => ({ ...d, formation: onMap(reference, d.mapName, d) }))) },
       }}

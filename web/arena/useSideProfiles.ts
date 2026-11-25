@@ -24,6 +24,10 @@ export interface SideProfilesOptions {
   onError: (message: string | null) => void;
   /** Offers “New profile…” on each side: asks for the name of the profile to make, or returns nothing when the person gives up. */
   askNewName?: (side: Side) => Promise<string | null | undefined>;
+  /** What each draft becomes when the sides are swapped (`swapSides`, then refitted to its map). */
+  swapDraft: (d: Draft) => Draft;
+  /** Called after the sides were swapped, for what the form keeps beside the drafts (the Formation ID of each side). */
+  onSwapped?: () => void;
 }
 
 /**
@@ -31,7 +35,7 @@ export interface SideProfilesOptions {
  * one (its Player ID goes on the drafts and its roster's states on their heroes), giving a profile its Player ID, and making a profile.
  * `barProps` is what `SideProfileBar` needs.
  */
-export function useSideProfiles({ profiles, patchReference, opening, update, overwrite, run, onError, askNewName }: SideProfilesOptions) {
+export function useSideProfiles({ profiles, patchReference, opening, update, overwrite, run, onError, askNewName, swapDraft, onSwapped }: SideProfilesOptions) {
   const [chosenProfile, setChosenProfile] = useState(opening);
   const [profileRoster, setProfileRoster] = useProfileRosters(chosenProfile);
   const newestA = useNewest();
@@ -83,7 +87,19 @@ export function useSideProfiles({ profiles, patchReference, opening, update, ove
     );
   }
 
-  const barProps: Pick<SideProfileBarProps, 'profiles' | 'sideProfiles' | 'onSideProfile' | 'onNewProfile' | 'onSetPlayerId'> = {
+  /** Side A becomes Side B and the other way round: the profiles with their rosters, and every draft with its units, Players and result. */
+  function swapSides() {
+    newestA(); // a roster still arriving was asked for a side that is no longer the same
+    newestB();
+    setChosenProfile((old) => ({ A: old.B, B: old.A }));
+    setProfileRoster((old) => ({ A: old.B, B: old.A }));
+    update(swapDraft);
+    onSwapped?.();
+    onError(null);
+  }
+
+  const barProps: Pick<SideProfileBarProps, 'profiles' | 'sideProfiles' | 'onSideProfile' | 'onNewProfile' | 'onSetPlayerId' | 'onSwapSides'> = {
+    onSwapSides: swapSides,
     profiles,
     sideProfiles: chosenProfile,
     onSideProfile: (side, id) => void chooseProfile(side, id),

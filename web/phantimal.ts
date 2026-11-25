@@ -1,4 +1,4 @@
-import { checkFactionRequirement, PAIR_PHANTIMALS } from '../src/domain/units.js';
+import { checkFactionRequirement, PAIR_PHANTIMALS, PARTNER_PHANTIMALS } from '../src/domain/units.js';
 import { firstFreeTile, type PlacedPhantimal, type PlacedRow } from './units.js';
 
 /** A Phantimal the editor may offer: its name and faction (the season filter is applied before it gets here). */
@@ -45,4 +45,13 @@ export function derivePhantimal<T extends WithPhantimal>(value: T, cells: number
   const partnerTile = firstFreeTile(cells, zone, (t) => t === tile || taken(t));
   // A pair stands together: with no room for the second part the Phantimal does not appear.
   return { ...value, phantimal: partnerTile === null ? null : { name: choice, tile, partnerTile } };
+}
+/** The options a team may bring from the Phantimals a mode and season offer: the second half of a pair is no option of its own. */
+export const phantimalOptionsOf = (phantimals: { name: string; faction: string | null }[] | null): PhantimalOption[] =>
+  (phantimals ?? []).filter((p) => !PARTNER_PHANTIMALS.has(p.name)).map((p) => ({ name: p.name, faction: p.faction }));
+
+/** The team with the Phantimal its heroes bring: the one of the faction three of them share, or none (a mode that always brings one, ADR 0029). */
+export function withAutoPhantimal<T extends WithPhantimal>(value: T, cells: number[], zone: number, options: PhantimalOption[], heroFactions: Map<string, string | null>): T {
+  const chosen = { ...value, phantimalChoice: eligiblePhantimals(value.placed, options, heroFactions)[0] ?? '' };
+  return derivePhantimal(chosen, cells, zone, options, heroFactions);
 }
