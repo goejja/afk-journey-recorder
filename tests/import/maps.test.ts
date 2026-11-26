@@ -98,11 +98,11 @@ describe('storeArenaMaps with a corrected map', () => {
 });
 
 describe('seedStageMaps', () => {
-  it('creates five blank Stage maps for the player to paint', () => {
+  it('creates one blank Stage map, Open, for the player to paint', () => {
     const db = openDb(':memory:');
     seedStageMaps(db);
     const names = db.prepare("SELECT name FROM map WHERE tags = '[\"Stage\"]' ORDER BY name").pluck().all();
-    expect(names).toEqual(['Open', 'Wall center', 'Wall left', 'Wall right', 'Walls both sides']);
+    expect(names).toEqual(['Open']);
     const cells = JSON.parse(db.prepare("SELECT cells FROM map WHERE name = 'Open'").pluck().get() as string);
     expect(cells).toHaveLength(45);
     expect(cells.every((tile: number) => tile === 0)).toBe(true);

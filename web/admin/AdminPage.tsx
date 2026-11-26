@@ -12,6 +12,7 @@ import { CleanupPage } from '../reader/CleanupPage.js';
 import { ImagesPage } from '../reader/ImagesPage.js';
 import { MapsPage } from './MapsPage.js';
 import { ArtifactsPage } from './ArtifactsPage.js';
+import { SyncPage } from './SyncPage.js';
 import { UnitsPage } from './UnitsPage.js';
 import { TitanReaverAdmin } from './TitanReaverAdmin.js';
 import { ReaderPage } from '../reader/ReaderPage.js';
@@ -590,6 +591,7 @@ const SECTIONS = [
   { key: 'reader', label: 'Reader', component: ReaderPage },
   { key: 'review', label: 'Review', component: ReviewPage },
   { key: 'agent', label: 'Agent', component: AgentAdmin },
+  { key: 'sync', label: 'Sync', component: SyncPage },
   { key: 'database', label: 'Database', component: DatabaseAdmin },
 ] as const;
 
@@ -601,7 +603,7 @@ export function AdminPage() {
   return (
     <div>
       <h2 className="sr-only">{active.label}</h2>
-      <Tabs id="admin" label="Admin" tabs={SECTIONS} value={section} onChange={setSection} />
+      <Tabs id="admin" label="Admin" tabs={SECTIONS} value={section} onChange={setSection} sticky />
       <TabPanel id="admin" value={section}>
         <Section />
       </TabPanel>

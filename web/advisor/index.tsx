@@ -43,9 +43,10 @@ export const KnownAdvisor = (_props: { reference: { maps: GameMap[]; heroes: Her
 /** The known-layout selector of the editors; there are no known layouts in this build. */
 export const KnownLayoutControl = <T extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: { tile: number; name: string; partnerTile?: number | null } | null }>(_props: {
   mode: ArenaMode;
-  map: string | null;
+  map: Pick<GameMap, 'name' | 'rowLengths' | 'cells'> | null;
   placement: T;
   turned?: boolean;
+  drawTurned?: boolean;
   excludeAttempts?: number[];
   excludeIdea?: number | null;
   onChange: (next: T) => void;

@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
-import { MAP_TAGS, TILE, TILE_COUNT } from '../../src/domain/map.js';
+import { MAP_TAGS, OPEN_MAP, TILE, TILE_COUNT } from '../../src/domain/map.js';
 import { api, type GameMap } from '../backend.js';
 import { HexMap, Legend } from '../HexMap.js';
+import { MapUsesPanel } from './MapUses.js';
 import { TilePopover } from '../TilePopover.js';
 import { useNameDialog } from '../ui/Dialog.js';
 import { useAction } from '../hooks/action.js';
@@ -205,12 +206,13 @@ export function MapsPage() {
                   <button onClick={() => void restore()} disabled={busy || !current.canRestore}>
                     Restore original
                   </button>
-                  <button className="danger" disabled={busy} onClick={() => void remove()}>
+                  <button className="danger" disabled={busy || current.name === OPEN_MAP} title={current.name === OPEN_MAP ? `${OPEN_MAP} is the map Stages start on and is never deleted` : undefined} onClick={() => void remove()}>
                     Delete
                   </button>
                 </>
               )}
             </div>
+            {current && <MapUsesPanel map={current.name} maps={maps} onMoved={() => void 0} />}
           </div>
         }
       />

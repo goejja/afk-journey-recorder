@@ -216,10 +216,15 @@ export function roundDeploymentProblem(deployment: RoundDeployment, factions?: R
 export function withPlacement(deployed: RoundTeam, placed: RoundTeam, mapName?: string): RoundTeam | null {
   const same = (a: RoundTeam, b: RoundTeam) => heroNamesOf(a).sort().join('|') === heroNamesOf(b).sort().join('|');
   if (!same(deployed, placed)) return null;
+  // Units of one kind (Zanie's two lasers) share hero and part: each takes the tile of a placed unit no other has taken.
+  const taken = new Set<number>();
   const heroes = deployed.heroes.map((h) => {
     if (h.tile !== null) return h;
-    const found = placed.heroes.find((p) => p.hero === h.hero && p.part === h.part);
-    return found?.tile != null ? { ...h, tile: found.tile } : h;
+    const at = placed.heroes.findIndex((p, i) => !taken.has(i) && p.hero === h.hero && p.part === h.part);
+    if (at < 0) return h;
+    taken.add(at);
+    const found = placed.heroes[at]!;
+    return found.tile != null ? { ...h, tile: found.tile } : h;
   });
   const phantimal = deployed.phantimal && deployed.phantimal.tile === null && placed.phantimal && phantimalKey(placed.phantimal.name) === phantimalKey(deployed.phantimal.name)
     ? { ...deployed.phantimal, tile: placed.phantimal.tile, ...(placed.phantimal.partnerTile != null ? { partnerTile: placed.phantimal.partnerTile } : {}) }

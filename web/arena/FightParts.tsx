@@ -9,6 +9,7 @@ import { type Reference, type Draft, onMap, playerName, type Side } from './draf
 /** The mode, map and rule of a battle: what it is about. */
 export function ArenaIdentity({ mode, onMode, draft, reference, onChange, side = 'A', excludeAttempts }: { mode: ArenaMode; onMode?: (mode: ArenaMode) => void; draft: Draft; reference: Reference; onChange: (draft: Draft) => void; /** The side being edited, which the known layouts are offered for. */ side?: Side; /** The saved fights being edited. */ excludeAttempts?: number[] }) {
   const arenaMaps = reference.maps.filter((m) => m.tags.includes('Arena'));
+  const map = reference.maps.find((m) => m.name === draft.mapName) ?? null;
   return (
     <>
       <label className="field">
@@ -30,9 +31,9 @@ export function ArenaIdentity({ mode, onMode, draft, reference, onChange, side =
         </select>
       </label>
       {side === 'A' ? (
-        <KnownLayoutControl mode={mode} map={draft.mapName || null} placement={draft.formation} excludeAttempts={excludeAttempts} onChange={(formation) => onChange({ ...draft, formation })} />
+        <KnownLayoutControl mode={mode} map={map} placement={draft.formation} excludeAttempts={excludeAttempts} onChange={(formation) => onChange({ ...draft, formation })} />
       ) : (
-        <KnownLayoutControl mode={mode} map={draft.mapName || null} placement={draft.opponent} turned excludeAttempts={excludeAttempts} onChange={(opponent) => onChange({ ...draft, opponent })} />
+        <KnownLayoutControl mode={mode} map={map} placement={draft.opponent} turned excludeAttempts={excludeAttempts} onChange={(opponent) => onChange({ ...draft, opponent })} />
       )}
       {mode === 'Supreme Arena' && (
         <label className="field">

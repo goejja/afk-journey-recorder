@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { safeFileName } from '../domain/file-name.js';
 import type { Fetcher } from './fetch.js';
+import type { SyncOutcome } from './reference-sync.js';
 
 const ORIGIN = 'https://www.afk.global';
 const PAGE = `${ORIGIN}/afk-journey/artifacts`;
@@ -92,4 +93,12 @@ export async function importArtifactImages(db: Database.Database, fetcher: Fetch
     }
   }
   return { downloaded, missing, failed };
+}
+
+/** What `npm run import:artifact-images` and Admin > Sync print: the result of the import, in lines. */
+export async function syncArtifactImages(db: Database.Database, fetcher: Fetcher, imagesDir = 'images'): Promise<SyncOutcome> {
+  const result = await importArtifactImages(db, fetcher, imagesDir);
+  const lines = [`Artifact images: ${result.downloaded} downloaded into ${imagesDir}/artifacts`];
+  if (result.missing.length) lines.push(`No icon found for: ${result.missing.join(', ')} (upload them in the Images tab)`);
+  return { lines, warnings: result.failed.length ? [`Failed: ${result.failed.join('; ')}`] : [] };
 }

@@ -1,7 +1,9 @@
 import type Database from 'better-sqlite3';
 import { Hono } from 'hono';
-import { isDeploymentTile, ROW_LENGTHS } from '../../domain/map.js';
-import { mapsContract, type GameMap } from '../../shared/contracts/maps.js';
+import { isDeploymentTile, OPEN_MAP, ROW_LENGTHS } from '../../domain/map.js';
+import { ideasUsing } from '../../advisor/index.js';
+import { mapsContract, type GameMap, type MapUses } from '../../shared/contracts/maps.js';
+import { describeUsage } from './usage.js';
 import { fail, serve } from '../contract.js';
 
 interface MapRow {
@@ -90,7 +92,37 @@ export function mapRoutes(db: Database.Database): Hono {
     return toJson(find(current.name)!);
   });
 
+  const count = (sql: string, name: string) => db.prepare(sql).pluck().get(name) as number;
+  const counts = (name: string): MapUses => ({
+    stages: { stages: count('SELECT count(*) FROM stage WHERE map_name = ?', name), records: count('SELECT count(*) FROM stage_attempt WHERE stage_id IN (SELECT id FROM stage WHERE map_name = ?)', name) },
+    arena: count('SELECT count(*) FROM arena_attempt WHERE map_name = ?', name),
+    ideas: ideasUsing(db, 'map', name),
+    dreamHunt: count('SELECT count(*) FROM dream_hunt_attempt WHERE map_name = ?', name),
+    titanReaver: 0, // a Titan Reaver fight is against a boss and has no map
+    scenarios: count('SELECT count(DISTINCT scenario_id) FROM scenario_slot WHERE map_name = ?', name),
+  });
+
+  serve(app, mapsContract.uses, ({ params }) => (find(params.name) ? counts(params.name) : fail(404, 'Unknown map')));
+
+  serve(app, mapsContract.moveStages, ({ params, body }) => {
+    if (!find(params.name)) return fail(404, 'Unknown map');
+    if (params.name === OPEN_MAP) return fail(409, `The stages of ${OPEN_MAP} are never moved off it`);
+    if (!find(body.to)) return fail(404, `Unknown map "${body.to}"`);
+    if (body.to === params.name) return fail(409, 'Choose another map to move the stages to');
+    return { moved: db.prepare('UPDATE stage SET map_name = ? WHERE map_name = ?').run(body.to, params.name).changes };
+  });
+
   serve(app, mapsContract.remove, ({ params }) => {
+    if (params.name === OPEN_MAP) return fail(409, `${OPEN_MAP} is the map Stages start on and is never deleted`);
+    const n = counts(params.name);
+    const used = describeUsage([
+      { label: 'stages', count: n.stages.stages },
+      { label: 'Dream Hunt records', one: 'Dream Hunt record', count: n.dreamHunt },
+      { label: 'PvP records', one: 'PvP record', count: n.arena },
+      { label: 'scenarios', count: n.scenarios },
+      { label: 'ideas', count: n.ideas },
+    ]);
+    if (used) return fail(409, `${params.name} is used by ${used}, so it cannot be deleted; see Used by`);
     db.prepare('DELETE FROM map WHERE name = ?').run(params.name);
   });
 

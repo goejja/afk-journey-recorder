@@ -211,11 +211,16 @@ export const applyToOpponent = (current: OpponentState, team: RoundTeam, cells: 
 function withKnownTiles<S extends { placed: { tile: number; hero: string; part?: string }[]; phantimal: PlacedPhantimal | null }>(current: S, team: RoundTeam, cells: number[], zone: number): S {
   const same = (p: { hero: string; part?: string }, h: RoundHero) => p.hero === h.hero && (p.part ?? '') === (h.part ?? '');
   let state = current;
+  // Units of one kind (Zanie's two lasers) share hero and part: each Deployment unit moves one placed unit, never one already moved.
+  const moved = new Set<number>();
   for (const h of team.heroes) {
     if (h.tile === null || cells[h.tile] !== zone) continue;
     const tile = h.tile;
+    const at = state.placed.findIndex((p, i) => !moved.has(i) && same(p, h));
+    if (at < 0) continue;
     if (state.placed.some((p) => p.tile === tile && !same(p, h))) continue;
-    state = { ...state, placed: state.placed.map((p) => (same(p, h) ? { ...p, tile } : p)) };
+    moved.add(at);
+    state = { ...state, placed: state.placed.map((p, i) => (i === at ? { ...p, tile } : p)) };
   }
   const phantimal = team.phantimal;
   if (phantimal && phantimal.tile !== null && cells[phantimal.tile] === zone && !state.placed.some((p) => p.tile === phantimal.tile)) {

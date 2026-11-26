@@ -20,6 +20,7 @@ import { seasonsContract } from '../src/shared/contracts/seasons.js';
 import { battlesContract } from '../src/shared/contracts/battles.js';
 import { scenariosContract } from '../src/shared/contracts/scenarios.js';
 import { statsContract } from '../src/shared/contracts/stats.js';
+import { syncContract } from '../src/shared/contracts/sync.js';
 import { counterRuleContract, statsSettingsContract } from '../src/shared/contracts/stats-settings.js';
 import { importFeedbackContract, keptPicturesContract, learnedContract, learnedPicturesContract, parkedReadingsContract, readerExamplesContract } from '../src/shared/contracts/reader.js';
 import { rosterImportContract } from '../src/shared/contracts/roster-import.js';
@@ -37,7 +38,7 @@ import type { TitanReaverSetup } from '../src/domain/titan-reaver.js';
 import type { Deployment } from '../src/domain/layout.js';
 import type { RoundDeployment } from '../src/domain/round-deployment.js';
 import type { Round } from '../src/domain/tournament.js';
-import type { GameMap, Phantimal, StageKind, StageKey, Stage, BossRule, StageAttemptInput, StageRangeInput, DreamHuntInput, BattleImportState, ImportApplySection, ImportFeedbackSide, ImportScreen, RosterImportState, ReaderExample, CleanupRequest, ScenarioInput, AgentSettings, ArenaMode, BattleFormationIds, BattleRound, ArenaFightInput, HeroAdminBody, PlacementRuleBody, PvpHintBody, TitanReaverBattleInput } from '../src/shared/api.js';
+import type { GameMap, Phantimal, StageKind, StageKey, Stage, BossRule, StageAttemptInput, StageRangeInput, DreamHuntInput, BattleImportState, ImportApplySection, ImportFeedbackSide, ImportScreen, RosterImportState, ReaderExample, CleanupRequest, ScenarioInput, AgentSettings, ArenaMode, BattleFormationIds, BattleRound, ArenaFightInput, HeroAdminBody, PlacementRuleBody, PvpHintBody, TitanReaverBattleInput, SyncSourceId } from '../src/shared/api.js';
 
 import { clearAnswers, keptAnswer } from './answers.js';
 
@@ -285,6 +286,8 @@ export const api = {
   factionMismatches: () => call(statsContract.factionMismatches),
   backCheck: () => call(statsContract.backCheck),
   dunlingrCheck: () => call(statsContract.dunlingrCheck),
+  syncState: () => call(syncContract.state),
+  startSync: (body: { source: 'all' | SyncSourceId; refresh: boolean; overwrite: boolean }) => call(syncContract.start, { body }),
   statsSettings: () => call(statsSettingsContract.get),
   saveStatsSettings: (modes: string[]) => call(statsSettingsContract.save, { body: { modes } }),
   updateDate: () => call(updateDateContract.get),
@@ -349,4 +352,6 @@ export const api = {
   duplicateMap: (name: string, newName: string) => call(mapsContract.duplicate, { params: { name }, body: { name: newName } }),
   restoreMap: (name: string) => call(mapsContract.restore, { params: { name } }),
   deleteMap: (name: string) => call(mapsContract.remove, { params: { name } }),
+  mapUses: (name: string) => call(mapsContract.uses, { params: { name } }),
+  moveMapStages: (name: string, to: string) => call(mapsContract.moveStages, { params: { name }, body: { to } }),
 };

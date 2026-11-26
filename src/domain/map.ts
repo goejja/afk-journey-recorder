@@ -114,3 +114,6 @@ export function playerOnTop(rowLengths: number[], cells: number[]): boolean | nu
   const enemy = averageRow(rowLengths, cells, TILE.ENEMY);
   return player === null || enemy === null || player === enemy ? null : player < enemy;
 }
+
+/** The Stage map every new Stage can start on: it is never deleted, and its Stages are never moved off it (#382). */
+export const OPEN_MAP = 'Open';

@@ -19,7 +19,7 @@ import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { useConfirm, useNameDialog } from '../ui/Dialog.js';
 import { FormationIdField } from '../FormationIdField.js';
 import { useLoad } from '../hooks/load.js';
-import { type PatchReference, type Reference, type Draft, onMap, newDraft, weekly, withDefault, sharedTags, swappedOnMap, toInput, type Clone, profileByPlayerId, type Side } from './draft.js';
+import { type PatchReference, type Reference, type Draft, onMap, newDraft, withDefault, sharedTags, swappedOnMap, toInput, type Clone, profileByPlayerId, type Side } from './draft.js';
 import { ArenaIdentity, WinnerField, FightEditor, FightFormationIds, UnionLevels } from './FightParts.js';
 
 /** Sets up one team per slot of the mode, greying out heroes the other teams use, then saves each as its own record. */
@@ -145,21 +145,6 @@ export function NewFights({ reference, patchReference, initial, editing, savedRo
   // The tags describe the whole battle (and the players behind its sides), so every team of it carries the same ones.
   const shareTags = (tags: Partial<ReturnType<typeof sharedTags>>) => setDrafts((old) => old.map((d) => ({ ...d, ...tags })));
 
-  async function setDefault() {
-    const weeklyMode = weekly(mode);
-    if (weeklyMode === null) return;
-    const slots = drafts.map((d) => ({ boss: null, mapName: d.mapName || null, rule: mode === 'Supreme Arena' ? d.rule || null : null }));
-    const saved = await formAction.run(
-      () => api.saveDefaults(weeklyMode, slots),
-      (defaults) => {
-        patchReference({ defaults });
-        setError(null);
-      },
-      `Saved as this week’s ${mode} default: new records start with these maps${mode === 'Supreme Arena' ? ' and rules' : ''}.`,
-    );
-    if (!saved) setStatus(null);
-  }
-
   const saving = useAction();
   const save = (another: boolean) => saving.run(() => saveNow(another));
 
@@ -217,7 +202,6 @@ export function NewFights({ reference, patchReference, initial, editing, savedRo
     {sync.dialog}
     <RecordShell
       title={editing != null ? `Edit ${mode} record` : 'New record'}
-      onSetDefault={weekly(mode) === null || editing != null ? undefined : () => void setDefault()}
       identity={<ArenaIdentity mode={mode} onMode={editing != null ? undefined : changeMode} draft={draft} reference={reference} onChange={change} side={side} excludeAttempts={editing != null ? initial?.attemptIds : undefined} />}
       result={<WinnerField draft={draft} onChange={change} />}
       note={draft.note}

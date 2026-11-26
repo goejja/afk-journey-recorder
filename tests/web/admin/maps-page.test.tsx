@@ -13,15 +13,20 @@ const maps = [
   { name: 'Supreme Arena XV', tags: ['Arena'], rowLengths, cells, boostTiles: [], source: 'manual', handMade: true, canRestore: false },
 ];
 
+const noUses = { stages: { stages: 0, records: 0 }, arena: 0, ideas: 0, dreamHunt: 0, titanReaver: 0, scenarios: 0 };
+let uses: any;
 let requests: { method: string; url: string; body?: any }[];
 
 beforeEach(() => {
   requests = [];
+  uses = noUses;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(init.body as string) : undefined;
       requests.push({ method: init?.method ?? 'GET', url, body });
+      if (url.endsWith('/uses')) return Response.json(uses);
+      if (url.endsWith('/move-stages')) return Response.json({ moved: 1 });
       if (!init?.method || init.method === 'GET') return Response.json(maps);
       return Response.json({ ...maps[0], ...body });
     }),
@@ -110,6 +115,7 @@ describe('MapsPage', () => {
         vi.fn(async (url: string, init?: RequestInit) => {
           const body = init?.body ? JSON.parse(init.body as string) : undefined;
           requests.push({ method: init?.method ?? 'GET', url, body });
+          if (url.endsWith('/uses')) return Response.json(uses);
           return !init?.method || init.method === 'GET' ? Response.json([duel]) : Response.json({ ...duel, ...body });
         }),
       );
@@ -158,5 +164,42 @@ describe('MapsPage', () => {
       await user.click(await screen.findByRole('button', { name: /Duel/ }));
       expect(screen.getByText(/Boost tile \(a deployment tile that boosts its unit\)/)).toBeTruthy();
     });
+  });
+
+  it('shows how many records of each mode use a map, and offers no move while no stage does', async () => {
+    const user = userEvent.setup();
+    render(<MapsPage />);
+    await user.click(await screen.findByRole('button', { name: /Arena I/ }));
+    const section = await screen.findByRole('region', { name: 'Used by' });
+    const rows = within(section).getAllByRole('row').slice(1).map((r) => r.textContent);
+    expect(rows).toEqual(['Stages0', 'PvP records0', 'PvP ideas0', 'Dream Hunt0', 'Titan Reaver0 (no map)']);
+    expect(within(section).queryByRole('button', { name: 'Move stages' })).toBeNull();
+  });
+
+  it('counts records by mode, and moves the stages after a confirmation', async () => {
+    uses = { ...noUses, stages: { stages: 1, records: 2 }, arena: 3, dreamHunt: 4, scenarios: 1 };
+    const user = userEvent.setup();
+    render(<MapsPage />);
+    await user.click(await screen.findByRole('button', { name: /Arena I/ }));
+    const section = await screen.findByRole('region', { name: 'Used by' });
+    expect(within(section).getAllByRole('row').slice(1).map((r) => r.textContent)).toEqual(['Stages2 (on 1 stage)', 'PvP records3', 'PvP ideas0', 'Dream Hunt4', 'Titan Reaver0 (no map)']);
+    expect(within(section).getByText('Also planned in 1 scenario.')).toBeTruthy();
+
+    await user.selectOptions(within(section).getByLabelText(/Move its stages to/), 'Open');
+    await user.click(within(section).getByRole('button', { name: 'Move stages' }));
+    expect(requests.some((r) => r.url.endsWith('/move-stages'))).toBe(false);
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Move stages' }));
+    await waitFor(() => expect(requests.find((r) => r.url.endsWith('/move-stages'))).toMatchObject({ method: 'POST', url: '/api/maps/Arena%20I/move-stages', body: { to: 'Open' } }));
+  });
+
+  it('never offers to delete or empty the Open map', async () => {
+    uses = { ...noUses, stages: { stages: 2, records: 5 } };
+    const user = userEvent.setup();
+    render(<MapsPage />);
+    await user.click(await screen.findByRole('button', { name: /^Open/ }));
+    const section = await screen.findByRole('region', { name: 'Used by' });
+    expect(within(section).queryByRole('button', { name: 'Move stages' })).toBeNull();
+    expect(within(section).getByText(/never deleted and its stages are never moved off it/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Delete' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

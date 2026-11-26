@@ -784,6 +784,56 @@ export interface JobsSummary {
   review: ReviewExplainJob | null;
   roster: ImportQueueSummary;
   battle: ImportQueueSummary;
+  /** The syncs of outside data and assets (Admin > Sync): whether one runs, and how the last finished run went. */
+  sync: SyncSummary;
+}
+
+/** The outside sources Admin > Sync can bring up to date. `game-icons` is in the private edition only. */
+export type SyncSourceId = 'reference' | 'artifact-images' | 'game-icons';
+
+/** One run of a sync of one source. */
+export interface SyncRun {
+  id: number;
+  source: SyncSourceId;
+  startedAt: string;
+  finishedAt: string | null;
+  status: 'running' | 'ok' | 'failed';
+  /** The cache was ignored (files were downloaded again). */
+  refresh: boolean;
+  /** The importer-owned fields of rows the player edited were replaced. */
+  overwrite: boolean;
+  /** What the run did, one line each (counts, rows taken over or overwritten). */
+  lines: string[];
+  /** What went wrong without stopping the run. */
+  warnings: string[];
+  /** Why the run stopped, when it failed. */
+  error: string | null;
+}
+
+/** A source in Admin > Sync with how its last run went. */
+export interface SyncSource {
+  id: SyncSourceId;
+  label: string;
+  description: string;
+  /** Whether the Overwrite option means something for it (only the reference data has rows the player can edit). */
+  canOverwrite: boolean;
+  last: SyncRun | null;
+}
+
+/** What Admin > Sync shows. */
+export interface SyncState {
+  /** The source being synced now, or null. */
+  running: SyncSourceId | null;
+  sources: SyncSource[];
+}
+
+/** The sync in the background summary: enough for a page to know when to ask again. */
+export interface SyncSummary {
+  running: boolean;
+  /** The id of the last run that was started (0 for none): changes when a run starts or ends. */
+  lastRunId: number;
+  /** The last finished run failed. */
+  failed: boolean;
 }
 
 /** A row where a proposed hero's tile fell that lost clearly more than the same hero in alike teams, from the records of all Players. */

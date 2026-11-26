@@ -32,6 +32,7 @@ describe('GET /api/jobs', () => {
       review: null,
       roster: { active: 0, failed: 0, done: 0, signature: '' },
       battle: { active: 0, failed: 0, done: 0, signature: '' },
+      sync: { running: false, lastRunId: 0, failed: false },
     });
   });
 

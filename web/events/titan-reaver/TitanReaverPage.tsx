@@ -63,7 +63,7 @@ export function TitanReaverPage({ onForm }: { onForm: (open: boolean) => void })
   const prefillUsed = useCallback(() => setPrefill(null), []);
 
   return (
-    <TabbedPage id="titan-reaver" label="Titan Reaver views" tabs={VIEWS} value={view} onChange={setView} notice={loaded.error && <Notice kind="error">{loaded.error}</Notice>} onForm={onForm}>
+    <TabbedPage id="titan-reaver" label="Titan Reaver views" tabs={VIEWS} value={view} onChange={setView} sticky={false} notice={loaded.error && <Notice kind="error">{loaded.error}</Notice>} onForm={onForm}>
       {(form) => (
         <>
           {reference && view === 'event' && (

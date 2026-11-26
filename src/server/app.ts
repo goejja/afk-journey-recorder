@@ -33,6 +33,7 @@ import { seasonRoutes } from './reference/seasons.js';
 import { scenarioRoutes } from './scenarios.js';
 import { newAgentSlot } from './agent/agent-slot.js';
 import { jobRoutes, newJobRegistry } from './agent/job-registry.js';
+import { syncRoutes, type SyncOptions } from './sync.js';
 import { importFeedbackRoutes } from './reader/import-feedback.js';
 import { parkedReadingRoutes } from './reader/parked-readings.js';
 import { keptPictureRoutes } from './reader/kept-pictures.js';
@@ -78,7 +79,7 @@ function loadRules(db: Database.Database): HeroStateRules {
 }
 
 /** The local JSON API. Pure over its database, so tests can run it in memory. */
-export function createApp(db: Database.Database, options: { imagesDir?: string; agentRunner?: AgentRunner; agentProbe?: AgentProbe; importWorkDir?: string; importConcurrency?: number; importMaxBytes?: number; importPersist?: boolean } = {}): Hono {
+export function createApp(db: Database.Database, options: { imagesDir?: string; agentRunner?: AgentRunner; agentProbe?: AgentProbe; importWorkDir?: string; importConcurrency?: number; importMaxBytes?: number; importPersist?: boolean; sync?: SyncOptions } = {}): Hono {
   const app = new Hono();
   app.use('*', requestGuard);
   app.onError((error, c) => (error instanceof FormationIdError ? c.json({ error: error.message }, 400) : (console.error(error), c.json({ error: 'Internal error' }, 500))));
@@ -109,6 +110,7 @@ export function createApp(db: Database.Database, options: { imagesDir?: string; 
   app.route('/', scenarioRunRoutes(db, options.agentRunner ?? spawnAgent, agentSlot, jobs));
   app.route('/', rosterImportRoutes(db, options.agentRunner ?? spawnAgent, () => loadRules(db), { imagesDir: options.imagesDir, workDir: options.importWorkDir, slot: agentSlot, registry: jobs, concurrency: options.importConcurrency, maxQueuedBytes: options.importMaxBytes, persistQueue: options.importPersist }));
   app.route('/', reviewExplainRoutes(db, options.agentRunner ?? spawnAgent, agentSlot, jobs));
+  app.route('/', syncRoutes(db, { imagesDir: options.imagesDir, ...options.sync, registry: jobs }));
   app.route('/', jobRoutes(jobs));
   app.route('/', importFeedbackRoutes(db, { imagesDir: options.imagesDir }));
   app.route('/', parkedReadingRoutes(db, { imagesDir: options.imagesDir }));

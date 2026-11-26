@@ -67,8 +67,6 @@ interface Props {
   /** The Formation ID fields of the record, beside the note and tags. */
   formationIds?: ReactNode;
   teams?: TeamTabs;
-  /** Saves what this record chose (the maps, rules or bosses of its teams) as the setup new records start with. Absent where there is none. */
-  onSetDefault?: () => void;
   error: string | null;
   /** Confirmation of the last save, shown while the form stays open. */
   status: string | null;
@@ -109,7 +107,7 @@ function useFillWindow() {
  * line, then the result, note, tags and Formation IDs (the same line in every mode, all in view), then a line for what only the mode
  * has, then the team tabs, and the editor in the rest of the window (ADR 0034).
  */
-export function RecordShell({ title, identity, result, note, onNote, tags, onTags, lockedTags, fields, deployment, formationIds, teams, onSetDefault, error, status, saveLabel, onSave, onSaveAnother, saveDisabled, saving, onCancel, cancelLabel, children }: Props) {
+export function RecordShell({ title, identity, result, note, onNote, tags, onTags, lockedTags, fields, deployment, formationIds, teams, error, status, saveLabel, onSave, onSaveAnother, saveDisabled, saving, onCancel, cancelLabel, children }: Props) {
   const teamsId = useId();
   const fill = useFillWindow();
   return (
@@ -125,11 +123,6 @@ export function RecordShell({ title, identity, result, note, onNote, tags, onTag
             {onSaveAnother && (
               <button onClick={onSaveAnother} disabled={saveDisabled || saving}>
                 Save and record another
-              </button>
-            )}
-            {onSetDefault && (
-              <button onClick={onSetDefault} title="New records start with the maps, rules and bosses chosen here">
-                Set as this week’s default
               </button>
             )}
             <button onClick={onCancel}>{cancelLabel ?? 'Cancel'}</button>

@@ -6,9 +6,10 @@ import { upsertImported } from './upsert.js';
 
 /**
  * Upserts heroes; rows the player edited by hand (source = 'manual') are left alone, and so are the units a hero declares (a pair's parts,
- * a summon). A hero the player made by hand while the source lacked it is taken over when the source lists it (said in what it returns).
+ * a summon). A hero the player made by hand while the source lacked it is taken over when the source lists it (said in what it returns). With
+ * `overwrite`, a hero the player edited after an import is replaced by the source's fields too (said in what it returns).
  */
-export function storeHeroes(db: Database.Database, cards: Card[], imagePathFor: (card: Card) => string): TakenOver[] {
+export function storeHeroes(db: Database.Database, cards: Card[], imagePathFor: (card: Card) => string, overwrite = false): TakenOver[] {
   const isUnit = db.prepare('SELECT 1 FROM hero_pair WHERE ? IN (part1, part2) UNION SELECT 1 FROM hero_summon WHERE part = ?');
   const upsert = upsertImported(db, 'hero', ['name', 'name'], [['tier', 'tier'], ['class', 'class'], ['faction', 'faction'], ['damage_type', 'damageType'], ['image_path', 'imagePath']]);
   const taken: TakenOver[] = [];
@@ -23,7 +24,7 @@ export function storeHeroes(db: Database.Database, cards: Card[], imagePathFor: 
         { column: 'faction', label: 'faction', value: card.faction },
         { column: 'damage_type', label: 'damage type', value: card.damageType },
         { column: 'image_path', label: 'picture', value: imagePath, report: false },
-      ]);
+      ], overwrite);
       if (over) taken.push(over);
       upsert.run({ ...card, imagePath });
     }
@@ -33,7 +34,7 @@ export function storeHeroes(db: Database.Database, cards: Card[], imagePathFor: 
 }
 
 /** Upserts bosses; rows the player edited by hand are left alone, but one the player made by hand is taken over (said in what it returns). */
-export function storeBosses(db: Database.Database, cards: Card[], imagePathFor: (card: Card) => string): TakenOver[] {
+export function storeBosses(db: Database.Database, cards: Card[], imagePathFor: (card: Card) => string, overwrite = false): TakenOver[] {
   const upsert = upsertImported(db, 'boss', ['name', 'name'], [['class', 'class'], ['damage_type', 'damageType'], ['image_path', 'imagePath']]);
   const taken: TakenOver[] = [];
   db.transaction(() => {
@@ -43,7 +44,7 @@ export function storeBosses(db: Database.Database, cards: Card[], imagePathFor: 
         { column: 'class', label: 'class', value: card.class },
         { column: 'damage_type', label: 'damage type', value: card.damageType },
         { column: 'image_path', label: 'picture', value: imagePath, report: false },
-      ]);
+      ], overwrite);
       if (over) taken.push(over);
       upsert.run({ ...card, imagePath });
     }

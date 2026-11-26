@@ -29,6 +29,7 @@ describe('parseCards', () => {
       {
         name: 'Smokey & Meerky',
         imagePath: '/assets/images/hexes/unit/Smokey & Meerky.png',
+        imageUrl: null,
         tier: 'S',
         class: 'Support',
         faction: 'Lightbearer',
@@ -46,6 +47,21 @@ describe('parseCards', () => {
     const card = `<a href="/heroes/Chippy"><img src="https://res.cloudinary.com/x/image/upload//assets/images/hexes/unit/Chippy.png"/>
 <img src="/assets/images/tier/r.png"/><img src="/assets/images/class/tank.png"/></a>`;
     expect(parseCards(card)[0]).toMatchObject({ name: 'Chippy', imagePath: '/assets/images/hexes/unit/Chippy.png', tier: 'R', class: 'Tank' });
+  });
+
+  it('names a hero the site still spells the old way by its new name', () => {
+    const card = `<a href="/heroes/Taichi%26Agumon"><img src="/assets/images/hexes/unit/Taichi&amp;Agumon.png"/><img src="/assets/images/tier/s.png"/></a>`;
+    expect(parseCards(card)[0]).toMatchObject({ name: 'Taichi & Agumon', imagePath: '/assets/images/hexes/unit/Taichi&Agumon.png' });
+  });
+
+  it('downloads from the image host without its resizing steps, which would give a low-quality WebP', () => {
+    const card = `<a href="/heroes/Chippy"><img src="https://res.cloudinary.com/vvib7uec/image/upload/f_webp/q_auto:low/assets/images/hexes/unit/Chippy.png"/>
+<img src="/assets/images/tier/r.png"/></a>`;
+    expect(parseCards(card)[0]!.imageUrl).toBe('https://res.cloudinary.com/vvib7uec/image/upload/assets/images/hexes/unit/Chippy.png');
+  });
+
+  it('has no image URL when the portrait is a path on the site itself', () => {
+    expect(parseCards(galaCard)[0]!.imageUrl).toBeNull();
   });
 
   it('ignores links that are not cards', () => {

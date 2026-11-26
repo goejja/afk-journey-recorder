@@ -171,9 +171,9 @@ describe('Round Deployments taken from saved Battles', () => {
         { tile: 2, hero: 'Vala', rank: '', equipment: '' },
       ],
     };
-    const deployed = { heroes: [hero('Orion', 0), hero('Perseus', 1), hero('Evie', 2), hero('Rolan', 3), hero('Taichi&Agumon', 4)], phantimal: null, artifact: null };
+    const deployed = { heroes: [hero('Orion', 0), hero('Perseus', 1), hero('Evie', 2), hero('Rolan', 3), hero('Taichi & Agumon', 4)], phantimal: null, artifact: null };
     const form = applyToOpponent(picture, deployed, cells);
-    expect(form.placed.map((p) => p.hero)).toEqual(['Orion', 'Perseus', 'Evie', 'Rolan', 'Taichi&Agumon']);
+    expect(form.placed.map((p) => p.hero)).toEqual(['Orion', 'Perseus', 'Evie', 'Rolan', 'Taichi & Agumon']);
   });
 
   it('replaces one team for a Team change and keeps the team it replaced as a reading', () => {
@@ -183,5 +183,26 @@ describe('Round Deployments taken from saved Battles', () => {
     expect(after[1]).toBe(before[1]); // the other teams stand as they were
     // the team it replaced is a reading of the new team: the picture that showed it is not flagged again
     expect(matchTeam(after[0], readSideOfTeam(before[0]!), 'A').state).toBe('fits');
+  });
+});
+
+describe('a hero with two identical summons', () => {
+  const laser = (tile: number | null) => ({ tile, hero: 'Zanie', part: 'Laser Turret', rank: null, equipmentLevel: null });
+
+  it('keeps each laser on its own tile when the Deployment knows only some tiles (Side A)', () => {
+    // Zanie's own tile is unknown, so the team is partly known and goes through the tiles the form already has
+    const partly = team([hero('Zanie', null), laser(40), laser(41)]);
+    const current = { ...emptyFormation(), placed: [{ tile: 38, hero: 'Zanie' }, { tile: 42, hero: 'Zanie', part: 'Laser Turret' }, { tile: 43, hero: 'Zanie', part: 'Laser Turret' }] };
+    const next = applyToOwn(current, partly, cells);
+    const lasers = next.placed.filter((p) => p.part === 'Laser Turret').map((p) => p.tile);
+    expect(lasers.sort()).toEqual([40, 41]);
+  });
+
+  it('keeps each laser on its own tile when the Deployment knows only some tiles (Side B)', () => {
+    const partly = team([hero('Zanie', null), laser(1), laser(2)]);
+    const current = { ...emptyOpponent(), placed: [{ tile: 0, hero: 'Zanie', rank: '', equipment: '' }, { tile: 3, hero: 'Zanie', part: 'Laser Turret', rank: '', equipment: '' }, { tile: 4, hero: 'Zanie', part: 'Laser Turret', rank: '', equipment: '' }] };
+    const next = applyToOpponent(current, partly, cells);
+    const lasers = next.placed.filter((p) => p.part === 'Laser Turret').map((p) => p.tile);
+    expect(lasers.sort()).toEqual([1, 2]);
   });
 });

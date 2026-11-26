@@ -148,4 +148,14 @@ describe('the job watcher', () => {
     // no toast on the page that shows the pictures
     expect(screen.queryByRole('link', { name: 'Open' })).toBeNull();
   });
+
+  it('toasts that a sync finished, or failed, when one that was running stops', async () => {
+    const sync = (o: Partial<JobsSummary['sync']>) => ({ running: false, lastRunId: 1, failed: false, ...o });
+    await arrive({ sync: sync({ running: true }) });
+    await push({ sync: sync({}) });
+    expect(screen.getByText('The sync finished.')).toBeTruthy();
+    await push({ sync: sync({ running: true, lastRunId: 2 }) });
+    await push({ sync: sync({ lastRunId: 2, failed: true }) });
+    expect(screen.getByRole('alert').textContent).toMatch(/A sync failed: see Admin > Sync\./);
+  });
 });

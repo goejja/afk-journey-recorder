@@ -78,7 +78,7 @@ export function extractMaps(chunkSources: string[]): MapRow[] {
  * takes the corrected tiles as its imported version. A map the player drew by hand while the source lacked it is taken over when the
  * source lists it (said in what it returns).
  */
-export function storeArenaMaps(db: Database.Database, maps: MapRow[], corrections: Record<string, number[]> = MAP_CORRECTIONS): TakenOver[] {
+export function storeArenaMaps(db: Database.Database, maps: MapRow[], corrections: Record<string, number[]> = MAP_CORRECTIONS, overwrite = false): TakenOver[] {
   const upsert = db.prepare(
     `INSERT INTO map (name, tags, row_lengths, cells, original_cells, source)
      VALUES (@name, '["Arena"]', @rowLengths, @cells, @cells, 'import')
@@ -92,7 +92,7 @@ export function storeArenaMaps(db: Database.Database, maps: MapRow[], correction
     for (const row of maps) {
       const cells = corrections[row.name] ?? row.cells;
       if (cells.length !== row.cells.length) throw new Error(`The correction of ${row.name} has ${cells.length} tiles, expected ${row.cells.length}`);
-      const over = takeOverMap(db, row.name, row.rowLengths, cells);
+      const over = takeOverMap(db, row.name, row.rowLengths, cells, overwrite);
       if (over) taken.push(over);
       upsert.run({ name: row.name, rowLengths: JSON.stringify(row.rowLengths), cells: JSON.stringify(cells) });
     }
@@ -100,10 +100,11 @@ export function storeArenaMaps(db: Database.Database, maps: MapRow[], correction
   return taken;
 }
 
-const STAGE_MAP_NAMES = ['Open', 'Wall left', 'Wall right', 'Wall center', 'Walls both sides'];
+/** The one blank Stage map the importer provides; the player draws any other in Admin > Maps (#382). */
+const STAGE_MAP_NAMES = ['Open'];
 
 /**
- * Creates the five Stage maps as blank open fields. The real stage deployment zones and walls
+ * Creates the Stage map "Open" as a blank open field. The real stage deployment zones and walls
  * are not known to the importer, so the player paints them in the map editor. Existing maps
  * are never touched.
  */

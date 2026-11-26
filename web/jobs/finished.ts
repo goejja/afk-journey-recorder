@@ -5,7 +5,9 @@ export type JobEvent =
   | { kind: 'scenario'; id: number; state: 'done' | 'failed'; error?: string }
   | { kind: 'review'; id: number; state: 'done' | 'failed'; error?: string }
   /** The pictures of an import queue that finished being read since the last look: `count` were read, or could not be. */
-  | { kind: 'roster' | 'battle'; state: 'done' | 'failed'; count: number };
+  | { kind: 'roster' | 'battle'; state: 'done' | 'failed'; count: number }
+  /** A sync of outside data (Admin > Sync) that stopped running. */
+  | { kind: 'sync'; state: 'done' | 'failed' };
 
 export type JobKind = JobEvent['kind'];
 
@@ -31,17 +33,21 @@ export function finishedBetween(before: JobsSummary, after: JobsSummary): JobEve
       if (now.failed > was.failed) events.push({ kind, state: 'failed', count: now.failed - was.failed });
     }
   }
+  if (before.sync.running && !after.sync.running) events.push({ kind: 'sync', state: after.sync.failed ? 'failed' : 'done' });
   return events;
 }
 
 /** The page of the app that shows the result of each kind of work: a person already there sees it without a toast. */
-const RESULT_PAGE: Record<JobKind, string> = { scenario: 'arena', review: 'admin', roster: 'roster', battle: 'arena' };
+const RESULT_PAGE: Record<JobKind, string> = { scenario: 'arena', review: 'admin', roster: 'roster', battle: 'arena', sync: 'admin' };
 
 export const showsResult = (event: JobEvent, page: string) => RESULT_PAGE[event.kind] === page;
 
 /** The toast for a finished piece of work. */
 export function announcement(event: JobEvent): { message: string; error: boolean; href: string } {
   const href = `#${RESULT_PAGE[event.kind]}`;
+  if (event.kind === 'sync') {
+    return event.state === 'done' ? { message: 'The sync finished.', error: false, href } : { message: 'A sync failed: see Admin > Sync.', error: true, href };
+  }
   if ('count' in event) {
     const pictures = `${event.count} picture${event.count === 1 ? '' : 's'}`;
     const where = event.kind === 'roster' ? 'Roster' : 'PvP';

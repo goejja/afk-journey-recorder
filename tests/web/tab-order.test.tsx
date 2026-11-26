@@ -46,6 +46,6 @@ describe('the order of the tabs', () => {
 
   it('Admin', async () => {
     render(<ToastProvider><AdminPage /></ToastProvider>);
-    expect(await namesOf('Admin')).toEqual(['General', 'Weekly default', 'Rules', 'Units', 'Artifacts', 'Maps', 'Tags', 'Formation IDs', 'Images', 'Reader', 'Review', 'Agent', 'Database']);
+    expect(await namesOf('Admin')).toEqual(['General', 'Weekly default', 'Rules', 'Units', 'Artifacts', 'Maps', 'Tags', 'Formation IDs', 'Images', 'Reader', 'Review', 'Agent', 'Sync', 'Database']);
   });
 });

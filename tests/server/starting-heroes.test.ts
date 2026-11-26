@@ -46,7 +46,7 @@ describe('starting heroes', () => {
     db.prepare("INSERT INTO hero (name, tier) VALUES ('Newbie', NULL)").run();
     db.prepare("INSERT INTO profile (name) VALUES ('Other')").run();
     db.prepare("INSERT INTO roster (profile_id, hero_name, rank) VALUES (1, 'Chippy', 'Epic')").run();
-    storeHeroes(db, [{ name: 'Newbie', imagePath: '/x', tier: 'R', class: 'Mage', faction: 'Wilder', damageType: 'Magic' }], () => 'images/x.png');
+    storeHeroes(db, [{ name: 'Newbie', imagePath: '/x', imageUrl: null, tier: 'R', class: 'Mage', faction: 'Wilder', damageType: 'Magic' }], () => 'images/x.png');
     expect(db.prepare("SELECT rank FROM roster WHERE profile_id = 1 AND hero_name = 'Chippy'").pluck().get()).toBe('Epic');
     expect(db.prepare("SELECT count(*) FROM roster WHERE hero_name = 'Newbie'").pluck().get()).toBe(2);
   });

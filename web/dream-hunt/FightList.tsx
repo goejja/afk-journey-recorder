@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DREAM_HUNT_FIGHTS, formatDuration } from '../../src/domain/dream-hunt.js';
-import { api, type DreamHuntAttempt, type WeeklySetups } from '../backend.js';
+import { api, type DreamHuntAttempt } from '../backend.js';
 import { RecordToolbar, useGroupedList, type ListItem } from '../records/GroupedList.js';
 import { FightRow } from '../records/FightRow.js';
 import { GroupCard } from '../records/GroupCard.js';
@@ -135,7 +135,7 @@ const BossFightRow = memo(function BossFightRow({ fight: f, onEdit, onDelete, on
 
 const NO_FIGHTS: DreamHuntAttempt[] = [];
 
-export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPrefillUsed }: { reference: Reference; onChanged: () => void; onDefaults: (defaults: WeeklySetups) => void; onForm: (open: boolean) => void; prefill: { index: number; draft: Draft }[] | null; onPrefillUsed: () => void }) {
+export function Fights({ reference, onChanged, onForm, prefill, onPrefillUsed }: { reference: Reference; onChanged: () => void; onForm: (open: boolean) => void; prefill: { index: number; draft: Draft }[] | null; onPrefillUsed: () => void }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<DreamHuntAttempt | null>(null);
   const [cloning, setCloning] = useState<DreamHuntAttempt[] | null>(null);
@@ -240,7 +240,6 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
         cloneOf={cloning}
         seed={seed}
         onCancel={() => (setAdding(false), setCloning(null), setSeed(null))}
-        onDefaults={onDefaults}
         onRecorded={() => {
           void reload();
           onChanged();
@@ -264,7 +263,6 @@ export function Fights({ reference, onChanged, onDefaults, onForm, prefill, onPr
         editing={editingDay}
         onCancel={() => setEditingDay(null)}
         onRecorded={() => undefined}
-        onDefaults={onDefaults}
         onSaved={() => {
           setEditingDay(null);
           void reload();

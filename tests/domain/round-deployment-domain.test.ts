@@ -154,6 +154,13 @@ describe('tiles that are not known yet', () => {
     expect(roundDeploymentProblem([team([{ ...hero('A', 0), tile: 40 }, hero('B', 40)]), null, null, null, null])).toMatch(/one tile/);
   });
 
+  it('give each of a hero\'s identical summons a tile of its own', () => {
+    const unit = (tile: number | null, part: string): RoundHero => ({ tile, hero: 'Zanie', part, rank: null, equipmentLevel: null });
+    const open = team([{ ...hero('Zanie', 0), tile: null }, unit(null, 'Laser Turret'), unit(null, 'Laser Turret')]);
+    const saved = team([hero('Zanie', 38), unit(40, 'Laser Turret'), unit(41, 'Laser Turret')]);
+    expect(withPlacement(open, saved)!.heroes.map((h) => h.tile)).toEqual([38, 40, 41]);
+  });
+
   it('come from the first saved Battle with the same heroes, and are never replaced', () => {
     const open = team(noTiles([hero('A', 0), hero('B', 0), hero('C', 0)]), 'Crown', { name: 'Wedge of Matter', tile: null });
     const saved = team([hero('C', 40), hero('A', 38), hero('B', 39)], 'Crown', { name: 'Wedge of Power', tile: 41, partnerTile: 42 });

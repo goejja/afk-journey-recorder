@@ -90,7 +90,7 @@ export function DreamHuntPage() {
           {reference && view === 'simulator' && <Simulator key={version} reference={reference} onRecord={(picks) => void record(picks)} sent={shelf.sent} onRemoveSent={shelf.remove} />}
           {reference && view === 'best' && <BestTeams key={version} bosses={reference.bosses} rules={reference.rules} send={toSimulator} />}
           {reference && view === 'finder' && <Finder key={version} rules={reference.rules} send={toSimulator} />}
-          {reference && view === 'fights' && <Fights reference={reference} onChanged={() => (setVersion((v) => v + 1), void reloadHeroes())} onDefaults={(defaults) => patchReference({ defaults })} onForm={onForm} prefill={prefill} onPrefillUsed={prefillUsed} />}
+          {reference && view === 'fights' && <Fights reference={reference} onChanged={() => (setVersion((v) => v + 1), void reloadHeroes())} onForm={onForm} prefill={prefill} onPrefillUsed={prefillUsed} />}
         </>
       )}
     </TabbedPage>

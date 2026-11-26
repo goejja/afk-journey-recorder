@@ -3,7 +3,7 @@ import { useAction } from '../hooks/action.js';
 import { stepAfterSave } from '../hooks/saved.js';
 import { heroesAlreadyUsed } from '../../src/domain/arena.js';
 import { DREAM_HUNT_FIGHTS } from '../../src/domain/dream-hunt.js';
-import { api, type DreamHuntAttempt, type WeeklySetups } from '../backend.js';
+import { api, type DreamHuntAttempt } from '../backend.js';
 import { formationBorrow } from '../arena/borrow.js';
 import { swapParts } from '../swap.js';
 import { RecordShell } from '../RecordShell.js';
@@ -11,7 +11,6 @@ import { recordedHeroes, useRosterSync } from '../reader/RosterSync.js';
 import { FormationIdField } from '../FormationIdField.js';
 import { type Reference, type Draft, onMap, sharedTags, newDraft, draftFromFight, toFight } from './draft.js';
 import { FightIdentity, FightResult, FightEditor } from './FightParts.js';
-import { useToast } from '../ui/Toast.js';
 
 /** The five fights of a Dream Hunt day, one tab each, saved together as one battle of separate records. */
 interface NewFightsProps {
@@ -24,13 +23,11 @@ interface NewFightsProps {
   seed?: { index: number; draft: Draft }[] | null;
   onSaved: (notice?: string | null) => void;
   onRecorded: () => void;
-  /** The Weekly defaults after "Set as default" saved them. */
-  onDefaults: (defaults: WeeklySetups) => void;
   onCancel: () => void;
 }
 
 /** The fights of a day, one tab each: a new day (empty, or cloned from a saved one), or a saved day being edited. */
-export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecorded, onDefaults, onCancel }: NewFightsProps) {
+export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecorded, onCancel }: NewFightsProps) {
   const [drafts, setDrafts] = useState<Draft[]>(() => {
     const source = editing?.fights ?? cloneOf;
     const tags = sharedTags(seed?.[0]?.draft ?? (source?.[0] ? draftFromFight(source[0]) : undefined));
@@ -45,7 +42,6 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
   const [current, setCurrent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const toast = useToast();
   // The Formation ID stands for the fights of the whole day (ADR 0007), not for one of them.
   const [formationId, setFormationId] = useState(() => (editing?.fights ?? cloneOf)?.[0]?.battleFormationId ?? '');
   const sync = useRosterSync();
@@ -63,18 +59,6 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
   });
 
   const borrow = formationBorrow(drafts, current, 'fight', setDrafts, true);
-
-  async function setDefault() {
-    try {
-      const slots = drafts.map((d, i) => ({ boss: d.boss || null, mapName: d.mapName || null, rule: i === DREAM_HUNT_FIGHTS - 1 ? d.rule || null : null }));
-      onDefaults(await api.saveDefaults('Dream Hunt', slots));
-      setError(null);
-      toast('Saved as this week’s Dream Hunt default: new days start with these bosses, maps and rule.');
-    } catch (e) {
-      setStatus(null);
-      setError((e as Error).message);
-    }
-  }
 
   const saving = useAction();
   const save = (another: boolean) => saving.run(() => saveNow(another));
@@ -111,7 +95,6 @@ export function NewFights({ reference, cloneOf, editing, seed, onSaved, onRecord
     {sync.dialog}
     <RecordShell
       title={editing ? 'Edit Dream Hunt record' : 'New record'}
-      onSetDefault={editing ? undefined : () => void setDefault()}
       identity={<FightIdentity draft={draft} reference={reference} showRule={current === DREAM_HUNT_FIGHTS - 1} onChange={change} />}
       result={<FightResult draft={draft} onChange={change} />}
       note={draft.note}

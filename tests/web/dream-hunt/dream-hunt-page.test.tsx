@@ -498,17 +498,6 @@ describe('Dream Hunt page', () => {
     expect(posts()[0]!.body.formation.heroes[0]).toMatchObject({ hero: 'Evie', rank: 'Elite', equipmentLevel: null });
   });
 
-  it('saves the bosses, maps and the last fight’s rule as the week’s default', async () => {
-    const user = userEvent.setup();
-    await openForm(user, true);
-    await user.click(screen.getByRole('button', { name: /Set as this week/ }));
-    await waitFor(() => expect(requests.find((r) => r.method === 'PUT')?.url).toBe('/api/defaults/Dream%20Hunt'));
-    const slots = requests.find((r) => r.method === 'PUT')!.body.slots;
-    expect(slots).toHaveLength(5);
-    expect(slots[0]).toEqual({ boss: 'King Croaker', mapName: 'Open', rule: null });
-    expect(await screen.findByText(/Saved as this week/)).toBeTruthy();
-  });
-
   it('takes a clear time in seconds with hundredths', async () => {
     const user = userEvent.setup();
     await openForm(user);

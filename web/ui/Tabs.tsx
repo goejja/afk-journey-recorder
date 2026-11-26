@@ -11,9 +11,10 @@ const panelId = (id: string) => `${id}-panel`;
 /**
  * A strip of Tabs (docs/ui-conventions.md): `role="tablist"` named by `label`, each Tab a button that controls the one `TabPanel` of the
  * same `id`. Left and Right move the focus between Tabs (and wrap), Home and End go to the first and the last, and Enter or Space selects,
- * so going through a long strip does not load every view on the way. Only the selected Tab is in the Tab order.
+ * so going through a long strip does not load every view on the way. Only the selected Tab is in the Tab order. `sticky` pins the strip under the
+ * top banner while the Page scrolls: only the strip of a Page, never one nested in a view (at most two levels stay pinned).
  */
-export function Tabs<K extends string | number>({ id, label, tabs, value, onChange }: { id: string; label: string; tabs: readonly TabItem<K>[]; value: K; onChange: (key: K) => void }) {
+export function Tabs<K extends string | number>({ id, label, tabs, value, onChange, sticky = false }: { id: string; label: string; tabs: readonly TabItem<K>[]; value: K; onChange: (key: K) => void; sticky?: boolean }) {
   const buttons = useRef(new Map<K, HTMLButtonElement>());
 
   const move = (e: KeyboardEvent, index: number) => {
@@ -25,7 +26,7 @@ export function Tabs<K extends string | number>({ id, label, tabs, value, onChan
   };
 
   return (
-    <div className="tabs" role="tablist" aria-label={label}>
+    <div className={sticky ? 'tabs sticky' : 'tabs'} role="tablist" aria-label={label}>
       {tabs.map((tab, i) => (
         <button
           key={tab.key}
@@ -63,7 +64,7 @@ export function TabPanel<K extends string | number>({ id, value, className, chil
  * form calls the `onForm` it is given with whether the form is open: the form then takes the whole Page, so the strip goes and the panel is a
  * plain `div` (docs/ui-conventions.md, "Pages and Tabs"). `onForm` of the component itself passes that on to the Page above it.
  */
-export function TabbedPage<K extends string | number>({ id, label, tabs, value, onChange, notice, onForm, children }: { id: string; label: string; tabs: readonly TabItem<K>[]; value: K; onChange: (key: K) => void; notice?: ReactNode; onForm?: (open: boolean) => void; children: (onForm: (open: boolean) => void) => ReactNode }) {
+export function TabbedPage<K extends string | number>({ id, label, tabs, value, onChange, notice, onForm, sticky = true, children }: { id: string; label: string; tabs: readonly TabItem<K>[]; value: K; onChange: (key: K) => void; sticky?: boolean; notice?: ReactNode; onForm?: (open: boolean) => void; children: (onForm: (open: boolean) => void) => ReactNode }) {
   const [full, setFull] = useState(false);
   const form = useCallback(
     (open: boolean) => {
@@ -74,7 +75,7 @@ export function TabbedPage<K extends string | number>({ id, label, tabs, value, 
   );
   return (
     <div>
-      {!full && <Tabs id={id} label={label} tabs={tabs} value={value} onChange={onChange} />}
+      {!full && <Tabs id={id} label={label} tabs={tabs} value={value} onChange={onChange} sticky={sticky} />}
       {notice}
       <TabPanel id={id} value={full ? null : value}>
         {children(form)}

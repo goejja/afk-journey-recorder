@@ -6,6 +6,7 @@ import { storeBosses, storeHeroes } from '../../src/import/store-cards.js';
 const evie: Card = {
   name: 'Evie',
   imagePath: '/x/Evie.png',
+  imageUrl: null,
   tier: 'A',
   class: 'Support',
   faction: 'Lightbearer',

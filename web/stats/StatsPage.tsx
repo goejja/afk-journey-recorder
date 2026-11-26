@@ -342,7 +342,7 @@ export function StatsPage() {
         Win rates are counted from your recorded battles, not simulated. Rows with fewer than {SMALL_SAMPLE} games are dimmed: too few to trust. In Arena, each
         hero is counted on both sides, with the result flipped for Side B.
       </p>
-      <Tabs id="stats" label="Statistics views" tabs={VIEWS} value={view} onChange={setView} />
+      <Tabs id="stats" label="Statistics views" tabs={VIEWS} value={view} onChange={setView} sticky />
       <TabPanel id="stats" value={view}>
         {view !== 'overview' && (
           <div className="filters">

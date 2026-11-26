@@ -103,11 +103,15 @@
   /* Layers: a sticky control, popovers, the overlay, toasts */
   --z-control: 3;
   --z-tag: 4; /* the rank tag of a map tile: above the artifact slots, which are controls */
+  --z-header: 10; /* the top banner and the page-level Tabs: above sticky controls, below a popover */
   --z-popover: 20;
   --z-overlay: 50;
   --z-overlay-popover: 55; /* a Popover opened from inside a Dialog */
   --z-toast: 60;
   /* Controls: every input, select and button is one height, compact ones in repeated rows another */
+  --header-h: 61px; /* the top banner: two 12px paddings, a 36px link, a 1px border */
+  --tabs-h: 49px; /* a sticky Tab strip: 8px padding, a 32px Tab, 8px padding, a 1px border */
+  --sticky-top: var(--header-h); /* where a sticky element of a Page stops: under the banner, and under the Tabs when the Page has a sticky strip */
   --control-h: 32px;
   --control-h-compact: 28px;
   --check-size: 18px;
@@ -119,11 +123,12 @@
 /* Every control shows where the keyboard is, without drawing a ring for a mouse click. */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 body { margin: 0; background: var(--bg); color: var(--text); font: var(--font-base)/1.4 system-ui, sans-serif; }
-.app-header { display: flex; align-items: center; gap: var(--sp-5); padding: var(--sp-3) var(--sp-5); border-bottom: 1px solid var(--border); background: var(--panel); }
+.app-header { position: sticky; top: 0; z-index: var(--z-header); min-height: var(--header-h); box-sizing: border-box; display: flex; align-items: center; gap: var(--sp-5); padding: var(--sp-3) var(--sp-5); border-bottom: 1px solid var(--border); background: var(--panel); }
 .app-header .brand { font-size: var(--font-lg); font-weight: 700; }
 nav a { color: var(--muted); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-control); }
 nav a.active { color: var(--text); background: var(--panel-hi); }
 main { padding: var(--sp-4) var(--sp-5); }
+main:has(.tabs.sticky) { --sticky-top: calc(var(--header-h) + var(--tabs-h)); }
 .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
 .toolbar h2 { margin-bottom: 0; }
 p { margin: 0 0 var(--sp-3); }
@@ -207,7 +212,11 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 
 a { text-decoration: none; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-color); font-weight: 600; }
-.master-detail { height: calc(100vh - 100px); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--sp-3); overflow: hidden; }
+/* The pane fills what is left of the screen under the banner (and the Tabs of a Page that has them, which keep a margin below) and above the room of the page: a fixed guess let the foot of the list fall below the screen (#381). */
+.master-detail { height: calc(100vh - var(--sticky-top) - 2 * var(--sp-4)); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--sp-3); overflow: hidden; }
+main:has(.tabs.sticky) .master-detail { height: calc(100vh - var(--sticky-top) - 3 * var(--sp-4)); }
+/* a second, non-sticky strip of Tabs above the pane (Admin > Units) takes a control height and its margin more */
+main:has(.tabs.sticky) .tabs:not(.sticky) + [role=tabpanel] .master-detail { height: calc(100vh - var(--sticky-top) - 4 * var(--sp-4) - var(--control-h)); }
 .master-detail-bare { grid-template-rows: minmax(0, 1fr); }
 .master-detail-header { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
 .master-detail-header > .toolbar, .master-detail-header > .panel { margin-bottom: 0; }
@@ -268,7 +277,7 @@ h4 { font-size: var(--font-md); margin: var(--sp-3) 0 var(--sp-2); color: var(--
 .two-col { display: grid; grid-template-columns: minmax(0, 448px) minmax(260px, 796px); gap: var(--sp-4); align-items: start; }
 /* The map column is as wide as the map, so long text below it cannot push the picker away. */
 /* The picker follows the page while the map is being filled, so it stays within reach. */
-.two-col > .picker { position: sticky; top: var(--sp-2); max-height: calc(100vh - var(--sp-4)); overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
+.two-col > .picker { position: sticky; top: calc(var(--sticky-top) + var(--sp-2)); max-height: calc(100vh - var(--sticky-top) - var(--sp-4)); overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 /* The search box and filters of a unit selector stay at the top while its icons scroll under them. */
 .picker-controls { position: sticky; top: 0; z-index: var(--z-control); padding-bottom: var(--sp-2); background: var(--bg); }
 .panel .picker-controls { background: var(--panel); }
@@ -352,6 +361,7 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 
 /* Dream Hunt */
 .tabs { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-4); }
+.tabs.sticky { position: sticky; top: var(--header-h); z-index: var(--z-header); box-sizing: border-box; min-height: var(--tabs-h); align-items: center; padding: var(--sp-2) 0; background: var(--bg); border-bottom: 1px solid var(--border); }
 .tabs button.active { background: var(--accent); border-color: var(--accent); color: var(--on-color); font-weight: 600; }
 /* One card: the panels of a page, a record in a list, a weekly slot, the selected hero, a dialog. Compact ones are for cards inside a grid or a row; nested ones sit inside a card, one step darker. */
 .panel, .attempt, .weekly-slot, .overlay-box, .crop-editor { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-3); }
@@ -404,6 +414,9 @@ fieldset.field > legend { padding: 0; margin-bottom: var(--sp-1); color: var(--m
 .advice-toggle { flex-direction: row; align-items: center; min-height: 0; }
 .advice-panel { grid-column: 1 / -1; border-color: var(--accent); }
 .advice-panel-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--sp-3); }
+.layout-dots { display: flex; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.layout-dot { width: var(--sp-3); height: var(--sp-3); min-height: 0; padding: 0; border-radius: 50%; border: 1px solid var(--muted); background: transparent; }
+.layout-dot.on { background: var(--accent); border-color: var(--accent); }
 .advice-panel-row + .advice-panel-row { margin-top: var(--sp-3); }
 @media (max-width: 900px) {
   .advice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -480,7 +493,6 @@ button.link { background: none; border: 0; color: inherit; font: inherit; font-w
 .tile-tag { position: absolute; left: 50%; bottom: 0; z-index: var(--z-tag); transform: translateX(-50%); display: inline-flex; gap: 0; align-items: baseline; padding: 0 var(--sp-1); font-size: var(--font-2xs); font-weight: 700; line-height: 1.35; white-space: nowrap; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-pill); pointer-events: none; }
 /* A tile's tooltip is drawn by hand: the browser's own takes a second to appear and is clipped by the hexagon. */
 .hex-cell { position: relative; flex: none; }
-.hex-cell:hover { z-index: var(--z-popover); }
 .hex-cell .hex { display: block; }
 .tile-tip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); z-index: var(--z-popover); padding: var(--sp-1) var(--sp-2); border-radius: var(--r-control); background: var(--bg); color: var(--text); border: 1px solid var(--border); font-size: var(--font-sm); font-weight: 600; white-space: nowrap; pointer-events: none; }
 .hex-cell:hover .tile-tip, .hex-cell:focus-within .tile-tip { display: block; }
@@ -511,6 +523,15 @@ a.button:hover { background: var(--panel-hi); }
 .workspace-row .tabs { margin: 0; }
 .swap-control { display: flex; gap: var(--sp-2); align-items: flex-end; }
 .side-switch { align-self: flex-end; }
+.known-layouts { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-end; }
+.layout-box { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--r-card); background: var(--panel); color: var(--text); font-size: var(--font-xs); }
+.layout-box:hover { border-color: var(--accent); }
+.layout-box.current { border-color: var(--accent); background: var(--panel-hi); cursor: default; }
+.layout-thumb { position: relative; flex: none; }
+.layout-thumb svg { display: block; }
+.layout-thumb .map-unit { position: absolute; }
+.layout-thumb .map-unit-a { box-shadow: 0 0 0 1px var(--side-a); }
+.layout-thumb .map-unit-b { box-shadow: 0 0 0 1px var(--side-b); }
 .side-switch.active { background: var(--accent); border-color: var(--accent); color: var(--on-color); }
 .workspace-row .side-profiles { display: contents; }
 /* The line under the title is the same in every mode, so its captions give way to placeholders and the fields share the width. */
@@ -533,7 +554,8 @@ a.button:hover { background: var(--panel-hi); }
 .workspace-bar .error, .workspace-bar [role='status'] { margin: 0 0 var(--sp-2); }
 .workspace-body { flex: 1; min-height: 0; }
 .workspace-body > div { height: 100%; }
-.workspace-body .two-col { height: 100%; }
+/* The map column keeps the room of its scrollbar (padding-right below, inside the box) on top of the map's own width, so the map never scrolls sideways. */
+.workspace-body .two-col { height: 100%; grid-template-columns: minmax(0, calc(448px + var(--scroll-room))) minmax(260px, 796px); }
 .workspace-body .two-col > div { min-height: 0; height: 100%; overflow-y: auto; scrollbar-gutter: stable; padding-right: var(--scroll-room); }
 .workspace-body .two-col > .picker { position: static; max-height: none; overflow: hidden; display: flex; flex-direction: column; padding-right: 0; }
 /* The profiles, side tabs and search stay in place; the units below them scroll. */
@@ -668,8 +690,8 @@ a.button:hover { background: var(--panel-hi); }
 .weekly-slot:nth-child(n+4) .map-picker-list { left: auto; right: 0; } /* the right-hand cards open leftwards, to stay on screen */
 
 @media (max-width: 800px) {
-  .master-detail { height: auto; overflow: visible; }
-  .master-detail-header { position: sticky; top: 0; z-index: var(--z-control); padding: var(--sp-2) 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .master-detail, main:has(.tabs.sticky) .master-detail, main:has(.tabs.sticky) .tabs:not(.sticky) + [role=tabpanel] .master-detail { height: auto; overflow: visible; }
+  .master-detail-header { position: sticky; top: var(--sticky-top); z-index: var(--z-control); padding: var(--sp-2) 0; background: var(--bg); border-bottom: 1px solid var(--border); }
   .master-detail-columns { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
   .master-detail-sidebar, .master-detail-main { overflow: visible; }
   .master-detail-sidebar-scroll, .master-detail-main-scroll { flex: 0 0 auto; overflow: visible; scrollbar-gutter: auto; padding-right: 0; }

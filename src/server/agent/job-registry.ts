@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { AgentJob, ImportQueueSummary, JobsSummary, ReviewExplainJob } from '../../shared/api.js';
+import type { AgentJob, ImportQueueSummary, JobsSummary, ReviewExplainJob, SyncSummary } from '../../shared/api.js';
 import { jobsContract } from '../../shared/contracts/jobs.js';
 import { serve, serveStream } from '../contract.js';
 
@@ -9,6 +9,7 @@ interface JobSources {
   review: () => ReviewExplainJob | null;
   roster: () => ImportQueueSummary | Promise<ImportQueueSummary>;
   battle: () => ImportQueueSummary | Promise<ImportQueueSummary>;
+  sync: () => SyncSummary;
 }
 
 /**
@@ -30,6 +31,7 @@ export interface JobRegistry {
 export const JOBS_LOOK_MS = 500;
 
 const IDLE_QUEUE: ImportQueueSummary = { active: 0, failed: 0, done: 0, signature: '' };
+const IDLE_SYNC: SyncSummary = { running: false, lastRunId: 0, failed: false };
 
 export function newJobRegistry(): JobRegistry {
   const sources: Partial<JobSources> = {};
@@ -48,6 +50,7 @@ export function newJobRegistry(): JobRegistry {
         review: sources.review?.() ?? null,
         roster: (await sources.roster?.()) ?? IDLE_QUEUE,
         battle: (await sources.battle?.()) ?? IDLE_QUEUE,
+        sync: sources.sync?.() ?? IDLE_SYNC,
       };
     },
     subscribe(listener) {

@@ -5,8 +5,8 @@ import type { Card } from '../../src/import/cards.js';
 import { storeBosses, storeHeroes } from '../../src/import/store-cards.js';
 import { takeOverLines } from '../../src/import/take-over.js';
 
-const thane: Card = { name: 'Thane', imagePath: '/x/Thane.png', tier: 'A', class: 'Warrior', faction: 'Graveborn', damageType: 'Physical' };
-const gloom: Card = { name: 'Gloomwing', imagePath: '/x/Gloomwing.png', tier: null, faction: null, class: 'Rogue', damageType: 'Physical' };
+const thane: Card = { name: 'Thane', imagePath: '/x/Thane.png', imageUrl: null, tier: 'A', class: 'Warrior', faction: 'Graveborn', damageType: 'Physical' };
+const gloom: Card = { name: 'Gloomwing', imagePath: '/x/Gloomwing.png', imageUrl: null, tier: null, faction: null, class: 'Rogue', damageType: 'Physical' };
 const path = (card: Card) => `images/${card.name}.png`;
 
 describe('taking over a hero the player made by hand', () => {
@@ -112,5 +112,57 @@ describe('taking over a map the player drew by hand', () => {
     db.prepare("UPDATE map SET cells = '[]', source = 'manual' WHERE name = 'Arena I'").run();
     expect(storeArenaMaps(db, mapRows('-1,-1,0,-3,1,1,-2'))).toEqual([]);
     expect(db.prepare("SELECT cells FROM map WHERE name = 'Arena I'").pluck().get()).toBe('[]');
+  });
+});
+
+describe('the overwrite option', () => {
+  it('replaces a hero the player edited after an import, and says it overwrote it', () => {
+    const db = openDb(':memory:');
+    storeHeroes(db, [thane], path);
+    db.prepare("UPDATE hero SET tier = 'S', source = 'manual' WHERE name = 'Thane'").run();
+    db.prepare("INSERT INTO hero_summon (hero, part, count) VALUES ('Thane', 'Turret', 2)").run();
+    const taken = storeHeroes(db, [thane], path, true);
+    expect(db.prepare("SELECT tier, source, hand_made FROM hero WHERE name = 'Thane'").get()).toEqual({ tier: 'A', source: 'import', hand_made: 0 });
+    expect(takeOverLines(taken)).toEqual(['Overwrote Thane from Yaphalla (tier S→A)']);
+    expect(db.prepare("SELECT part FROM hero_summon WHERE hero = 'Thane'").pluck().get()).toBe('Turret');
+  });
+
+  it('keeps the roster entry and the records of an overwritten hero', () => {
+    const db = openDb(':memory:');
+    storeHeroes(db, [thane], path);
+    const profile = db.prepare('SELECT id FROM profile WHERE is_default = 1').pluck().get() as number;
+    db.prepare("INSERT INTO rank (name, position, source) VALUES ('Elite', 1, 'import')").run();
+    db.prepare("INSERT INTO equipment_level (level, source) VALUES (0, 'import')").run();
+    db.prepare("INSERT INTO roster (profile_id, hero_name, rank, equipment_level) VALUES (?, 'Thane', 'Elite', 0)").run(profile);
+    db.prepare("UPDATE hero SET tier = 'S', source = 'manual' WHERE name = 'Thane'").run();
+    storeHeroes(db, [thane], path, true);
+    expect(db.prepare("SELECT count(*) FROM roster WHERE hero_name = 'Thane'").pluck().get()).toBe(1);
+  });
+
+  it('does nothing to an edited hero without the option, and reports a hand-made one as taken over, not overwritten', () => {
+    const db = openDb(':memory:');
+    db.prepare("INSERT INTO hero (name, tier, class, faction, damage_type, image_path, source, hand_made) VALUES ('Thane', 'S', 'Warrior', 'Lightbearer', 'Physical', NULL, 'manual', 1)").run();
+    expect(takeOverLines(storeHeroes(db, [thane], path, true))).toEqual(['Took over Thane from Yaphalla (tier S→A, faction Lightbearer→Graveborn)']);
+  });
+
+  it('replaces a boss the player edited after an import', () => {
+    const db = openDb(':memory:');
+    storeBosses(db, [gloom], path);
+    db.prepare("UPDATE boss SET class = 'Tank', source = 'manual' WHERE name = 'Gloomwing'").run();
+    expect(takeOverLines(storeBosses(db, [gloom], path, true))).toEqual(['Overwrote Gloomwing from Yaphalla (class Tank→Rogue)']);
+    expect(db.prepare("SELECT class, source FROM boss WHERE name = 'Gloomwing'").get()).toEqual({ class: 'Rogue', source: 'import' });
+  });
+
+  it('replaces the tiles of an Arena map the player edited, keeping its Boost tiles on deployment tiles', () => {
+    const db = openDb(':memory:');
+    const layout = [2, 3, 2].map((length) => `{length:${length},offset:"",reverse:"",preview:""}`).join(',');
+    const entries = ['"Arena I":[-1,-1,0,-3,1,1,-2]', ...Array.from({ length: 21 }, (_, i) => `"Filler ${i + 1}":[0,0,0,0,0,0,1]`)];
+    const maps = extractMaps([`(self.webpackChunk_N_E=[]).push([[1],{9:(e,t,r)=>{let l=[${layout}],n={Custom:Array(7).fill(0),${entries.join(',')}};}}]);`]);
+    storeArenaMaps(db, maps);
+    db.prepare("UPDATE map SET cells = '[0,0,0,0,1,1,1]', boost_tiles = '[4,6]', source = 'manual' WHERE name = 'Arena I'").run();
+    expect(storeArenaMaps(db, maps, undefined, false)).toEqual([]);
+    const taken = storeArenaMaps(db, maps, undefined, true);
+    expect(db.prepare("SELECT cells, boost_tiles, source FROM map WHERE name = 'Arena I'").get()).toEqual({ cells: '[-1,-1,0,-3,1,1,-2]', boost_tiles: '[4]', source: 'import' });
+    expect(takeOverLines(taken)).toEqual(['Overwrote Arena I from Yaphalla (4 of 7 tiles differed)']);
   });
 });
